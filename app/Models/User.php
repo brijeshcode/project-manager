@@ -3,15 +3,17 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\CostRateType;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, HasRoles, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -22,6 +24,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'client_id',
+        'cost_rate_type',
+        'cost_rate_amount',
     ];
 
     /**
@@ -44,6 +49,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'cost_rate_type' => CostRateType::class,
+            'cost_rate_amount' => 'float',
         ];
     }
 }
