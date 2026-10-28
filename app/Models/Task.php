@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\BoardColumn;
 use App\Enums\TaskScope;
 use App\Enums\TaskStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -107,6 +108,19 @@ class Task extends Model
     public function totalEstimateHours(): float
     {
         return $this->effectiveHours() + (float) $this->subtasks()->sum('estimate_hours');
+    }
+
+    /**
+     * Move this task to a different board column at the given position.
+     * Silently ignores unknown column values (ponytail: no exception thrown, just a no-op guard).
+     */
+    public function moveTo(string $column, int $position): void
+    {
+        if (! BoardColumn::isValid($column)) {
+            return;
+        }
+
+        $this->update(['board_column' => $column, 'position' => $position]);
     }
 
     /**
