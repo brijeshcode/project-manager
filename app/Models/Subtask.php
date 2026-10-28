@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Subtask extends Model
 {
@@ -25,6 +26,11 @@ class Subtask extends Model
     public function assignees(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'subtask_user');
+    }
+
+    public function checklistItems(): MorphMany
+    {
+        return $this->morphMany(ChecklistItem::class, 'checklistable')->orderBy('position');
     }
 
     /** Returns the next position integer (1-based) within a task. */

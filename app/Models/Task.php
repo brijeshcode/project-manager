@@ -87,6 +87,11 @@ class Task extends Model
         return $this->morphMany(Comment::class, 'commentable');
     }
 
+    public function checklistItems(): MorphMany
+    {
+        return $this->morphMany(ChecklistItem::class, 'checklistable')->orderBy('position');
+    }
+
     /**
      * Effective hours: estimate + testing add-on when enabled.
      * percent → estimate * (1 + value/100); fixed → estimate + value.
