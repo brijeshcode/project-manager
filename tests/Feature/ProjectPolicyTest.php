@@ -121,3 +121,70 @@ it('project_manager who is a member can view', function () {
 
     expect($pm->can('view', $project))->toBeTrue();
 });
+
+// Finding 2: inactive members must be denied
+it('an inactive member is denied view', function () {
+    $client  = Client::create(['name' => 'Corp', 'currency' => 'USD']);
+    $project = Project::create(['client_id' => $client->id, 'name' => 'App', 'status' => 'active']);
+    $user    = User::factory()->create();
+    $user->assignRole('developer');
+
+    ProjectMember::create([
+        'project_id'      => $project->id,
+        'user_id'         => $user->id,
+        'role_on_project' => 'developer',
+        'access_scope'    => AccessScope::All,
+        'active'          => false,
+        'removed_at'      => now(),
+    ]);
+
+    expect($user->can('view', $project))->toBeFalse();
+});
+
+it('an inactive member is denied update', function () {
+    $client  = Client::create(['name' => 'Corp', 'currency' => 'USD']);
+    $project = Project::create(['client_id' => $client->id, 'name' => 'App', 'status' => 'active']);
+    $user    = User::factory()->create();
+    $user->assignRole('developer');
+
+    ProjectMember::create([
+        'project_id'      => $project->id,
+        'user_id'         => $user->id,
+        'role_on_project' => 'developer',
+        'access_scope'    => AccessScope::All,
+        'active'          => false,
+        'removed_at'      => now(),
+    ]);
+
+    expect($user->can('update', $project))->toBeFalse();
+});
+
+// Finding 3: only super_admin and project_manager can create
+it('a client user cannot create a project', function () {
+    $client = Client::create(['name' => 'Corp', 'currency' => 'USD']);
+    $user   = User::factory()->create(['client_id' => $client->id]);
+    $user->assignRole('client');
+
+    expect($user->can('create', Project::class))->toBeFalse();
+});
+
+it('a developer cannot create a project', function () {
+    $user = User::factory()->create();
+    $user->assignRole('developer');
+
+    expect($user->can('create', Project::class))->toBeFalse();
+});
+
+it('a project_manager can create a project', function () {
+    $user = User::factory()->create();
+    $user->assignRole('project_manager');
+
+    expect($user->can('create', Project::class))->toBeTrue();
+});
+
+it('super_admin can create a project', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('super_admin');
+
+    expect($admin->can('create', Project::class))->toBeTrue();
+});

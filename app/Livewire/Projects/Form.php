@@ -20,6 +20,11 @@ class Form extends Component
     {
         if ($project && $project->exists) {
             $this->authorize('update', $project);
+        } else {
+            $this->authorize('create', Project::class);
+        }
+
+        if ($project && $project->exists) {
             $this->projectId      = $project->id;
             $this->client_id      = $project->client_id;
             $this->name           = $project->name;
@@ -44,6 +49,7 @@ class Form extends Component
             $this->authorize('update', $project);
             $project->update($data);
         } else {
+            $this->authorize('create', Project::class);
             Project::create($data);
         }
 
