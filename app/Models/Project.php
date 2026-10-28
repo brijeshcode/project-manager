@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Project extends Model
 {
@@ -34,6 +35,11 @@ class Project extends Model
         return $this->belongsToMany(User::class, 'project_members')
                     ->withPivot(['role_on_project', 'access_scope', 'active', 'removed_at'])
                     ->withTimestamps();
+    }
+
+    public function modules(): HasMany
+    {
+        return $this->hasMany(Module::class)->orderBy('position');
     }
 
     public function currency(): string
