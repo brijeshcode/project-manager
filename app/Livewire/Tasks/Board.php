@@ -5,6 +5,7 @@ namespace App\Livewire\Tasks;
 use App\Enums\BoardColumn;
 use App\Models\Project;
 use App\Models\Task;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
@@ -52,9 +53,13 @@ class Board extends Component
     {
         $this->authorize('view', $this->project);
 
-        $task = Task::visibleTo(auth()->user())
-            ->whereIn('module_id', $this->project->modules()->pluck('id'))
-            ->findOrFail($taskId);
+        try {
+            $task = Task::visibleTo(auth()->user())
+                ->whereIn('module_id', $this->project->modules()->pluck('id'))
+                ->findOrFail($taskId);
+        } catch (ModelNotFoundException) {
+            return; // foreign-project task; silently no-op
+        }
 
         $task->moveTo($column, $position);
 

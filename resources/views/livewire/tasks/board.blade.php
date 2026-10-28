@@ -18,8 +18,10 @@
             </ul>
         </div>
     @endforeach
-</div>
 
-@assets
-<script src="{{ asset('js/board-drag.js') }}"></script>
-@endassets
+    @once
+        @push('scripts')
+            @vite(['resources/js/board-drag.js'])
+        @endpush
+    @endonce
+</div>

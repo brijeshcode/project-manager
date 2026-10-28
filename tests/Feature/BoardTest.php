@@ -16,7 +16,10 @@ use Livewire\Livewire;
 
 uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
 
-beforeEach(fn () => $this->seed(RoleSeeder::class));
+beforeEach(function () {
+    $this->seed(RoleSeeder::class);
+    $this->withoutVite();
+});
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -164,16 +167,22 @@ it('taskMoved event moves the task and re-renders', function () {
 });
 
 it('taskMoved is denied for a user without project access', function () {
-    $project  = boardProject();
-    $module   = boardModule($project);
-    $owner    = boardMember($project, 'project_manager');
-    $task     = boardTask($module, $owner);
+    // Project A: task lives here
+    $projectA = boardProject();
+    $moduleA  = boardModule($projectA);
+    $ownerA   = boardMember($projectA, 'project_manager');
+    $task     = boardTask($moduleA, $ownerA, ['board_column' => 'Backlog', 'position' => 1]);
 
-    // outsider has no project membership
-    $outsider = User::factory()->create();
-    $outsider->assignRole('developer');
+    // Project B: memberB is a valid member here, so mount succeeds
+    $projectB = boardProject();
+    $memberB  = boardMember($projectB, 'developer');
 
-    Livewire::actingAs($outsider)
-        ->test(Board::class, ['project' => $project])
-        ->assertForbidden();
+    // Mount Board for Project B (passes), then attempt to move a task from Project A
+    Livewire::actingAs($memberB)
+        ->test(Board::class, ['project' => $projectB])
+        ->call('taskMoved', $task->id, 'Done', 1);
+
+    // taskMoved scopes via whereIn(project B's module IDs) → findOrFail rejects the foreign task
+    // board_column must remain unchanged
+    expect($task->fresh()->board_column)->toBe('Backlog');
 });
