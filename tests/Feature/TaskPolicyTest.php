@@ -3,6 +3,7 @@
 use App\Enums\AccessScope;
 use App\Enums\TaskScope;
 use App\Enums\TaskStatus;
+use App\Livewire\Tasks\Form;
 use App\Models\Client;
 use App\Models\Module;
 use App\Models\Project;
@@ -10,6 +11,7 @@ use App\Models\ProjectMember;
 use App\Models\Task;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
+use Livewire\Livewire;
 
 uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
 
@@ -103,7 +105,7 @@ it('super_admin can view a published task via Gate::before', function () {
     expect($superAdmin->can('view', $task))->toBeTrue();
 });
 
-it('super_admin is denied view of a draft task via policy (Gate::before bypassed for draft)', function () {
+it('super_admin draft is hidden by visibleTo scope (policy is bypassed by Gate::before)', function () {
     $project    = policyProject();
     $module     = policyModule($project);
     $creator    = policyMember($project);
@@ -253,4 +255,52 @@ it('super_admin can comment', function () {
     $task = policyTask($module, $creator);
 
     expect($superAdmin->can('comment', $task))->toBeTrue();
+});
+
+// ── Form: developer save does NOT change cost/time fields ─────────────────────
+
+it('developer assignee save does NOT change estimate_hours or price', function () {
+    $project = policyProject();
+    $module  = policyModule($project);
+    $creator = policyMember($project, 'project_manager');
+    $dev     = policyMember($project, 'developer');
+
+    $task = policyTask($module, $creator, [
+        'estimate_hours' => 8.0,
+        'scope'          => TaskScope::Out,
+        'price'          => 100.0,
+    ]);
+    $task->assignees()->attach($dev->id);
+
+    Livewire::actingAs($dev)
+        ->test(Form::class, ['task' => $task])
+        ->set('estimate_hours', 99.0)
+        ->set('price', 999.0)
+        ->call('save');
+
+    $task->refresh();
+    expect((float) $task->estimate_hours)->toBe(8.0);
+    expect((float) $task->price)->toBe(100.0);
+});
+
+it('project_manager save DOES change estimate_hours and price', function () {
+    $project = policyProject();
+    $module  = policyModule($project);
+    $pm      = policyMember($project, 'project_manager');
+
+    $task = policyTask($module, $pm, [
+        'estimate_hours' => 8.0,
+        'scope'          => TaskScope::Out,
+        'price'          => 100.0,
+    ]);
+
+    Livewire::actingAs($pm)
+        ->test(Form::class, ['task' => $task])
+        ->set('estimate_hours', 20.0)
+        ->set('price', 500.0)
+        ->call('save');
+
+    $task->refresh();
+    expect((float) $task->estimate_hours)->toBe(20.0);
+    expect((float) $task->price)->toBe(500.0);
 });

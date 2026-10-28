@@ -210,9 +210,9 @@ it('task can have labels', function () {
     expect($task->labels()->first()->name)->toBe('Bug');
 });
 
-// ── visibleTo scope (draft hiding) ────────────────────────────────────────────
+// ── visibleTo scope ───────────────────────────────────────────────────────────
 
-it('published tasks are visible to all members via visibleTo', function () {
+it('published tasks are visible to active members of the same project via visibleTo', function () {
     $project = makeTaskProject();
     $module  = makeModule($project);
     $creator = memberOfProject($project);
@@ -221,6 +221,47 @@ it('published tasks are visible to all members via visibleTo', function () {
     makeTask($module, $creator, ['status' => TaskStatus::Published]);
 
     expect(Task::visibleTo($other)->count())->toBe(1);
+});
+
+it('member of project A does NOT see published task in project B via visibleTo', function () {
+    $projectA = makeTaskProject();
+    $projectB = makeTaskProject();
+    $moduleA  = makeModule($projectA);
+    $moduleB  = makeModule($projectB);
+    $creatorB = memberOfProject($projectB);
+    $userA    = memberOfProject($projectA);
+
+    makeTask($moduleB, $creatorB, ['status' => TaskStatus::Published]);
+
+    // userA is only in projectA — must not see projectB's task
+    expect(Task::visibleTo($userA)->count())->toBe(0);
+});
+
+it('member of project A sees published task in project A via visibleTo', function () {
+    $projectA = makeTaskProject();
+    $moduleA  = makeModule($projectA);
+    $creator  = memberOfProject($projectA);
+    $userA    = memberOfProject($projectA);
+
+    makeTask($moduleA, $creator, ['status' => TaskStatus::Published]);
+
+    expect(Task::visibleTo($userA)->count())->toBe(1);
+});
+
+it('super_admin sees published tasks across all projects via visibleTo', function () {
+    $projectA   = makeTaskProject();
+    $projectB   = makeTaskProject();
+    $moduleA    = makeModule($projectA);
+    $moduleB    = makeModule($projectB);
+    $creatorA   = memberOfProject($projectA);
+    $creatorB   = memberOfProject($projectB);
+    $superAdmin = User::factory()->create();
+    $superAdmin->assignRole('super_admin');
+
+    makeTask($moduleA, $creatorA, ['status' => TaskStatus::Published]);
+    makeTask($moduleB, $creatorB, ['status' => TaskStatus::Published]);
+
+    expect(Task::visibleTo($superAdmin)->count())->toBe(2);
 });
 
 it('draft task is visible only to its creator via visibleTo', function () {
@@ -236,15 +277,27 @@ it('draft task is visible only to its creator via visibleTo', function () {
 });
 
 it('draft task is NOT visible to super_admin via visibleTo', function () {
-    $project   = makeTaskProject();
-    $module    = makeModule($project);
-    $creator   = memberOfProject($project);
+    $project    = makeTaskProject();
+    $module     = makeModule($project);
+    $creator    = memberOfProject($project);
     $superAdmin = User::factory()->create();
     $superAdmin->assignRole('super_admin');
 
     makeTask($module, $creator, ['status' => TaskStatus::Draft]);
 
+    // super_admin does NOT own this draft — scope hides it regardless of role
     expect(Task::visibleTo($superAdmin)->count())->toBe(0);
+});
+
+it('super_admin sees their OWN draft via visibleTo', function () {
+    $project    = makeTaskProject();
+    $module     = makeModule($project);
+    $superAdmin = User::factory()->create();
+    $superAdmin->assignRole('super_admin');
+
+    makeTask($module, $superAdmin, ['status' => TaskStatus::Draft]);
+
+    expect(Task::visibleTo($superAdmin)->count())->toBe(1);
 });
 
 it('draft task is NOT visible to project_manager via visibleTo', function () {

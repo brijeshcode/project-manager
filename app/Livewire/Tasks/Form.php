@@ -74,6 +74,10 @@ class Form extends Component
         if ($this->taskId) {
             $task = Task::findOrFail($this->taskId);
             $this->authorize('update', $task);
+            // Strip cost/time fields if user is not allowed to change them
+            if (! auth()->user()->can('updateCostTime', $task)) {
+                unset($data['estimate_hours'], $data['price']);
+            }
             $task->update($data);
         } else {
             $module = Module::findOrFail($this->module_id);

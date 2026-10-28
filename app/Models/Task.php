@@ -91,26 +91,41 @@ class Task extends Model
         }
 
         return match ($this->testing_add_type) {
-            'percent' => $this->estimate_hours * (1 + $this->testing_add_value / 100),
-            'fixed'   => $this->estimate_hours + $this->testing_add_value,
+            'percent' => $this->estimate_hours * (1 + (float) ($this->testing_add_value ?? 0) / 100),
+            'fixed'   => $this->estimate_hours + (float) ($this->testing_add_value ?? 0),
             default   => $this->estimate_hours,
         };
     }
 
     /**
-     * Scope: published tasks visible to all; drafts only to their creator.
-     * Enforced at the query level so Gate::before cannot override draft hiding.
+     * Scope: published tasks restricted to projects where the user is an active member;
+     * drafts only to their creator regardless of membership.
+     * super_admin sees all published tasks + own drafts.
+     * Enforced at query level — Gate::before cannot override this.
      *
-     * ponytail: simple two-branch WHERE; no caching — fine for per-request queries.
+     * ponytail: simple two-branch WHERE; membership sub-join mirrors ProjectPolicy::isMember.
      */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        return $query->where(function (Builder $q) use ($user) {
-            $q->where('status', TaskStatus::Published->value)
-              ->orWhere(function (Builder $q2) use ($user) {
-                  $q2->where('status', TaskStatus::Draft->value)
-                     ->where('creator_id', $user->id);
-              });
+        $isSuperAdmin = $user->hasRole('super_admin');
+
+        return $query->where(function (Builder $q) use ($user, $isSuperAdmin) {
+            // Published branch
+            $q->where(function (Builder $pub) use ($user, $isSuperAdmin) {
+                $pub->where('status', TaskStatus::Published->value);
+                if (! $isSuperAdmin) {
+                    // restrict to projects where user is an active member
+                    $pub->whereHas('module.project.members', function (Builder $m) use ($user) {
+                        $m->where('users.id', $user->id)
+                          ->where('project_members.active', true);
+                    });
+                }
+            });
+            // Draft branch — creator only (applies to everyone incl. super_admin)
+            $q->orWhere(function (Builder $draft) use ($user) {
+                $draft->where('status', TaskStatus::Draft->value)
+                      ->where('creator_id', $user->id);
+            });
         });
     }
 }

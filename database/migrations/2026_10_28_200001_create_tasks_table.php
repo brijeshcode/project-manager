@@ -19,11 +19,11 @@ return new class extends Migration
             $table->unsignedInteger('priority')->default(0);
             $table->float('estimate_hours')->default(0.0);
             $table->string('scope')->default('in');              // TaskScope enum
-            $table->float('price')->nullable();
+            $table->decimal('price', 12, 2)->nullable();
             $table->boolean('client_visible')->default(false);
             $table->boolean('testing_enabled')->default(false);
             $table->string('testing_add_type')->nullable();      // 'percent'|'fixed'
-            $table->float('testing_add_value')->nullable();
+            $table->decimal('testing_add_value', 12, 2)->nullable();
             $table->string('board_column')->default('Backlog');
             $table->unsignedInteger('position')->default(0);
             $table->timestamps();
