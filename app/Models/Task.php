@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Task extends Model
@@ -75,6 +76,11 @@ class Task extends Model
         return $this->belongsToMany(Label::class, 'label_task');
     }
 
+    public function subtasks(): HasMany
+    {
+        return $this->hasMany(Subtask::class)->orderBy('position');
+    }
+
     public function comments(): MorphMany
     {
         return $this->morphMany(Comment::class, 'commentable');
@@ -95,6 +101,12 @@ class Task extends Model
             'fixed'   => $this->estimate_hours + (float) ($this->testing_add_value ?? 0),
             default   => $this->estimate_hours,
         };
+    }
+
+    /** Own effectiveHours + sum of all subtask estimate_hours. */
+    public function totalEstimateHours(): float
+    {
+        return $this->effectiveHours() + (float) $this->subtasks()->sum('estimate_hours');
     }
 
     /**
