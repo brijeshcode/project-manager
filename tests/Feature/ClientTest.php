@@ -1,9 +1,11 @@
 <?php
 
+use App\Livewire\Clients\Form;
 use App\Models\Client;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
@@ -13,8 +15,15 @@ it('super_admin can create a client with a currency', function () {
     $admin = User::factory()->create();
     $admin->assignRole('super_admin');
 
-    $client = Client::create(['name' => 'Acme Corp', 'currency' => 'USD']);
+    Livewire::actingAs($admin)
+        ->test(Form::class)
+        ->set('name', 'Acme Corp')
+        ->set('currency', 'USD')
+        ->call('save')
+        ->assertHasNoErrors();
 
+    $client = Client::first();
+    expect($client)->not->toBeNull();
     expect($client->name)->toBe('Acme Corp');
     expect($client->currency)->toBe('USD');
     expect(Client::count())->toBe(1);
