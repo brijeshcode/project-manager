@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Module extends Model
 {
@@ -26,11 +27,15 @@ class Module extends Model
         return (int) static::where('project_id', $projectId)->max('position') + 1;
     }
 
-    /** Persists a new ordering given an ordered array of IDs. */
-    public static function reorder(array $orderedIds): void
+    /** Persists a new ordering given an ordered array of IDs, scoped to a project. */
+    public static function reorder(array $orderedIds, int $projectId): void
     {
-        foreach ($orderedIds as $position => $id) {
-            static::where('id', $id)->update(['position' => $position + 1]);
-        }
+        DB::transaction(function () use ($orderedIds, $projectId) {
+            foreach ($orderedIds as $position => $id) {
+                static::where('id', $id)
+                    ->where('project_id', $projectId)
+                    ->update(['position' => $position + 1]);
+            }
+        });
     }
 }

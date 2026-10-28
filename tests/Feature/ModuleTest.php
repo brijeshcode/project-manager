@@ -15,24 +15,28 @@ beforeEach(fn () => $this->seed(RoleSeeder::class));
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function makeProject(): Project
-{
-    $client = Client::create(['name' => 'Acme', 'currency' => 'USD']);
-    return Project::create(['client_id' => $client->id, 'name' => 'Alpha', 'status' => 'active']);
+if (! function_exists('makeProject')) {
+    function makeProject(): Project
+    {
+        $client = Client::create(['name' => 'Acme', 'currency' => 'USD']);
+        return Project::create(['client_id' => $client->id, 'name' => 'Alpha', 'status' => 'active']);
+    }
 }
 
-function memberOf(Project $project, string $role = 'developer'): User
-{
-    $user = User::factory()->create();
-    $user->assignRole($role);
-    ProjectMember::create([
-        'project_id'      => $project->id,
-        'user_id'         => $user->id,
-        'role_on_project' => $role,
-        'access_scope'    => AccessScope::All,
-        'active'          => true,
-    ]);
-    return $user;
+if (! function_exists('memberOf')) {
+    function memberOf(Project $project, string $role = 'developer'): User
+    {
+        $user = User::factory()->create();
+        $user->assignRole($role);
+        ProjectMember::create([
+            'project_id'      => $project->id,
+            'user_id'         => $user->id,
+            'role_on_project' => $role,
+            'access_scope'    => AccessScope::All,
+            'active'          => true,
+        ]);
+        return $user;
+    }
 }
 
 // ── model tests ───────────────────────────────────────────────────────────────
@@ -65,7 +69,7 @@ it('reorder persists new positions', function () {
     $m2 = Module::create(['project_id' => $project->id, 'name' => 'Billing', 'position' => 2]);
     $m3 = Module::create(['project_id' => $project->id, 'name' => 'Reports', 'position' => 3]);
 
-    Module::reorder([$m3->id, $m1->id, $m2->id]);
+    Module::reorder([$m3->id, $m1->id, $m2->id], $project->id);
 
     expect($m3->fresh()->position)->toBe(1);
     expect($m1->fresh()->position)->toBe(2);
@@ -142,4 +146,26 @@ it('manager reorderModules persists order', function () {
 
     expect($m2->fresh()->position)->toBe(1);
     expect($m1->fresh()->position)->toBe(2);
+});
+
+it('reorder scoped to project cannot affect another projects modules', function () {
+    $projectA = makeProject();
+    $projectB = makeProject();
+
+    $a1 = Module::create(['project_id' => $projectA->id, 'name' => 'A1', 'position' => 1]);
+    $a2 = Module::create(['project_id' => $projectA->id, 'name' => 'A2', 'position' => 2]);
+
+    $b1 = Module::create(['project_id' => $projectB->id, 'name' => 'B1', 'position' => 1]);
+    $b2 = Module::create(['project_id' => $projectB->id, 'name' => 'B2', 'position' => 2]);
+
+    // Attempt to reorder scoped to Project A, injecting Project B IDs
+    Module::reorder([$b2->id, $b1->id, $a2->id, $a1->id], $projectA->id);
+
+    // Project B positions must be unchanged
+    expect($b1->fresh()->position)->toBe(1);
+    expect($b2->fresh()->position)->toBe(2);
+
+    // Project A positions are updated
+    expect($a2->fresh()->position)->toBe(3);
+    expect($a1->fresh()->position)->toBe(4);
 });

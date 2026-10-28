@@ -32,7 +32,11 @@ class Manager extends Component
 
     public function reorderModules(array $orderedIds): void
     {
-        Module::reorder($orderedIds);
+        if (empty($orderedIds)) {
+            return;
+        }
+
+        Module::reorder($orderedIds, $this->project->id);
     }
 
     public function render()
