@@ -21,6 +21,12 @@ class Module extends Model
         return $this->hasMany(\App\Models\Task::class);
     }
 
+    /** Sum of all tasks' totalEstimateHours for this module. */
+    public function timelineHours(): float
+    {
+        return (float) $this->tasks->sum(fn ($t) => $t->totalEstimateHours());
+    }
+
     /** Returns the next position integer (1-based) within a project. */
     public static function nextPosition(int $projectId): int
     {
