@@ -6,6 +6,8 @@ namespace App\Models;
 use App\Enums\CostRateType;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
@@ -52,5 +54,27 @@ class User extends Authenticatable
             'cost_rate_type' => CostRateType::class,
             'cost_rate_amount' => 'float',
         ];
+    }
+
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
+
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class);
+    }
+
+    /**
+     * Derive cost for a given number of hours based on this user's rate type.
+     * Hourly: hours × rate. Flat: the fixed amount (hours ignored).
+     */
+    public function costFor(float $hours): float
+    {
+        return match ($this->cost_rate_type) {
+            CostRateType::Hourly => $hours * (float) $this->cost_rate_amount,
+            CostRateType::Flat   => (float) $this->cost_rate_amount,
+        };
     }
 }

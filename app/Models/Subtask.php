@@ -33,6 +33,11 @@ class Subtask extends Model
         return $this->morphMany(ChecklistItem::class, 'checklistable')->orderBy('position');
     }
 
+    public function timeEntries(): MorphMany
+    {
+        return $this->morphMany(TimeEntry::class, 'timeable');
+    }
+
     /** Returns the next position integer (1-based) within a task. */
     public static function nextPosition(int $taskId): int
     {
