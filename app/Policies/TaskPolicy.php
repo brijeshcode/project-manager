@@ -8,6 +8,8 @@ use App\Models\User;
 
 class TaskPolicy
 {
+    use ResolvesAbility;
+
     /**
      * View: published tasks open to any project member;
      * drafts visible only to their creator.
@@ -30,6 +32,12 @@ class TaskPolicy
      */
     public function update(User $user, Task $task): bool
     {
+        $project  = $task->module->project;
+        $resolved = $this->resolvesAbility($user, $project, 'update');
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
         if ($user->hasRole(['project_manager'])) {
             return true;
         }
@@ -43,6 +51,12 @@ class TaskPolicy
      */
     public function updateCostTime(User $user, Task $task): bool
     {
+        $project  = $task->module->project;
+        $resolved = $this->resolvesAbility($user, $project, 'updateCostTime');
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
         if ($user->hasRole('developer')) {
             return false;
         }
@@ -60,6 +74,12 @@ class TaskPolicy
      */
     public function comment(User $user, Task $task): bool
     {
+        $project  = $task->module->project;
+        $resolved = $this->resolvesAbility($user, $project, 'comment');
+        if ($resolved !== null) {
+            return $resolved;
+        }
+
         return $task->assignees()->where('users.id', $user->id)->exists();
     }
 }
