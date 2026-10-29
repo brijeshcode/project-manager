@@ -26,8 +26,8 @@ it('16h from a Friday lands on Monday, skipping the weekend', function () {
     // 8h consumed on Friday, 8h consumed on Monday → finishes Monday
     $result = $svc->workingDaysFrom($start, 16.0);
 
-    // The weekend (Sat 2026-11-01, Sun 2026-11-02) is skipped.
-    // Friday consumes 8h, Monday consumes remaining 8h → lands Monday 2026-11-03
+    // The weekend (Sat 2026-10-31, Sun 2026-11-01) is skipped.
+    // Friday consumes 8h, Monday consumes remaining 8h → lands Monday 2026-11-02
     expect($result->toDateString())->toBe('2026-11-02'); // Monday after weekend
 });
 
@@ -60,6 +60,24 @@ it('starting on Saturday jumps to next Monday', function () {
 });
 
 // ── buffer applied after hours→days conversion ────────────────────────────────
+
+// ── non-multiple-of-8 base: proves buffer-on-hours ≡ buffer-on-fractional-days ──
+//
+// base = 11h, buffer = 10% from Monday 2026-10-26.
+// Code path: 11h × 1.1 = 12.1h → workingDaysFrom(Mon, 12.1h).
+//   12.1 > 8 → consume Mon (3.1h left) → advance to Tue → 3.1 ≤ 8 → lands Tue.
+// Brief path: 11h → fractional day span = 11/8 = 1.375d; × 1.1 = 1.5125d; × 8 = 12.1h
+//   → same workingDaysFrom call → same Tue result.
+// The two approaches are EQUIVALENT (linear mapping, no rounding step in between).
+it('non-round base 11h + 10% buffer lands on Tuesday (buffer-on-hours ≡ buffer-on-fractional-days)', function () {
+    $svc   = new EstimateService();
+    $start = Carbon::parse('2026-10-26'); // Monday
+
+    // 11h × 1.1 = 12.1h: fills Mon (8h), 4.1h spills into Tue → Tue 2026-10-27
+    $result = $svc->workingDaysFrom($start, 11.0 * 1.1);
+
+    expect($result->toDateString())->toBe('2026-10-27'); // Tuesday
+});
 
 it('buffer is applied after conversion: 5 working days + 20% buffer = 6 days', function () {
     // We test this via projectDeadline with a controlled project.

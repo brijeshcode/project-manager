@@ -63,9 +63,7 @@ class EstimateService
 
         $totalHours = 0.0;
         foreach ($project->modules as $module) {
-            foreach ($module->tasks as $task) {
-                $totalHours += $task->totalEstimateHours();
-            }
+            $totalHours += $module->timelineHours();
         }
 
         $buffer      = (float) ($project->buffer_percent ?? 0.0);
