@@ -161,6 +161,62 @@ it('subtask has timeEntries morphMany', function () {
     expect($subtask->timeEntries()->count())->toBe(1);
 });
 
+// ── null/unconfigured cost rate ──────────────────────────────────────────────
+
+it('null cost_rate_amount yields zero cost', function () {
+    $project = timeProject();
+    $module  = timeModule($project);
+    $user    = timeMember($project, 'developer', [
+        'cost_rate_type'   => null,
+        'cost_rate_amount' => null,
+    ]);
+    $task = timeTask($module, $user);
+
+    $entry = TimeEntry::create([
+        'timeable_type' => Task::class,
+        'timeable_id'   => $task->id,
+        'user_id'       => $user->id,
+        'hours'         => 5.0,
+        'worked_on'     => '2026-10-01',
+    ]);
+
+    expect($entry->derivedCost())->toBe(0.0); // Unconfigured rate = zero cost, intentionally
+});
+
+// ── flat-rate per-entry contract (aggregation dedup) ────────────────────────
+
+it('flat-rate two entries each return the full fixed amount (per-entry, not summed)', function () {
+    $project = timeProject();
+    $module  = timeModule($project);
+    $user    = timeMember($project, 'developer', [
+        'cost_rate_type'   => CostRateType::Flat,
+        'cost_rate_amount' => 800.0,
+    ]);
+    $task = timeTask($module, $user);
+
+    $entry1 = TimeEntry::create([
+        'timeable_type' => Task::class,
+        'timeable_id'   => $task->id,
+        'user_id'       => $user->id,
+        'hours'         => 4.0,
+        'worked_on'     => '2026-10-01',
+    ]);
+
+    $entry2 = TimeEntry::create([
+        'timeable_type' => Task::class,
+        'timeable_id'   => $task->id,
+        'user_id'       => $user->id,
+        'hours'         => 6.0,
+        'worked_on'     => '2026-10-02',
+    ]);
+
+    // Each entry returns the full flat amount (800.0), not split or halved.
+    // derivedCost() is per-entry. The AGGREGATION layer (Task 12 profit/loss)
+    // must count the flat amount ONCE per project, not sum across entries.
+    expect($entry1->derivedCost())->toBe(800.0);
+    expect($entry2->derivedCost())->toBe(800.0);
+});
+
 // ── loggedBetween scope ───────────────────────────────────────────────────────
 
 it('loggedBetween sums hours inside range and excludes outside', function () {

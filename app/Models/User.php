@@ -69,12 +69,14 @@ class User extends Authenticatable
     /**
      * Derive cost for a given number of hours based on this user's rate type.
      * Hourly: hours × rate. Flat: the fixed amount (hours ignored).
+     * Null/unconfigured rate type: returns 0.0 (no cost).
      */
     public function costFor(float $hours): float
     {
         return match ($this->cost_rate_type) {
             CostRateType::Hourly => $hours * (float) $this->cost_rate_amount,
             CostRateType::Flat   => (float) $this->cost_rate_amount,
+            null                 => 0.0,
         };
     }
 }
