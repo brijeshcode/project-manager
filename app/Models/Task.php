@@ -43,6 +43,7 @@ class Task extends Model
         'board_column',
         'position',
         'section',
+        'client_approval',
     ];
 
     protected function casts(): array

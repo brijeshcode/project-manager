@@ -2,6 +2,8 @@
 
 use App\Livewire\Clients\Form as ClientForm;
 use App\Livewire\Clients\Index as ClientIndex;
+use App\Livewire\Portal\Dashboard as PortalDashboard;
+use App\Livewire\Portal\ProjectView as PortalProjectView;
 use App\Livewire\Projects\Form as ProjectForm;
 use App\Livewire\Projects\Index as ProjectIndex;
 use App\Livewire\Projects\Show as ProjectShow;
@@ -16,6 +18,12 @@ Route::view('dashboard', 'dashboard')
 Route::view('profile', 'profile')
     ->middleware(['auth'])
     ->name('profile');
+
+// Client portal — gated to users with the 'client' role
+Route::middleware(['auth'])->prefix('portal')->name('portal.')->group(function () {
+    Route::get('/', PortalDashboard::class)->name('dashboard');
+    Route::get('/projects/{project}', PortalProjectView::class)->name('project');
+});
 
 Route::middleware(['auth'])->group(function () {
     Route::get('clients', ClientIndex::class)->name('clients.index');
