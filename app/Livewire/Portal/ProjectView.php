@@ -23,13 +23,7 @@ class ProjectView extends Component
 
     public function mount(Project $project): void
     {
-        abort_unless(auth()->user()->hasRole('client'), 403);
-
-        // Cross-client fence: project must belong to this user's client.
-        abort_unless(
-            (int) $project->client_id === (int) auth()->user()->client_id,
-            403
-        );
+        $this->authorize('viewAsClient', $project);
 
         $this->project = $project;
     }

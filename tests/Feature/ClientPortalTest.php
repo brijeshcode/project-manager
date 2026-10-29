@@ -104,6 +104,14 @@ it('non-client user is denied the portal dashboard route', function () {
         ->assertForbidden();
 });
 
+it('developer role is blocked from portal routes at route middleware level', function () {
+    $user = internalUser('developer');
+
+    $this->actingAs($user)
+        ->get(route('portal.dashboard'))
+        ->assertForbidden();
+});
+
 it('client user can access portal dashboard route', function () {
     [$client, $user] = portalClient();
 
@@ -317,7 +325,8 @@ it('client cannot approve a task from another client', function () {
 
     Livewire::actingAs($userA)
         ->test(ProjectView::class, ['project' => $projectA])
-        ->call('approveTask', $taskB->id);
+        ->call('approveTask', $taskB->id)
+        ->assertForbidden();
 
     expect($taskB->fresh()->client_approval)->toBeNull();
 });

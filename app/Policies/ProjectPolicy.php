@@ -9,6 +9,16 @@ class ProjectPolicy
 {
     use ResolvesAbility;
 
+    /**
+     * Client portal: user may view this project as a client.
+     * Requires the 'client' role AND matching client_id FK.
+     */
+    public function viewAsClient(User $user, Project $project): bool
+    {
+        return $user->hasRole('client')
+            && (int) $user->client_id === (int) $project->client_id;
+    }
+
     public function create(User $user): bool
     {
         return $user->hasRole('project_manager');

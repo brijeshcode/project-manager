@@ -20,7 +20,7 @@ Route::view('profile', 'profile')
     ->name('profile');
 
 // Client portal — gated to users with the 'client' role
-Route::middleware(['auth'])->prefix('portal')->name('portal.')->group(function () {
+Route::middleware(['auth', 'role:client'])->prefix('portal')->name('portal.')->group(function () {
     Route::get('/', PortalDashboard::class)->name('dashboard');
     Route::get('/projects/{project}', PortalProjectView::class)->name('project');
 });
