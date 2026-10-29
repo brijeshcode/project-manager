@@ -2,10 +2,10 @@
 
 namespace App\Livewire\Tasks;
 
-use App\Enums\TaskScope;
-use App\Enums\TaskStatus;
+use App\Enums\BoardColumn;
 use App\Models\Module;
 use App\Models\Task;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class Form extends Component
@@ -67,7 +67,7 @@ class Form extends Component
             'testing_enabled'   => 'boolean',
             'testing_add_type'  => 'nullable|in:percent,fixed',
             'testing_add_value' => 'nullable|numeric|min:0',
-            'board_column'      => 'required|string|max:100',
+            'board_column'      => ['required', Rule::enum(BoardColumn::class)],
             'position'          => 'integer|min:0',
         ]);
 
@@ -83,6 +83,11 @@ class Form extends Component
             $module = Module::findOrFail($this->module_id);
             $this->authorize('update', $module->project);
             $data['creator_id'] = auth()->id();
+            // Strip cost/time for roles that cannot set them (developers, clients, etc.)
+            // super_admin and project_manager may set these on create; others cannot.
+            if (! auth()->user()->hasAnyRole(['super_admin', 'project_manager'])) {
+                unset($data['estimate_hours'], $data['price']);
+            }
             Task::create($data);
         }
     }

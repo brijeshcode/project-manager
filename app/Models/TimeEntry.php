@@ -55,6 +55,11 @@ class TimeEntry extends Model
     {
         $user = $this->relationLoaded('user') ? $this->user : $this->user()->first();
 
+        // ponytail: null guard for deleted users; returns 0.0 to match User::costFor null tolerance
+        if ($user === null) {
+            return 0.0;
+        }
+
         return $user->costFor($this->hours);
     }
 

@@ -25,11 +25,14 @@ Route::middleware(['auth', 'role:client'])->prefix('portal')->name('portal.')->g
     Route::get('/projects/{project}', PortalProjectView::class)->name('project');
 });
 
-Route::middleware(['auth'])->group(function () {
+// Client management — super_admin only
+Route::middleware(['auth', 'role:super_admin'])->group(function () {
     Route::get('clients', ClientIndex::class)->name('clients.index');
     Route::get('clients/create', ClientForm::class)->name('clients.create');
     Route::get('clients/{client}/edit', ClientForm::class)->name('clients.edit');
+});
 
+Route::middleware(['auth'])->group(function () {
     Route::get('projects', ProjectIndex::class)->name('projects.index');
     Route::get('projects/create', ProjectForm::class)->name('projects.create');
     Route::get('projects/{project}', ProjectShow::class)->name('projects.show');

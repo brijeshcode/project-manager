@@ -31,6 +31,7 @@ class Form extends Component
     public function mount(?Client $client = null): void
     {
         if ($client && $client->exists) {
+            $this->authorize('update', $client);
             $this->clientId           = $client->id;
             $this->name               = $client->name;
             $this->currency           = $client->currency;
@@ -49,6 +50,12 @@ class Form extends Component
 
     public function save(): void
     {
+        if ($this->clientId) {
+            $this->authorize('update', Client::findOrFail($this->clientId));
+        } else {
+            $this->authorize('create', Client::class);
+        }
+
         $data = $this->validate([
             'name'                => 'required|string|max:255',
             'currency'            => 'required|size:3',

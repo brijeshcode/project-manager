@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Clients\Form;
+use App\Livewire\Clients\Index;
 use App\Models\Client;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
@@ -91,6 +92,68 @@ it('stores and retrieves billing details', function () {
     expect($fresh->tax_number)->toBe('VAT123456');
     expect($fresh->billing_address)->toBe('456 Invoice Ave');
     expect($fresh->payment_terms)->toBe('net-30');
+});
+
+// ── Finding 1: route + policy deny non-super_admin ────────────────────────────
+
+it('developer is denied /clients route (403)', function () {
+    $user = User::factory()->create();
+    $user->assignRole('developer');
+
+    $this->actingAs($user)
+        ->get(route('clients.index'))
+        ->assertForbidden();
+});
+
+it('client role is denied /clients route (403)', function () {
+    $user = User::factory()->create();
+    $user->assignRole('client');
+
+    $this->actingAs($user)
+        ->get(route('clients.index'))
+        ->assertForbidden();
+});
+
+it('super_admin can access /clients route (not forbidden)', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('super_admin');
+
+    // Route middleware allows through; full render may fail on missing layout in test
+    // env — assertNotForbidden proves the gate is open for super_admin.
+    $response = $this->actingAs($admin)->get(route('clients.index'));
+    expect($response->status())->not->toBe(403);
+});
+
+it('developer is denied Client Index component (policy)', function () {
+    $user = User::factory()->create();
+    $user->assignRole('developer');
+
+    Livewire::actingAs($user)
+        ->test(Index::class)
+        ->assertForbidden();
+});
+
+it('developer is denied Client Form component on create (policy)', function () {
+    $user = User::factory()->create();
+    $user->assignRole('developer');
+
+    Livewire::actingAs($user)
+        ->test(Form::class)
+        ->set('name', 'Hack')
+        ->set('currency', 'USD')
+        ->call('save')
+        ->assertForbidden();
+});
+
+it('super_admin can list clients via Index component', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('super_admin');
+
+    Client::create(['name' => 'Listed Corp', 'currency' => 'USD']);
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->assertSuccessful();
 });
 
 it('encrypts bank fields at rest and decrypts via model', function () {

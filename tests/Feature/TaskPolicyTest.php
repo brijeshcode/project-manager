@@ -304,3 +304,68 @@ it('project_manager save DOES change estimate_hours and price', function () {
     expect((float) $task->estimate_hours)->toBe(20.0);
     expect((float) $task->price)->toBe(500.0);
 });
+
+// ── Finding 2: developer CREATE does NOT persist estimate_hours / price ────────
+
+it('developer creating a task has estimate_hours and price stripped', function () {
+    $project = policyProject();
+    $module  = policyModule($project);
+    $dev     = policyMember($project, 'developer');
+
+    Livewire::actingAs($dev)
+        ->test(Form::class)
+        ->set('module_id', $module->id)
+        ->set('title', 'Dev Task')
+        ->set('status', 'published')
+        ->set('scope', 'in')
+        ->set('board_column', 'Backlog')
+        ->set('estimate_hours', 99.0)
+        ->set('price', 999.0)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $task = \App\Models\Task::where('title', 'Dev Task')->firstOrFail();
+    // estimate_hours defaults to 0.0 (model default), price stays null
+    expect((float) $task->estimate_hours)->toBe(0.0);
+    expect($task->price)->toBeNull();
+});
+
+it('project_manager creating a task CAN set estimate_hours and price', function () {
+    $project = policyProject();
+    $module  = policyModule($project);
+    $pm      = policyMember($project, 'project_manager');
+
+    Livewire::actingAs($pm)
+        ->test(Form::class)
+        ->set('module_id', $module->id)
+        ->set('title', 'PM Task')
+        ->set('status', 'published')
+        ->set('scope', 'in')
+        ->set('board_column', 'Backlog')
+        ->set('estimate_hours', 8.0)
+        ->set('price', 200.0)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $task = \App\Models\Task::where('title', 'PM Task')->firstOrFail();
+    expect((float) $task->estimate_hours)->toBe(8.0);
+    expect((float) $task->price)->toBe(200.0);
+});
+
+// ── Finding 3: invalid board_column is rejected ────────────────────────────────
+
+it('invalid board_column value is rejected with a validation error', function () {
+    $project = policyProject();
+    $module  = policyModule($project);
+    $pm      = policyMember($project, 'project_manager');
+
+    Livewire::actingAs($pm)
+        ->test(Form::class)
+        ->set('module_id', $module->id)
+        ->set('title', 'Bad Column Task')
+        ->set('status', 'published')
+        ->set('scope', 'in')
+        ->set('board_column', 'InvalidColumn')
+        ->call('save')
+        ->assertHasErrors(['board_column']);
+});
