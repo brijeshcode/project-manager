@@ -20,7 +20,7 @@ class ProgressService
      */
     public function forTask(Task $task): float
     {
-        $taskItems    = $task->checklistItems()->get();
+        $taskItems    = $task->checklistItems;
         $subtaskItems = $task->subtasks()
             ->with('checklistItems')
             ->get()
