@@ -16,6 +16,12 @@ class TaskPolicy
      * Note: Gate::before returns true for super_admin, so super_admin bypasses
      * this check for published tasks. Draft hiding is enforced additionally
      * at the query scope level (Task::visibleTo) for list/board queries.
+     *
+     * INTENTIONAL: view is NOT subject to per-ability PermissionOverrides.
+     * Task visibility is governed by project membership and the draft creator-only rule
+     * (enforced via Task::visibleTo at query level). Overrides apply only to action
+     * abilities (update, updateCostTime, comment) — wiring an override into view could
+     * allow a non-member to resolve another user's draft task via a single-model Gate check.
      */
     public function view(User $user, Task $task): bool
     {

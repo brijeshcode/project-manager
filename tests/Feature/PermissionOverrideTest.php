@@ -235,6 +235,65 @@ it('super_admin sees tasks of all sections', function () {
         ->toContain($nullTask->id);
 });
 
+// ── multi-project ceiling: global scope-union behaviour ───────────────────────
+//
+// @todo per-project scope isolation (ponytail ceiling): currently unions scopes globally.
+// A user who is 'frontend' on Project A and 'backend' on Project B sees BOTH frontend and
+// backend tasks from Project A (and Project B). Per-project isolation needs a correlated JOIN.
+// This test pins the CURRENT accepted behaviour so any future change is caught immediately.
+
+it('user with frontend scope on project A and backend scope on project B sees both sections in project A (global union ceiling)', function () {
+    $client = Client::create(['name' => 'Multi Corp', 'currency' => 'USD']);
+
+    $projectA = Project::create(['client_id' => $client->id, 'name' => 'Project A', 'status' => 'active']);
+    $projectB = Project::create(['client_id' => $client->id, 'name' => 'Project B', 'status' => 'active']);
+
+    $moduleA = Module::create(['project_id' => $projectA->id, 'name' => 'Core A', 'position' => 1]);
+
+    // One user — frontend in Project A, backend in Project B
+    $user = User::factory()->create();
+    $user->assignRole('developer');
+    ProjectMember::create([
+        'project_id'      => $projectA->id,
+        'user_id'         => $user->id,
+        'role_on_project' => 'developer',
+        'access_scope'    => AccessScope::Frontend,
+        'active'          => true,
+    ]);
+    ProjectMember::create([
+        'project_id'      => $projectB->id,
+        'user_id'         => $user->id,
+        'role_on_project' => 'developer',
+        'access_scope'    => AccessScope::Backend,
+        'active'          => true,
+    ]);
+
+    // A creator to own tasks (also a member of Project A)
+    $creator = User::factory()->create();
+    $creator->assignRole('developer');
+    ProjectMember::create([
+        'project_id'      => $projectA->id,
+        'user_id'         => $creator->id,
+        'role_on_project' => 'developer',
+        'access_scope'    => AccessScope::All,
+        'active'          => true,
+    ]);
+
+    $frontendTaskA = overrideTask($moduleA, $creator, ['section' => 'frontend']);
+    $backendTaskA  = overrideTask($moduleA, $creator, ['section' => 'backend']);
+    $nullTaskA     = overrideTask($moduleA, $creator, ['section' => null]);
+
+    $visible = Task::visibleTo($user)->pluck('id');
+
+    // CURRENT BEHAVIOUR (global scope-union): the user's backend scope from Project B bleeds
+    // into Project A, so they see the backend task in A as well as the frontend + null tasks.
+    // Change this assertion only after implementing per-project JOIN isolation.
+    expect($visible)
+        ->toContain($frontendTaskA->id)  // expected: frontend scope from A
+        ->toContain($backendTaskA->id)   // ceiling: backend scope from B bleeds in globally
+        ->toContain($nullTaskA->id);     // always visible (null-sectioned)
+});
+
 // ── section filter preserves draft visibility guarantee ───────────────────────
 
 it('section filter does not expose other-user drafts', function () {

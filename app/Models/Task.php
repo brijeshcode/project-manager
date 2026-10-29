@@ -6,7 +6,6 @@ use App\Enums\AccessScope;
 use App\Enums\BoardColumn;
 use App\Enums\TaskScope;
 use App\Enums\TaskStatus;
-use App\Models\ProjectMember;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -162,10 +161,11 @@ class Task extends Model
                     });
 
                     // Section filter: restrict to sections allowed by the member's access_scope.
-                    // If the user has different scopes on different projects, we apply the most
-                    // permissive scope they hold on any of their memberships.
-                    // ponytail: per-project scope enforcement would need a JOIN; this simple approach
-                    // uses the narrowest single-scope a user holds, upgrade to per-project JOIN if needed.
+                    // Collects ALL active membership scopes across ALL projects globally and unions them:
+                    // if a user is 'frontend' on Project A and 'backend' on Project B, they see both
+                    // frontend and backend tasks from EVERY project they belong to.
+                    // ponytail: global scope-union, per-project scope isolation would require a correlated
+                    // subquery or JOIN — upgrade if cross-project section leakage becomes a concern.
                     $this->applyAccessScopeFilter($pub, $user);
                 }
             });
