@@ -1,3 +1,74 @@
+@import url('https://fonts.bunny.net/css?family=inter:400,500,600,700|inter-tight:500,600,700');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    html {
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+    body {
+        @apply bg-slate-50 text-slate-800;
+    }
+}
+
+@layer components {
+    /* Buttons */
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold
+               transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50
+               focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none;
+    }
+    .btn-primary {
+        @apply bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800;
+    }
+    .btn-secondary {
+        @apply bg-white text-slate-700 ring-1 ring-inset ring-slate-200 shadow-sm hover:bg-slate-50;
+    }
+    .btn-ghost {
+        @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+    }
+    .btn-danger {
+        @apply bg-rose-600 text-white shadow-sm hover:bg-rose-700;
+    }
+
+    /* Surfaces */
+    .card {
+        @apply rounded-xl border border-slate-200 bg-white shadow-card;
+    }
+
+    /* Forms */
+    .label {
+        @apply block text-sm font-medium text-slate-700 mb-1.5;
+    }
+    .input,
+    .select,
+    .textarea {
+        @apply block w-full rounded-lg border-slate-300 text-slate-900 placeholder:text-slate-400 shadow-sm
+               focus:border-brand-500 focus:ring-brand-500 sm:text-sm;
+    }
+    .field-error {
+        @apply mt-1.5 text-sm text-rose-600;
+    }
+
+    /* Badges */
+    .badge {
+        @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset;
+    }
+    .badge-slate  { @apply bg-slate-50   text-slate-600  ring-slate-200; }
+    .badge-brand  { @apply bg-brand-50   text-brand-700  ring-brand-200; }
+    .badge-green  { @apply bg-emerald-50 text-emerald-700 ring-emerald-200; }
+    .badge-amber  { @apply bg-amber-50   text-amber-700  ring-amber-200; }
+    .badge-rose   { @apply bg-rose-50    text-rose-700   ring-rose-200; }
+
+    /* Sidebar nav items */
+    .nav-item {
+        @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600
+               transition hover:bg-slate-100 hover:text-slate-900;
+    }
+    .nav-item-active {
+        @apply bg-brand-50 text-brand-700 hover:bg-brand-50 hover:text-brand-700;
+    }
+}

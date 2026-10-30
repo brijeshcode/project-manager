@@ -1,3 +1,5 @@
+> **STATUS (2026-10-30):** All 14 tasks below are **complete, reviewed, and passing** (227 Pest tests) on branch `phase-1`. A frontend redesign + "make the components reachable" pass is now in progress. For current status and the forward plan (descriptions, forms, board wiring, portal detail, later phases), see **[docs/STATUS.md](../../STATUS.md)** — that is the live handoff doc.
+
 # Project Tracker — Phase 1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

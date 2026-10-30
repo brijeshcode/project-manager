@@ -12,6 +12,7 @@ class Form extends Component
 
     public int    $client_id      = 0;
     public string $name           = '';
+    public string $description    = '';
     public float  $buffer_percent = 0;
     public ?string $start_date    = null;
     public string $status         = 'draft';
@@ -28,6 +29,7 @@ class Form extends Component
             $this->projectId      = $project->id;
             $this->client_id      = $project->client_id;
             $this->name           = $project->name;
+            $this->description    = $project->description ?? '';
             $this->buffer_percent = (float) $project->buffer_percent;
             $this->start_date     = $project->start_date?->toDateString();
             $this->status         = $project->status;
@@ -39,6 +41,7 @@ class Form extends Component
         $data = $this->validate([
             'client_id'      => 'required|exists:clients,id',
             'name'           => 'required|string|max:255',
+            'description'    => 'nullable|string',
             'buffer_percent' => 'numeric|min:0|max:999.99',
             'start_date'     => 'nullable|date',
             'status'         => 'required|string|max:50',

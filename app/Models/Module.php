@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 
 class Module extends Model
 {
-    protected $fillable = ['project_id', 'name', 'position'];
+    protected $fillable = ['project_id', 'name', 'description', 'position'];
 
     public function project(): BelongsTo
     {

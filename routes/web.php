@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Actions\Logout;
 use App\Livewire\Clients\Form as ClientForm;
 use App\Livewire\Clients\Index as ClientIndex;
 use App\Livewire\Portal\Dashboard as PortalDashboard;
@@ -10,6 +11,12 @@ use App\Livewire\Projects\Show as ProjectShow;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome');
+
+Route::post('logout', function (Logout $logout) {
+    $logout();
+
+    return redirect('/');
+})->middleware('auth')->name('logout');
 
 Route::view('dashboard', 'dashboard')
     ->middleware(['auth', 'verified'])

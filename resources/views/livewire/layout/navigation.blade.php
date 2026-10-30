@@ -33,6 +33,24 @@ new class extends Component
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
                     </x-nav-link>
+
+                    @if (auth()->user()->hasRole('super_admin'))
+                        <x-nav-link :href="route('clients.index')" :active="request()->routeIs('clients.*')" wire:navigate>
+                            {{ __('Clients') }}
+                        </x-nav-link>
+                    @endif
+
+                    @unless (auth()->user()->hasRole('client'))
+                        <x-nav-link :href="route('projects.index')" :active="request()->routeIs('projects.*')" wire:navigate>
+                            {{ __('Projects') }}
+                        </x-nav-link>
+                    @endunless
+
+                    @if (auth()->user()->hasRole('client'))
+                        <x-nav-link :href="route('portal.dashboard')" :active="request()->routeIs('portal.*')" wire:navigate>
+                            {{ __('My Projects') }}
+                        </x-nav-link>
+                    @endif
                 </div>
             </div>
 
@@ -84,6 +102,24 @@ new class extends Component
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')" wire:navigate>
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+
+            @if (auth()->user()->hasRole('super_admin'))
+                <x-responsive-nav-link :href="route('clients.index')" :active="request()->routeIs('clients.*')" wire:navigate>
+                    {{ __('Clients') }}
+                </x-responsive-nav-link>
+            @endif
+
+            @unless (auth()->user()->hasRole('client'))
+                <x-responsive-nav-link :href="route('projects.index')" :active="request()->routeIs('projects.*')" wire:navigate>
+                    {{ __('Projects') }}
+                </x-responsive-nav-link>
+            @endunless
+
+            @if (auth()->user()->hasRole('client'))
+                <x-responsive-nav-link :href="route('portal.dashboard')" :active="request()->routeIs('portal.*')" wire:navigate>
+                    {{ __('My Projects') }}
+                </x-responsive-nav-link>
+            @endif
         </div>
 
         <!-- Responsive Settings Options -->
