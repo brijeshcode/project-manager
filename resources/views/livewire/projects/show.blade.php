@@ -1,8 +1,9 @@
 <div>
     @php
-        $checklist = app(\App\Services\ProgressService::class)->forProject($project);
-        $timeUsed  = $project->timeBar() * 100;
-        $deadline  = $project->start_date ? $project->deadline() : null;
+        $checklist       = app(\App\Services\ProgressService::class)->forProject($project);
+        $timeUsed        = $project->timeBar() * 100;
+        $deadline        = $project->start_date ? $project->deadline() : null;
+        $estimateVsActual = $project->estimateVsActual();
     @endphp
 
     <div class="mb-6">
@@ -196,6 +197,14 @@
                     <div class="flex justify-between">
                         <dt class="text-slate-500">Buffer</dt>
                         <dd class="font-medium text-slate-900">{{ rtrim(rtrim(number_format((float) $project->buffer_percent, 2), '0'), '.') }}%</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500">Estimated hours</dt>
+                        <dd class="font-medium text-slate-900">{{ number_format($estimateVsActual['estimated'], 1) }}h</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500">Logged hours</dt>
+                        <dd class="font-medium text-slate-900">{{ number_format($estimateVsActual['logged'], 1) }}h</dd>
                     </div>
                 </dl>
             </x-ui.card>

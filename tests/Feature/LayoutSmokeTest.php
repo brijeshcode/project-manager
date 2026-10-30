@@ -57,3 +57,37 @@ it('renders project cards with live progress (health meter) without error', func
         ->assertSee('Acme Site')
         ->assertSee('Checklist'); // health meter rendered
 });
+
+it('project show page displays estimated and logged hours', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('super_admin');
+
+    $client  = Client::create(['name' => 'TL Corp', 'currency' => 'USD']);
+    $project = \App\Models\Project::create([
+        'client_id' => $client->id, 'name' => 'TL Project',
+        'buffer_percent' => 0, 'start_date' => now(), 'status' => 'active',
+    ]);
+    $module = \App\Models\Module::create(['project_id' => $project->id, 'name' => 'Core', 'position' => 1]);
+    $task   = \App\Models\Task::create([
+        'module_id'      => $module->id,
+        'creator_id'     => $admin->id,
+        'title'          => 'Work',
+        'status'         => 'published',
+        'estimate_hours' => 16,
+        'scope'          => 'in',
+        'board_column'   => 'Backlog',
+        'position'       => 1,
+    ]);
+    \App\Models\TimeEntry::create([
+        'timeable_type' => \App\Models\Task::class,
+        'timeable_id'   => $task->id,
+        'user_id'       => $admin->id,
+        'hours'         => 4,
+        'worked_on'     => now(),
+    ]);
+
+    actingAs($admin)->get(route('projects.show', $project))
+        ->assertOk()
+        ->assertSee('Estimated hours')
+        ->assertSee('Logged hours');
+});
