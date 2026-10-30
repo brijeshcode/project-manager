@@ -19,9 +19,12 @@
             </div>
             <p class="mt-1 text-sm text-slate-500">{{ $project->client->name }} &middot; {{ $project->currency() }}</p>
         </div>
-        @unless (auth()->user()->hasRole('client'))
-            <a href="{{ route('projects.edit', $project) }}" wire:navigate class="btn btn-secondary">Edit project</a>
-        @endunless
+        <div class="flex items-center gap-2">
+            <a href="{{ route('projects.board', $project) }}" wire:navigate class="btn btn-secondary">Board</a>
+            @unless (auth()->user()->hasRole('client'))
+                <a href="{{ route('projects.edit', $project) }}" wire:navigate class="btn btn-secondary">Edit project</a>
+            @endunless
+        </div>
     </div>
 
     @if ($project->description)

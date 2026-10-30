@@ -186,3 +186,12 @@ it('taskMoved is denied for a user without project access', function () {
     // board_column must remain unchanged
     expect($task->fresh()->board_column)->toBe('Backlog');
 });
+
+it('board page is reachable via route for project members', function () {
+    $project = boardProject();
+    $user    = boardMember($project);
+
+    $this->actingAs($user)
+        ->get(route('projects.board', $project))
+        ->assertOk();
+});
