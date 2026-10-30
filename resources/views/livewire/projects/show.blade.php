@@ -160,6 +160,12 @@
                                             @endif
                                         </div>
                                       </div>
+
+                                      {{-- Time logger --}}
+                                      <div>
+                                          <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Time</p>
+                                          <livewire:time.logger :timeable="$task" :key="'logger-'.$task->id" />
+                                      </div>
                                     </div>
                                 </li>
                             @endforeach

@@ -91,3 +91,24 @@ it('project show page displays estimated and logged hours', function () {
         ->assertSee('Estimated hours')
         ->assertSee('Logged hours');
 });
+
+it('project workspace embeds time logger for tasks', function () {
+    $admin = User::factory()->create();
+    $admin->assignRole('super_admin');
+
+    $client  = Client::create(['name' => 'Logger Corp', 'currency' => 'USD']);
+    $project = \App\Models\Project::create([
+        'client_id' => $client->id, 'name' => 'Logger Project',
+        'buffer_percent' => 0, 'status' => 'active',
+    ]);
+    $module = \App\Models\Module::create(['project_id' => $project->id, 'name' => 'Core', 'position' => 1]);
+    \App\Models\Task::create([
+        'module_id' => $module->id, 'creator_id' => $admin->id,
+        'title' => 'Loggable Task', 'status' => 'published',
+        'scope' => 'in', 'board_column' => 'Backlog', 'position' => 1,
+    ]);
+
+    actingAs($admin)->get(route('projects.show', $project))
+        ->assertOk()
+        ->assertSee('Log time');
+});
