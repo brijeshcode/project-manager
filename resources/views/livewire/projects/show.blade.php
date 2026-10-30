@@ -87,6 +87,9 @@
                                         </button>
                                         <x-ui.badge color="slate">{{ $task->board_column }}</x-ui.badge>
                                         <span class="w-10 text-right text-xs font-semibold tabular-nums text-slate-500">{{ round($taskProgress) }}%</span>
+                                        @if($canManage)
+                                        <a href="{{ route('tasks.edit', $task) }}" wire:navigate class="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700">Edit</a>
+                                        @endif
                                     </div>
                                     <div class="mt-2 h-1 w-full overflow-hidden rounded-full bg-slate-100">
                                         <div class="h-full rounded-full bg-brand-500" style="width: {{ round($taskProgress) }}%"></div>

@@ -3,8 +3,10 @@
 namespace App\Livewire\Tasks;
 
 use App\Enums\BoardColumn;
+use App\Models\Label;
 use App\Models\Module;
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -28,6 +30,9 @@ class Form extends Component
     public string $board_column    = 'Backlog';
     public int    $position        = 0;
 
+    public array  $labelIds        = [];
+    public array  $assigneeIds     = [];
+
     public function mount(?Task $task = null): void
     {
         if ($task && $task->exists) {
@@ -48,6 +53,8 @@ class Form extends Component
             $this->testing_add_value = $task->testing_add_value;
             $this->board_column     = $task->board_column;
             $this->position         = $task->position;
+            $this->labelIds         = $task->labels()->pluck('labels.id')->toArray();
+            $this->assigneeIds      = $task->assignees()->pluck('users.id')->toArray();
         }
     }
 
@@ -74,26 +81,32 @@ class Form extends Component
         if ($this->taskId) {
             $task = Task::findOrFail($this->taskId);
             $this->authorize('update', $task);
-            // Strip cost/time fields if user is not allowed to change them
             if (! auth()->user()->can('updateCostTime', $task)) {
                 unset($data['estimate_hours'], $data['price']);
             }
             $task->update($data);
+            $task->labels()->sync($this->labelIds);
+            $task->assignees()->sync($this->assigneeIds);
         } else {
             $module = Module::findOrFail($this->module_id);
             $this->authorize('update', $module->project);
             $data['creator_id'] = auth()->id();
-            // Strip cost/time for roles that cannot set them (developers, clients, etc.)
-            // super_admin and project_manager may set these on create; others cannot.
             if (! auth()->user()->hasAnyRole(['super_admin', 'project_manager'])) {
                 unset($data['estimate_hours'], $data['price']);
             }
-            Task::create($data);
+            $task = Task::create($data);
+            $task->labels()->sync($this->labelIds);
+            $task->assignees()->sync($this->assigneeIds);
         }
+
+        $this->redirect(route('projects.show', $task->module->project_id), navigate: true);
     }
 
     public function render()
     {
-        return view('livewire.tasks.form');
+        return view('livewire.tasks.form', [
+            'allLabels' => Label::orderBy('name')->get(),
+            'allUsers'  => User::orderBy('name')->get(),
+        ]);
     }
 }

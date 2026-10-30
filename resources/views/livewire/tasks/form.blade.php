@@ -1,5 +1,156 @@
 <div>
-    <input wire:model="title" type="text" placeholder="Task title" />
-    <textarea wire:model="description"></textarea>
-    <button wire:click="save">Save</button>
+    <div class="mb-6">
+        <a href="{{ $taskId ? url()->previous() : route('projects.index') }}" wire:navigate class="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700">
+            &larr; Back
+        </a>
+    </div>
+
+    <x-ui.page-header :title="$taskId ? 'Edit task' : 'New task'" subtitle="Fill in the details for this task." />
+
+    <form wire:submit="save" class="max-w-3xl space-y-6">
+
+        {{-- Core --}}
+        <x-ui.card class="space-y-5">
+            <div>
+                <label class="label" for="title">Title</label>
+                <input id="title" type="text" wire:model="title" placeholder="What needs doing?" class="input">
+                @error('title') <p class="field-error">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
+                <label class="label" for="description">Description <span class="font-normal text-slate-400">(optional)</span></label>
+                <textarea id="description" wire:model="description" rows="4" placeholder="Context, acceptance criteria, links…" class="textarea"></textarea>
+                @error('description') <p class="field-error">{{ $message }}</p> @enderror
+            </div>
+
+            <div class="grid gap-5 sm:grid-cols-3">
+                <div>
+                    <label class="label" for="status">Status</label>
+                    <select id="status" wire:model="status" class="select">
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                    </select>
+                    @error('status') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="label" for="priority">Priority</label>
+                    <select id="priority" wire:model="priority" class="select">
+                        <option value="0">Low</option>
+                        <option value="1">Medium</option>
+                        <option value="2">High</option>
+                    </select>
+                    @error('priority') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="label" for="board_column">Board column</label>
+                    <select id="board_column" wire:model="board_column" class="select">
+                        @foreach(\App\Enums\BoardColumn::ordered() as $col)
+                            <option value="{{ $col->value }}">{{ $col->value }}</option>
+                        @endforeach
+                    </select>
+                    @error('board_column') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <label class="inline-flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" wire:model="is_idea" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <span class="text-sm font-medium text-slate-700">Idea / backlog item</span>
+                </label>
+                <label class="inline-flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" wire:model="client_visible" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <span class="text-sm font-medium text-slate-700">Visible to client</span>
+                </label>
+            </div>
+        </x-ui.card>
+
+        {{-- Scope & pricing --}}
+        <x-ui.card>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-4">Scope &amp; pricing</p>
+            <div class="grid gap-5 sm:grid-cols-3">
+                <div>
+                    <label class="label" for="scope">Scope</label>
+                    <select id="scope" wire:model="scope" class="select">
+                        <option value="in">In scope</option>
+                        <option value="out">Out of scope</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="label" for="estimate_hours">Estimate (hours)</label>
+                    <input id="estimate_hours" type="number" step="0.5" min="0" wire:model="estimate_hours" class="input">
+                    @error('estimate_hours') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="label" for="price">Price <span class="font-normal text-slate-400">(out of scope)</span></label>
+                    <input id="price" type="number" step="0.01" min="0" wire:model="price" class="input" {{ $scope !== 'out' ? 'disabled' : '' }}>
+                    @error('price') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+            </div>
+        </x-ui.card>
+
+        {{-- Testing add-on --}}
+        <x-ui.card>
+            <div class="flex items-center justify-between mb-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Testing add-on</p>
+                <label class="inline-flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" wire:model="testing_enabled" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <span class="text-sm font-medium text-slate-700">Enable</span>
+                </label>
+            </div>
+            @if($testing_enabled)
+            <div class="grid gap-5 sm:grid-cols-2">
+                <div>
+                    <label class="label" for="testing_add_type">Type</label>
+                    <select id="testing_add_type" wire:model="testing_add_type" class="select">
+                        <option value="">Select…</option>
+                        <option value="percent">Percentage</option>
+                        <option value="fixed">Fixed hours</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="label" for="testing_add_value">Value</label>
+                    <input id="testing_add_value" type="number" step="0.1" min="0" wire:model="testing_add_value" class="input">
+                </div>
+            </div>
+            @endif
+        </x-ui.card>
+
+        {{-- Labels --}}
+        @if($allLabels->count())
+        <x-ui.card>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Labels</p>
+            <div class="flex flex-wrap gap-2">
+                @foreach($allLabels as $label)
+                    <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" wire:model="labelIds" value="{{ $label->id }}"
+                               class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-sm font-medium text-slate-700">{{ $label->name }}</span>
+                        @if($label->color)
+                            <span class="inline-block w-3 h-3 rounded-full" style="background:{{ $label->color }}"></span>
+                        @endif
+                    </label>
+                @endforeach
+            </div>
+        </x-ui.card>
+        @endif
+
+        {{-- Assignees --}}
+        <x-ui.card>
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Assignees</p>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                @foreach($allUsers as $user)
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" wire:model="assigneeIds" value="{{ $user->id }}"
+                               class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-sm text-slate-700">{{ $user->name }}</span>
+                    </label>
+                @endforeach
+            </div>
+        </x-ui.card>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn btn-primary">{{ $taskId ? 'Save changes' : 'Create task' }}</button>
+            <a href="{{ url()->previous() }}" class="btn btn-ghost">Cancel</a>
+        </div>
+    </form>
 </div>
