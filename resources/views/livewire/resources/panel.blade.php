@@ -38,6 +38,20 @@
                                 @endif
                             @endforeach
                         </div>
+                        <div class="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                            @foreach ($item->comments as $comment)
+                                <p wire:key="c-{{ $comment->id }}" class="text-xs text-slate-700">
+                                    <span class="font-medium">{{ $isClient ? ($comment->author_id === auth()->id() ? 'You' : 'Team') : $comment->author?->name }}</span>
+                                    <span class="text-slate-400">{{ $comment->created_at?->format('M j, g:i a') }}</span>
+                                    <span class="block whitespace-pre-wrap break-words">{{ $comment->body }}</span>
+                                </p>
+                            @endforeach
+                            <form wire:submit="addComment({{ $item->id }})" class="flex gap-2">
+                                <input type="text" wire:model="commentBody.{{ $item->id }}" placeholder="Add a comment…" class="input flex-1 text-sm h-8 py-1">
+                                <button type="submit" class="btn btn-secondary text-xs">Comment</button>
+                            </form>
+                            @error("commentBody.{$item->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
+                        </div>
                         @if ($isAdmin)
                             <div class="mt-2 flex gap-2">
                                 <select multiple wire:model="assigneeIds.{{ $item->id }}" class="input text-sm">

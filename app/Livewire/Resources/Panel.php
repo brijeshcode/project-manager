@@ -34,6 +34,8 @@ class Panel extends Component
     /** Keyed by item id. */
     public array $assigneeIds = [];
 
+    public array $commentBody = [];
+
     public function mount(Project $project): void
     {
         $user = auth()->user();
@@ -54,7 +56,7 @@ class Panel extends Component
 
         return Resource::visibleTo($user)
             ->where('project_id', $this->project->id)
-            ->with(['items' => fn ($q) => $q->visibleTo($user)->with(['assignees', 'creator'])])
+            ->with(['items' => fn ($q) => $q->visibleTo($user)->with(['assignees', 'creator', 'comments.author'])])
             ->orderBy('id')
             ->get();
     }
@@ -149,6 +151,21 @@ class Panel extends Component
         }
 
         $item->assignees()->sync($ids->all());
+        unset($this->resources);
+    }
+
+    public function addComment(int $itemId): void
+    {
+        $user = auth()->user();
+        $item = ResourceItem::visibleTo($user)
+            ->whereHas('resource', fn ($r) => $r->where('project_id', $this->project->id))
+            ->findOrFail($itemId);
+
+        $this->validate(["commentBody.$itemId" => 'required|string|max:2000']);
+
+        $item->comments()->create(['author_id' => $user->id, 'body' => $this->commentBody[$itemId]]);
+
+        unset($this->commentBody[$itemId]);
         unset($this->resources);
     }
 
