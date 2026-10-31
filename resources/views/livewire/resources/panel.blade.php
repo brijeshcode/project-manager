@@ -1,3 +1,7 @@
+@php
+    $isAdmin = auth()->user()->hasRole('super_admin');
+    $isClient = auth()->user()->hasRole('client');
+@endphp
 <div class="space-y-4">
     <h2 class="text-sm font-semibold text-slate-900">Resources</h2>
 
@@ -20,13 +24,17 @@
                         @if ($item->type === 'text')
                             <p class="mt-1 whitespace-pre-wrap break-words text-slate-700">{{ $item->value }}</p>
                         @endif
-                        <p class="mt-1 text-xs text-slate-500">{{ $item->created_at?->format('M j, Y') }} · {{ $item->creator?->name }}</p>
+                        <p class="mt-1 text-xs text-slate-500">{{ $item->created_at?->format('M j, Y') }}@if (! $isClient || $item->created_by === auth()->id()) · {{ $isClient ? 'You' : $item->creator?->name }}@endif</p>
                         <div class="mt-1 flex flex-wrap gap-1">
                             @foreach ($item->assignees as $a)
-                                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{{ $a->name }}</span>
+                                @if (! $isClient)
+                                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{{ $a->name }}</span>
+                                @elseif ($a->id === auth()->id())
+                                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs">You</span>
+                                @endif
                             @endforeach
                         </div>
-                        @if (auth()->user()->hasRole('super_admin'))
+                        @if ($isAdmin)
                             <div class="mt-2 flex gap-2">
                                 <select multiple wire:model="assigneeIds.{{ $item->id }}" class="input text-sm">
                                     @foreach ($this->candidates as $u)
@@ -53,7 +61,7 @@
         <p class="text-sm text-slate-500">No resources yet.</p>
     @endforelse
 
-    @if (auth()->user()->hasRole('super_admin'))
+    @if ($isAdmin)
         <x-ui.card>
             <form wire:submit="addResource" class="space-y-2">
                 <input type="text" wire:model="newTitle" placeholder="New resource title" class="input w-full text-sm">

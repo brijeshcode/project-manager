@@ -114,3 +114,49 @@ it('client sees only own item on portal; outsiders are forbidden', function () {
         ->assertSee('LabelC')->assertDontSee('LabelA')->assertDontSee('LabelB');
     Livewire::actingAs($outsider)->test(Panel::class, ['project' => $project])->assertForbidden();
 });
+
+function rpOtherProject(array $s): array
+{
+    $p2 = Project::create(['client_id' => $s['client']->id, 'name' => 'Other', 'buffer_percent' => 0, 'start_date' => now(), 'status' => 'active']);
+    $r2 = $p2->resources()->create(['title' => 'Elsewhere']);
+    $i2 = $r2->items()->create(['type' => 'text', 'label' => 'LabelZ', 'value' => 'z', 'created_by' => $s['admin']->id]);
+    $i2->assignees()->attach($s['admin']);
+
+    return [$r2, $i2];
+}
+
+it('rejects a resource id from another project', function () {
+    $s = rpSetup();
+    [$r2] = rpOtherProject($s);
+    expect(fn () => Livewire::actingAs($s['admin'])->test(Panel::class, ['project' => $s['project']])
+        ->set("itemLabel.{$r2->id}", 'L')->set("itemValue.{$r2->id}", 'v')
+        ->call('addTextItem', $r2->id))->toThrow(ModelNotFoundException::class);
+    expect(ResourceItem::where('resource_id', $r2->id)->count())->toBe(1);
+});
+
+it('rejects an item id from another project in setAssignees', function () {
+    $s = rpSetup();
+    [, $i2] = rpOtherProject($s);
+    expect(fn () => Livewire::actingAs($s['admin'])->test(Panel::class, ['project' => $s['project']])
+        ->call('setAssignees', $i2->id, [$s['staff']->id]))->toThrow(ModelNotFoundException::class);
+    expect($i2->assignees()->pluck('users.id')->all())->toBe([$s['admin']->id]);
+});
+
+it('client cannot add to an invisible resource or set assignees', function () {
+    extract(rpSetup());
+    $t = Livewire::actingAs($k)->test(Panel::class, ['project' => $project]);
+    $t->call('setAssignees', $c->id, [$k->id])->assertForbidden();
+    expect(fn () => Livewire::actingAs($k)->test(Panel::class, ['project' => $project])
+        ->set("itemLabel.{$hidden->id}", 'L')->set("itemValue.{$hidden->id}", 'v')
+        ->call('addTextItem', $hidden->id))->toThrow(ModelNotFoundException::class);
+});
+
+it('client panel hides staff names but shows own item', function () {
+    extract(rpSetup());
+    $c->assignees()->attach($staff);
+    $admin->update(['name' => 'Zed Adminson']);
+    $staff->update(['name' => 'Quinn Staffer']);
+    Livewire::actingAs($k)->test(Panel::class, ['project' => $project])
+        ->assertSee('LabelC')->assertSee('You')
+        ->assertDontSee('Zed Adminson')->assertDontSee('Quinn Staffer');
+});

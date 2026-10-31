@@ -9,10 +9,12 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class Panel extends Component
 {
+    #[Locked]
     public Project $project;
 
     public string $newTitle = '';
