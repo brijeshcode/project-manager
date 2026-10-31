@@ -23,6 +23,10 @@
                         </div>
                         @if ($item->type === 'text')
                             <p class="mt-1 whitespace-pre-wrap break-words text-slate-700">{{ $item->value }}</p>
+                        @elseif ($item->type === 'image')
+                            <img src="{{ route('resource-items.download', $item->id) }}" alt="{{ $item->original_name }}" class="mt-1 max-h-40 rounded">
+                        @elseif ($item->type === 'file')
+                            <a href="{{ route('resource-items.download', $item->id) }}" class="mt-1 inline-block text-indigo-600 underline">{{ $item->original_name }}</a>
                         @endif
                         <p class="mt-1 text-xs text-slate-500">{{ $item->created_at?->format('M j, Y') }}@if (! $isClient || $item->created_by === auth()->id()) · {{ $isClient ? 'You' : $item->creator?->name }}@endif</p>
                         <div class="mt-1 flex flex-wrap gap-1">
@@ -56,6 +60,13 @@
                 @error("itemValue.{$resource->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
                 <button type="submit" class="btn btn-secondary text-sm">+ Text item</button>
             </form>
+
+            <div class="mt-3 space-y-2">
+                <input type="file" wire:model="upload.{{ $resource->id }}" class="text-sm">
+                @error("upload.{$resource->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
+                <button type="button" wire:click="addFileItem({{ $resource->id }}, 'image')" class="btn btn-secondary text-sm">+ Image</button>
+                <button type="button" wire:click="addFileItem({{ $resource->id }}, 'file')" class="btn btn-secondary text-sm">+ File</button>
+            </div>
         </x-ui.card>
     @empty
         <p class="text-sm text-slate-500">No resources yet.</p>

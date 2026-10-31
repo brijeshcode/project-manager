@@ -11,9 +11,14 @@ use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class Panel extends Component
 {
+    use WithFileUploads;
+
+    public array $upload = [];
+
     #[Locked]
     public Project $project;
 
@@ -99,6 +104,35 @@ class Panel extends Component
         $item->assignees()->attach($user->id);
 
         unset($this->itemLabel[$resourceId], $this->itemValue[$resourceId]);
+        unset($this->resources);
+    }
+
+    public function addFileItem(int $resourceId, string $type): void
+    {
+        $user = auth()->user();
+        $resource = Resource::visibleTo($user)->where('project_id', $this->project->id)->findOrFail($resourceId);
+
+        validator(['type' => $type], ['type' => 'in:image,file'])->validate();
+        $mimes = $type === 'image' ? 'png,jpg,jpeg,webp,gif' : 'pdf,doc,docx,xls,xlsx,zip';
+        $this->validate([
+            "itemLabel.$resourceId" => 'required|string|max:255',
+            "upload.$resourceId" => "required|file|mimes:$mimes|max:10240",
+        ]);
+
+        $file = $this->upload[$resourceId];
+        $name = basename(str_replace(chr(92), '/', $file->getClientOriginalName()));
+        $name = mb_substr(preg_replace('/[\x00-\x1F\x7F]/u', '', $name), 0, 255);
+
+        $item = $resource->items()->create([
+            'type' => $type,
+            'label' => trim($this->itemLabel[$resourceId]),
+            'value' => $file->store('resources', 'local'),
+            'original_name' => $name !== '' ? $name : 'file',
+            'created_by' => $user->id,
+        ]);
+        $item->assignees()->attach($user->id);
+
+        unset($this->itemLabel[$resourceId], $this->upload[$resourceId]);
         unset($this->resources);
     }
 
