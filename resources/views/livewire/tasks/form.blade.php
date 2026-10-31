@@ -65,6 +65,7 @@
         </x-ui.card>
 
         {{-- Scope & pricing --}}
+        @if($task && auth()->user()->can('updateCostTime', $task))
         <x-ui.card>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-4">Scope &amp; pricing</p>
             <div class="grid gap-5 sm:grid-cols-3">
@@ -87,6 +88,7 @@
                 </div>
             </div>
         </x-ui.card>
+        @endif
 
         {{-- Testing add-on --}}
         <x-ui.card>

@@ -295,3 +295,32 @@ it('developer still cannot updateCostTime after logging time', function () {
 
     expect($dev->can('updateCostTime', $task))->toBeFalse();
 });
+
+it('logger log() rejects tampering with a task from another project', function () {
+    // Project A + task A
+    $projectA = timeProject();
+    $moduleA  = timeModule($projectA);
+    $ownerA   = timeMember($projectA, 'project_manager');
+    $taskA    = timeTask($moduleA, $ownerA);
+
+    // Project B + member B (no access to project A)
+    $client   = Client::create(['name' => 'BrandCo', 'currency' => 'USD']);
+    $projectB = Project::create(['client_id' => $client->id, 'name' => 'ProjectB', 'status' => 'active']);
+    $memberB  = timeMember($projectB, 'developer');
+
+    // memberB mounts the logger legitimately on a project-B task, then tampers
+    $taskB = timeTask($moduleA, $ownerA); // create another task so we have a valid mount
+    // Give memberB their own task to mount on
+    $moduleB = timeModule($projectB);
+    $validTask = timeTask($moduleB, $memberB);
+
+    Livewire::actingAs($memberB)
+        ->test(Logger::class, ['timeable' => $validTask])
+        ->set('timeableId', $taskA->id)   // tamper: point at project-A task
+        ->set('hours', 2.0)
+        ->set('worked_on', '2026-10-01')
+        ->call('log');
+
+    // No time entry must have been created for project-A task
+    expect(TimeEntry::where('timeable_id', $taskA->id)->count())->toBe(0);
+});

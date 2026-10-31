@@ -73,6 +73,46 @@ it('task form syncs labels and assignees when saving', function () {
         ->and($task->fresh()->assignees()->count())->toBe(1);
 });
 
+it('task form hides scope and pricing card from developers', function () {
+    $project  = tfProject();
+    $module   = tfModule($project);
+    $dev      = tfMember($project, 'developer');
+    $task     = Task::create([
+        'module_id'    => $module->id,
+        'creator_id'   => $dev->id,
+        'title'        => 'Dev task',
+        'status'       => 'published',
+        'scope'        => 'in',
+        'board_column' => 'Backlog',
+        'position'     => 1,
+    ]);
+
+    Livewire::actingAs($dev)
+        ->test(\App\Livewire\Tasks\Form::class, ['task' => $task])
+        ->assertDontSee('Scope &amp; pricing');
+});
+
+it('task form returns 403 for a non-member', function () {
+    $project  = tfProject();
+    $module   = tfModule($project);
+    $creator  = tfAdminUser();
+    $task     = Task::create([
+        'module_id'    => $module->id,
+        'creator_id'   => $creator->id,
+        'title'        => 'Restricted task',
+        'status'       => 'published',
+        'scope'        => 'in',
+        'board_column' => 'Backlog',
+        'position'     => 1,
+    ]);
+    $outsider = User::factory()->create();
+    $outsider->assignRole('developer');
+
+    Livewire::actingAs($outsider)
+        ->test(\App\Livewire\Tasks\Form::class, ['task' => $task])
+        ->assertForbidden();
+});
+
 it('task form page is reachable via route for managers', function () {
     $admin   = tfAdminUser();
     $project = tfProject();

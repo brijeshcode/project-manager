@@ -104,7 +104,10 @@ class Form extends Component
 
     public function render()
     {
+        $task = $this->taskId ? Task::find($this->taskId) : null;
+
         return view('livewire.tasks.form', [
+            'task'      => $task,
             'allLabels' => Label::orderBy('name')->get(),
             'allUsers'  => User::orderBy('name')->get(),
         ]);

@@ -139,3 +139,30 @@ it('blocks adding a task to a module from another project', function () {
 
     expect(Task::where('module_id', $moduleB->id)->count())->toBe(0);
 });
+
+it('workspace hides draft tasks created by other users', function () {
+    $project = wsProject();
+    $manager = wsManager($project);
+
+    // Another developer creates a draft task (not the manager)
+    $dev = User::factory()->create();
+    $dev->assignRole('developer');
+    $project->members()->attach($dev->id, ['role_on_project' => 'developer', 'access_scope' => 'all', 'active' => true]);
+
+    $module = $project->modules()->create(['name' => 'Core', 'position' => 1]);
+
+    Task::create([
+        'module_id'    => $module->id,
+        'creator_id'   => $dev->id,
+        'title'        => 'Secret Draft',
+        'status'       => 'draft',
+        'scope'        => 'in',
+        'board_column' => 'Backlog',
+        'position'     => 1,
+    ]);
+
+    // Manager (not the creator) should NOT see it
+    Livewire::actingAs($manager)
+        ->test(\App\Livewire\Projects\Show::class, ['project' => $project])
+        ->assertDontSee('Secret Draft');
+});

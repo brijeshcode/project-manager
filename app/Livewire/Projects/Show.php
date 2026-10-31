@@ -173,7 +173,7 @@ class Show extends Component
     {
         $modules = $this->project->modules()
             ->with([
-                'tasks' => fn ($q) => $q->orderBy('position'),
+                'tasks' => fn ($q) => $q->visibleTo(auth()->user())->orderBy('position'),
                 'tasks.subtasks',
                 'tasks.checklistItems',
             ])
