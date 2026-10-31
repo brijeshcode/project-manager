@@ -43,6 +43,16 @@ class Client extends Model
         return $this->hasMany(User::class);
     }
 
+    public function billableLines(): HasMany
+    {
+        return $this->hasMany(BillableLine::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class);

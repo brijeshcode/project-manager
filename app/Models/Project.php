@@ -50,6 +50,11 @@ class Project extends Model
         return $this->hasMany(Module::class)->orderBy('position');
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
     public function currency(): string
     {
         return $this->client->currency;
