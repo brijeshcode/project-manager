@@ -96,3 +96,90 @@ it('ignores drafts and other clients', function () {
     bsSync($m);
     expect(BillableLine::count())->toBe(0);
 });
+
+it('hourly amount matches rate x totalEstimateHours with testing add-ons and subtasks', function () {
+    $m = bsModule('hourly', 4500);
+    $pct = bsTask($m, ['estimate_hours' => 3, 'testing_enabled' => true, 'testing_add_type' => 'percent', 'testing_add_value' => 25, 'title' => 'P']);
+    $fix = bsTask($m, ['estimate_hours' => 2.5, 'testing_enabled' => true, 'testing_add_type' => 'fixed', 'testing_add_value' => 1.25, 'title' => 'F']);
+    foreach ([$pct, $fix] as $t) {
+        $t->subtasks()->create(['title' => 's1', 'estimate_hours' => 1.5, 'position' => 1]);
+        $t->subtasks()->create(['title' => 's2', 'estimate_hours' => 0.75, 'position' => 2]);
+    }
+    bsSync($m);
+    foreach ([$pct, $fix] as $t) {
+        $expected = intdiv(\App\Support\Money::toCents(number_format($t->totalEstimateHours(), 2, '.', '')) * 4500 + 50, 100);
+        expect(BillableLine::where('source_id', $t->id)->first()->amount_cents)->toBe($expected);
+    }
+});
+
+it('treats price 0 as unpriced', function () {
+    $h = bsModule('hourly', 5000);
+    bsTask($h, ['price' => 0, 'estimate_hours' => 2]);
+    bsSync($h);
+    expect(BillableLine::first()->amount_cents)->toBe(10000);
+
+    $f = bsModule();
+    bsTask($f, ['price' => 0, 'estimate_hours' => 2]);
+    bsSync($f);
+    expect(BillableLine::where('client_id', $f->project->client_id)->count())->toBe(0);
+});
+
+it('follows billing mode switches without touching invoiced lines', function () {
+    $m = bsModule('hourly', 5000);
+    $a = bsTask($m, ['estimate_hours' => 2]);
+    $b = bsTask($m, ['estimate_hours' => 1, 'title' => 'B']);
+    bsSync($m);
+    BillableLine::where('source_id', $b->id)->update(['invoice_id' => 3]);
+    $client = $m->project->client;
+    $client->update(['billing_mode' => 'fixed']);
+    app(BillableService::class)->syncCompletedWork($client->fresh());
+    expect(BillableLine::pluck('source_id')->all())->toBe([$b->id]);
+    $client->update(['billing_mode' => 'hourly']);
+    app(BillableService::class)->syncCompletedWork($client->fresh());
+    expect(BillableLine::where('source_id', $a->id)->count())->toBe(1)
+        ->and(BillableLine::where('source_id', $b->id)->count())->toBe(1);
+});
+
+it('deletes an uninvoiced line when the task amount becomes null', function () {
+    $m = bsModule();
+    $t = bsTask($m, ['price' => 200]);
+    bsSync($m);
+    $t->update(['price' => null]);
+    bsSync($m);
+    expect(BillableLine::count())->toBe(0);
+});
+
+it('never alters another client\'s lines', function () {
+    $a = bsModule();
+    $b = bsModule();
+    $ta = bsTask($a, ['price' => 100]);
+    $tb = bsTask($b, ['price' => 300]);
+    bsSync($b);
+    bsSync($a);
+    $tb->update(['board_column' => 'Backlog']);
+    bsSync($a);
+    expect(BillableLine::where('client_id', $b->project->client_id)->pluck('amount_cents')->all())->toBe([30000])
+        ->and(BillableLine::where('client_id', $a->project->client_id)->count())->toBe(1);
+});
+
+it('does not bill hourly tasks when the module has no rate', function () {
+    $m = bsModule('hourly', null);
+    bsTask($m, ['estimate_hours' => 2]);
+    bsSync($m);
+    expect(BillableLine::count())->toBe(0);
+});
+
+it('self-heals duplicate uninvoiced lines', function () {
+    $m = bsModule();
+    $t = bsTask($m, ['price' => 200]);
+    bsSync($m);
+    $dup = BillableLine::first()->replicate();
+    $dup->save();
+    $inv = BillableLine::first()->replicate();
+    $inv->invoice_id = 5;
+    $inv->save();
+    expect(BillableLine::count())->toBe(3);
+    bsSync($m);
+    expect(BillableLine::whereNull('invoice_id')->count())->toBe(1)
+        ->and(BillableLine::whereNotNull('invoice_id')->count())->toBe(1);
+});

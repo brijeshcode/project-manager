@@ -25,9 +25,11 @@ class BillableService
             ->get();
 
         $hourly = $client->billing_mode === BillingMode::Hourly;
-        $existing = BillableLine::where('client_id', $client->id)->where('source_type', Task::class)->get()->groupBy('source_id');
 
-        DB::transaction(function () use ($tasks, $hourly, $existing, $client) {
+        DB::transaction(function () use ($tasks, $hourly, $client) {
+            // read inside the transaction; lockForUpdate is a no-op on sqlite (no unique index, per ruling)
+            $existing = BillableLine::where('client_id', $client->id)->where('source_type', Task::class)
+                ->orderBy('id')->lockForUpdate()->get()->groupBy('source_id');
             $keep = [];
             foreach ($tasks as $task) {
                 $cents = $this->amountCents($task, $hourly);
@@ -36,7 +38,10 @@ class BillableService
                 }
                 $keep[] = $task->id;
                 $data = ['description' => $task->title, 'quantity' => 1, 'unit_price_cents' => $cents, 'amount_cents' => $cents];
-                $line = $existing->get($task->id)?->first();
+                $group = $existing->get($task->id, collect());
+                $line = $group->first(fn ($l) => $l->invoice_id === null) ?? $group->first();
+                // self-heal: surplus uninvoiced duplicates are deleted, the first one is kept
+                $group->filter(fn ($l) => $l->invoice_id === null && $l->id !== $line?->id)->each->delete();
                 if ($line === null) {
                     BillableLine::create($data + [
                         'client_id' => $client->id, 'project_id' => $task->module->project_id,
@@ -59,7 +64,7 @@ class BillableService
 
     private function amountCents(Task $task, bool $hourly): ?int
     {
-        if ($task->price !== null) {
+        if ($task->price !== null && $task->price > 0) {
             return Money::toCents((string) $task->price);
         }
         $rate = $task->module->hourly_rate_cents;
