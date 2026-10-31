@@ -7,6 +7,7 @@ use App\Enums\TaskStatus;
 use App\Models\ChecklistItem;
 use App\Models\Module;
 use App\Models\Project;
+use App\Support\Money;
 use App\Models\Subtask;
 use App\Models\Task;
 use App\Services\ProgressService;
@@ -36,13 +37,23 @@ class Show extends Component
 
     public array $taskDescriptions = [];
 
+    /** Budget inputs per module id: hours, rate, amount (major units), deadline, reason. Owner only. */
+    public array $budget = [];
+
+    public bool $canMoney = false;
+
     public function mount(Project $project): void
     {
         $this->authorize('view', $project);
         $this->project = $project;
         $this->canManage = auth()->user()->can('update', $project);
 
+        $this->canMoney = auth()->user()->can('manage-money');
+
         foreach ($project->modules()->with('tasks')->get() as $module) {
+            if ($this->canMoney) {
+                $this->fillBudget($module);
+            }
             $this->moduleDescriptions[$module->id] = $module->description ?? '';
             foreach ($module->tasks as $task) {
                 $this->taskDescriptions[$task->id] = $task->description ?? '';
@@ -65,6 +76,48 @@ class Show extends Component
         $this->moduleDescriptions[$module->id] = $module->description ?? '';
         $this->newModuleName = '';
         $this->newModuleDescription = '';
+    }
+
+    protected function fillBudget(Module $m): void
+    {
+        $this->budget[$m->id] = [
+            'hours'    => $m->budget_hours === null ? '' : (string) $m->budget_hours,
+            'rate'     => Money::toInput($m->hourly_rate_cents),
+            'amount'   => Money::toInput($m->budget_amount_cents),
+            'deadline' => $m->deadline?->toDateString() ?? '',
+            'reason'   => '',
+        ];
+    }
+
+    public function saveBudget(int $moduleId): void
+    {
+        $this->authorize('manage-money');
+
+        $module = $this->project->modules()->findOrFail($moduleId);
+        $this->validate([
+            "budget.$moduleId.hours"    => 'nullable|numeric|min:0|max:999999',
+            "budget.$moduleId.rate"     => ['nullable', 'regex:/^[\d,]{1,14}(\.\d{1,3})?$/'],
+            "budget.$moduleId.amount"   => ['nullable', 'regex:/^[\d,]{1,14}(\.\d{1,3})?$/'],
+            "budget.$moduleId.deadline" => 'nullable|date',
+            "budget.$moduleId.reason"   => 'nullable|string|max:1000',
+        ]);
+
+        $b = $this->budget[$moduleId];
+        $cents = fn ($v) => ($v ?? '') === '' ? null : Money::toCents(str_replace(',', '', $v));
+        try {
+            $module->updateBudget([
+                'budget_hours'        => ($b['hours'] ?? '') === '' ? null : $b['hours'],
+                'hourly_rate_cents'   => $cents($b['rate'] ?? null),
+                'budget_amount_cents' => $cents($b['amount'] ?? null),
+                'deadline'            => ($b['deadline'] ?? '') ?: null,
+            ], auth()->user(), (string) ($b['reason'] ?? ''));
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->addError("budget.$moduleId.reason", $e->errors()['reason'][0] ?? 'Reason required.');
+
+            return;
+        }
+
+        $this->fillBudget($module->fresh());
     }
 
     public function saveModuleDescription(int $moduleId): void

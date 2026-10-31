@@ -78,6 +78,32 @@
                             @elseif ($module->description)
                                 <p class="mt-1 text-xs text-slate-500">{{ $module->description }}</p>
                             @endif
+                            @if ($canMoney)
+                                @php $hourly = $project->client->billing_mode === \App\Enums\BillingMode::Hourly; @endphp
+                                <div class="mt-2 text-xs text-slate-500" x-data="{ editingBudget: false }">
+                                    <div x-show="!editingBudget" class="flex items-center gap-2">
+                                        <span>Budget: {{ $module->budgetCents() === null ? 'not set' : \App\Support\Money::format($module->budgetCents(), $project->client->currency) }}@if ($module->deadline) &middot; due {{ $module->deadline->toDateString() }}@endif</span>
+                                        <button @click="editingBudget = true" class="shrink-0 font-medium text-brand-600 hover:text-brand-700">Edit budget</button>
+                                    </div>
+                                    <form x-show="editingBudget" style="display:none" wire:submit.prevent="saveBudget({{ $module->id }})" @submit="editingBudget = false" class="space-y-1.5">
+                                        @if ($hourly)
+                                            <input type="number" step="0.01" min="0" wire:model="budget.{{ $module->id }}.hours" placeholder="Budget hours" class="input h-8 text-xs">
+                                            <input type="text" wire:model="budget.{{ $module->id }}.rate" placeholder="Hourly rate ({{ $project->client->currency }})" class="input h-8 text-xs">
+                                        @else
+                                            <input type="text" wire:model="budget.{{ $module->id }}.amount" placeholder="Fixed amount ({{ $project->client->currency }})" class="input h-8 text-xs">
+                                        @endif
+                                        <input type="date" wire:model="budget.{{ $module->id }}.deadline" class="input h-8 text-xs">
+                                        <input type="text" wire:model="budget.{{ $module->id }}.reason" placeholder="Reason (required when changing an existing value)" class="input h-8 text-xs">
+                                        @foreach (['hours', 'rate', 'amount', 'deadline', 'reason'] as $f)
+                                            @error("budget.{$module->id}.$f") <p class="field-error">{{ $message }}</p> @enderror
+                                        @endforeach
+                                        <div class="flex gap-2">
+                                            <button type="submit" class="btn btn-secondary h-7 px-2.5 py-1 text-xs">Save budget</button>
+                                            <button type="button" @click="editingBudget = false" class="btn btn-ghost h-7 px-2.5 py-1 text-xs">Cancel</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            @endif
                         </div>
 
                         <ul class="divide-y divide-slate-100">

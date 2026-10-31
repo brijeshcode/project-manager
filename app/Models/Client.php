@@ -12,6 +12,7 @@ class Client extends Model
     protected $fillable = [
         'name',
         'currency',
+        'billing_mode',
         // Contact
         'contact_name',
         'contact_email',
@@ -30,6 +31,7 @@ class Client extends Model
     protected function casts(): array
     {
         return [
+            'billing_mode'        => \App\Enums\BillingMode::class,
             'bank_name'           => 'encrypted',
             'bank_account_number' => 'encrypted',
             'bank_swift'          => 'encrypted',

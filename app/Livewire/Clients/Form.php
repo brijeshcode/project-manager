@@ -11,6 +11,7 @@ class Form extends Component
 
     public string $name     = '';
     public string $currency = '';
+    public string $billing_mode = 'fixed';
 
     // Contact
     public ?string $contact_name  = null;
@@ -35,6 +36,7 @@ class Form extends Component
             $this->clientId           = $client->id;
             $this->name               = $client->name;
             $this->currency           = $client->currency;
+            $this->billing_mode       = $client->billing_mode->value;
             $this->contact_name       = $client->contact_name;
             $this->contact_email      = $client->contact_email;
             $this->contact_phone      = $client->contact_phone;
@@ -59,6 +61,7 @@ class Form extends Component
         $data = $this->validate([
             'name'                => 'required|string|max:255',
             'currency'            => 'required|size:3',
+            'billing_mode'        => ['required', new \Illuminate\Validation\Rules\Enum(\App\Enums\BillingMode::class)],
             'contact_name'        => 'nullable|string|max:255',
             'contact_email'       => 'nullable|email|max:255',
             'contact_phone'       => 'nullable|string|max:50',
