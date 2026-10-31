@@ -40,6 +40,11 @@ class Project extends Model
                     ->withTimestamps();
     }
 
+    public function resources(): HasMany
+    {
+        return $this->hasMany(Resource::class);
+    }
+
     public function modules(): HasMany
     {
         return $this->hasMany(Module::class)->orderBy('position');
