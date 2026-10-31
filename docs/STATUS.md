@@ -1,6 +1,6 @@
 # Project Tracker ("Helm") — Status & Next Steps
 
-_Last updated: 2026-10-31. Branch: `phase-1` (not yet merged to `main`). Tests: **237 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
+_Last updated: 2026-10-31. Branch: `phase-2` (not yet merged to `main`). Tests: **270 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
 
 This is the living "where are we / what's next" doc. The task-by-task build plan is
 [docs/superpowers/plans/2026-10-26-project-tracker-phase-1.md](superpowers/plans/2026-10-26-project-tracker-phase-1.md);
@@ -44,6 +44,14 @@ time bar turns amber→rose when over budget).
 - Supporting: `logout` route, `DemoSeeder` (demo client + projects + tasks), smoke tests
   (`LayoutSmokeTest`, `ProjectWorkspaceTest`).
 
+### ✅ Phase 2 Resources — built (2026-10-31)
+Spec: [docs/superpowers/specs/2026-10-31-phase-2-resources-design.md](superpowers/specs/2026-10-31-phase-2-resources-design.md);
+plan: [docs/superpowers/plans/2026-10-31-phase-2-resources.md](superpowers/plans/2026-10-31-phase-2-resources.md).
+Resource containers → items (text / image / file), per-item assignees (assigned by super
+admin only), encrypted values, private files with a permission-checked download route,
+comments on items, and a client portal embed with staff names hidden from clients.
+`DemoSeeder` also adds one demo Resource (idempotent).
+
 ---
 
 ## Frontend pass — completed items
@@ -72,9 +80,7 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
 ## What's next
 
 ### Later phases (from the spec)
-- **Phase 2 — Resources**: documents / screenshots / credentials, one typed entity,
-  item-level sharing, credentials encrypted at rest, client-uploadable.
-- **Phase 3 — Money**: payments, invoices (replace manual PDFs), expenses, profit/loss,
+- **Phase 3 — Money (next)**: payments, invoices (replace manual PDFs), expenses, profit/loss,
   client-visible payment standing.
 - **Phase 4 — Chat**: in-app chat per project + chat-to-task.
 - **Phase 5 — Multi-tenancy**: spatie multi-DB (one DB/tenant) + landlord DB + feature flags.
@@ -92,6 +98,16 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
 - `client_approval` and task `section` are raw nullable strings (no enum cast) — fine, tidy later.
 - Cypress deferred on this machine (Electron illegal-instruction crash) — run specs on CI.
 - `approveTask()` silently no-ops on a non-Done task (button hidden in UI).
+
+## Phase 2 deferred items
+
+- No delete/edit flow for resources/items (so no file cleanup on delete).
+- Item `type` is a free string at model level (validated only in the panel).
+- Download route hardening: `nosniff` header, `whereNumber('item')`.
+- Test helper `rpSetup()` is shared across test files via `require_once`.
+- Comments are unordered.
+- Null `client_id` guard in the `ResourceItem` scope.
+- Clients see all assignee candidates only in the admin UI (n/a for clients).
 
 ---
 

@@ -6,6 +6,7 @@ use App\Models\ChecklistItem;
 use App\Models\Client;
 use App\Models\Module;
 use App\Models\Project;
+use App\Models\Resource;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -20,9 +21,40 @@ class DemoSeeder extends Seeder
      */
     public function run(): void
     {
-        if (Client::where('name', 'Northwind Trading')->exists()) {
+        if (! Client::where('name', 'Northwind Trading')->exists()) {
+            $this->seedWorkspace();
+        }
+
+        $this->seedResource();
+    }
+
+    private function seedResource(): void
+    {
+        $project = Project::where('name', 'Northwind Storefront')->first();
+        if (! $project) {
             return;
         }
+
+        $resource = Resource::firstOrCreate(
+            ['project_id' => $project->id, 'title' => 'Staging access'],
+            ['description' => 'Demo shared resource'],
+        );
+        if ($resource->items()->exists()) {
+            return;
+        }
+
+        $admin = User::where('email', 'admin@example.com')->first();
+        $item = $resource->items()->create([
+            'type' => 'text',
+            'label' => 'Staging URL',
+            'value' => 'https://staging.northwind.test',
+            'created_by' => $admin?->id,
+        ]);
+        $item->assignees()->sync(User::whereIn('email', ['admin@example.com', 'client@example.com'])->pluck('id'));
+    }
+
+    private function seedWorkspace(): void
+    {
 
         $admin = User::where('email', 'admin@example.com')->first();
         if ($admin && $admin->cost_rate_type === null) {
