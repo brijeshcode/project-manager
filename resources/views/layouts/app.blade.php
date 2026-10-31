@@ -17,6 +17,7 @@
                 ['label' => 'Dashboard', 'route' => 'dashboard',      'pattern' => 'dashboard',  'icon' => 'home',     'show' => true],
                 ['label' => 'Projects',  'route' => 'projects.index', 'pattern' => 'projects.*', 'icon' => 'folder',   'show' => $u && ! $u->hasRole('client')],
                 ['label' => 'Clients',   'route' => 'clients.index',  'pattern' => 'clients.*',  'icon' => 'building', 'show' => $u && $u->hasRole('super_admin')],
+                ['label' => 'Invoices',  'route' => 'invoices.index','pattern' => 'invoices.*', 'icon' => 'building', 'show' => $u && $u->can('manage-money')],
                 ['label' => 'Billing',   'route' => 'billing.recurring','pattern' => 'billing.*', 'icon' => 'building', 'show' => $u && $u->can('manage-money')],
                 ['label' => 'My projects','route' => 'portal.dashboard','pattern' => 'portal.*',  'icon' => 'folder',   'show' => $u && $u->hasRole('client')],
             ])->where('show', true);

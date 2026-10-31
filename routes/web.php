@@ -46,6 +46,12 @@ Route::get('billing/recurring', \App\Livewire\Billing\Recurring::class)
 Route::get('billing/bank-accounts', \App\Livewire\Billing\BankAccounts::class)
     ->middleware(['auth', 'can:manage-money'])->name('billing.bank-accounts');
 
+Route::middleware(['auth', 'can:manage-money'])->prefix('invoices')->name('invoices.')->group(function () {
+    Route::get('/', \App\Livewire\Invoices\Index::class)->name('index');
+    Route::get('create', \App\Livewire\Invoices\Create::class)->name('create');
+    Route::get('{invoice}', \App\Livewire\Invoices\Show::class)->name('show');
+});
+
 Route::middleware(['auth'])->group(function () {
     Route::get('projects', ProjectIndex::class)->name('projects.index');
     Route::get('projects/create', ProjectForm::class)->name('projects.create');
