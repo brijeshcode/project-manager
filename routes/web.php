@@ -41,6 +41,9 @@ Route::middleware(['auth', 'role:super_admin'])->group(function () {
     Route::get('clients/{client}/edit', ClientForm::class)->name('clients.edit');
 });
 
+Route::get('billing/recurring', \App\Livewire\Billing\Recurring::class)
+    ->middleware(['auth', 'can:manage-money'])->name('billing.recurring');
+
 Route::middleware(['auth'])->group(function () {
     Route::get('projects', ProjectIndex::class)->name('projects.index');
     Route::get('projects/create', ProjectForm::class)->name('projects.create');
