@@ -43,6 +43,8 @@ Route::middleware(['auth', 'role:super_admin'])->group(function () {
 
 Route::get('billing/recurring', \App\Livewire\Billing\Recurring::class)
     ->middleware(['auth', 'can:manage-money'])->name('billing.recurring');
+Route::get('billing/bank-accounts', \App\Livewire\Billing\BankAccounts::class)
+    ->middleware(['auth', 'can:manage-money'])->name('billing.bank-accounts');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('projects', ProjectIndex::class)->name('projects.index');

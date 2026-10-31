@@ -1,5 +1,6 @@
 <div>
     <x-ui.page-header title="Recurring charges" subtitle="Hosting, retainers and other repeating fees. Lines are generated daily as they fall due." />
+    <p class="mb-4 text-sm"><a href="{{ route('billing.bank-accounts') }}" class="text-indigo-600 hover:underline">Bank accounts &rarr;</a></p>
 
     <form wire:submit="save" class="card mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
