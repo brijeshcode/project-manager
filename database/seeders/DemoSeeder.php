@@ -31,7 +31,8 @@ class DemoSeeder extends Seeder
     private function seedResource(): void
     {
         $project = Project::where('name', 'Northwind Storefront')->first();
-        if (! $project) {
+        $admin = User::where('email', 'admin@example.com')->first();
+        if (! $project || ! $admin) {
             return;
         }
 
@@ -43,19 +44,17 @@ class DemoSeeder extends Seeder
             return;
         }
 
-        $admin = User::where('email', 'admin@example.com')->first();
         $item = $resource->items()->create([
             'type' => 'text',
             'label' => 'Staging URL',
             'value' => 'https://staging.northwind.test',
-            'created_by' => $admin?->id,
+            'created_by' => $admin->id,
         ]);
         $item->assignees()->sync(User::whereIn('email', ['admin@example.com', 'client@example.com'])->pluck('id'));
     }
 
     private function seedWorkspace(): void
     {
-
         $admin = User::where('email', 'admin@example.com')->first();
         if ($admin && $admin->cost_rate_type === null) {
             $admin->update(['cost_rate_type' => 'hourly', 'cost_rate_amount' => 60]);

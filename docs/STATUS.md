@@ -107,7 +107,6 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
 - Test helper `rpSetup()` is shared across test files via `require_once`.
 - Comments are unordered.
 - Null `client_id` guard in the `ResourceItem` scope.
-- Clients see all assignee candidates only in the admin UI (n/a for clients).
 
 ---
 
@@ -117,7 +116,7 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
 # deps already installed. If fresh:
 composer install && npm install
 
-php artisan migrate            # includes the new description migration
+php artisan migrate
 php artisan db:seed            # super admin (admin@example.com / password) + roles
 php artisan db:seed --class=DemoSeeder   # demo client + projects + tasks (idempotent)
 
@@ -130,6 +129,3 @@ php artisan serve              # http://127.0.0.1:8000
 **Tooling notes for this machine:** run `php artisan test` via bash with a file redirect
 (`php artisan test > out.txt 2>&1; echo $?`) — piping through PowerShell `Select-Object`
 misreports the exit code. Don't run `npx`/node in Git Bash (crashes); use PowerShell for npm.
-
-**Uncommitted work:** the entire frontend pass above is uncommitted on `phase-1`. Commit it
-before closing out so it isn't lost.
