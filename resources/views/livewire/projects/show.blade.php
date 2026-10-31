@@ -186,6 +186,8 @@
                     </x-ui.empty-state>
                 @endforelse
             </div>
+
+            <livewire:resources.panel :project="$project" />
         </div>
 
         <div class="space-y-6">

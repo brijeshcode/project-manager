@@ -80,4 +80,6 @@
         <x-ui.empty-state title="No tasks yet"
                           message="Once tasks are marked visible to clients they'll appear here. You can also request a new task above." />
     @endforelse
+
+    <livewire:resources.panel :project="$project" />
 </div>
