@@ -3,15 +3,17 @@
 namespace App\Services;
 
 use App\Models\Client;
+use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Project;
 
 class ClientAccount
 {
-    // Payments only for now; Task 6 subtracts non-void invoice totals.
+    // payments received minus everything invoiced (non-void); positive = client has credit
     public function balanceCents(Client $client): int
     {
-        return (int) $client->payments()->sum('amount_cents');
+        return (int) $client->payments()->sum('amount_cents')
+            - (int) Invoice::where('client_id', $client->id)->where('status', 'sent')->sum('total_cents');
     }
 
     public function softBalanceCents(Project $project): int

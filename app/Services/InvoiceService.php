@@ -1,0 +1,138 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\BankAccount;
+use App\Models\BillableLine;
+use App\Models\Client;
+use App\Models\Invoice;
+use App\Support\Money;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+class InvoiceService
+{
+    /**
+     * @param  array<int>  $lineIds  pending lines of this client
+     * @param  array<int, array{description:string, quantity:mixed, unit_price:mixed}>  $customLines
+     */
+    public function create(Client $client, array $lineIds, array $customLines = [], float $taxPercent = 0.0, ?int $bankAccountId = null, ?float $inrRate = null): Invoice
+    {
+        $lineIds = array_values(array_unique($lineIds));
+        $pctHundredths = $this->validatedPercent($taxPercent);
+        $custom = $this->validatedCustomLines($customLines);
+
+        if (! $lineIds && ! $custom) {
+            throw ValidationException::withMessages(['lines' => 'Add at least one line.']);
+        }
+
+        return DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $inrRate) {
+            $picked = BillableLine::pending()->where('client_id', $client->id)->whereIn('id', $lineIds)->lockForUpdate()->get();
+            if ($picked->count() !== count($lineIds)) {
+                throw ValidationException::withMessages(['lines' => 'Some lines are not pending lines of this client.']);
+            }
+
+            $subtotal = (int) $picked->sum('amount_cents') + array_sum(array_column($custom, 'amount_cents'));
+            // half-up: percent is in hundredths, so tax = subtotal * pct / 10000
+            $tax = intdiv($subtotal * $pctHundredths + 5000, 10000);
+
+            $bank = $bankAccountId ? BankAccount::findOrFail($bankAccountId) : null;
+            $terms = $client->payment_terms;
+            $issued = now()->startOfDay();
+
+            $invoice = $this->insertNumbered([
+                'client_id' => $client->id,
+                'status' => 'sent',
+                'issued_on' => $issued,
+                'due_on' => $terms && preg_match('/^net-(\d{1,3})$/i', trim($terms), $m) ? $issued->copy()->addDays((int) $m[1]) : null,
+                'currency' => $client->currency,
+                'subtotal_cents' => $subtotal,
+                'tax_percent' => sprintf('%d.%02d', intdiv($pctHundredths, 100), $pctHundredths % 100),
+                'tax_cents' => $tax,
+                'total_cents' => $subtotal + $tax,
+                'bank_account_id' => $bank?->id,
+                'bank_snapshot' => $bank ? $bank->only(['account_name', 'bank_name', 'account_number', 'ifsc_swift', 'email']) : null,
+                'inr_rate' => $inrRate,
+                'terms' => $terms,
+            ], $issued->format('Ymd'));
+
+            BillableLine::whereIn('id', $picked->pluck('id'))->update(['invoice_id' => $invoice->id]);
+            foreach ($custom as $line) {
+                BillableLine::create($line + ['client_id' => $client->id, 'invoice_id' => $invoice->id]);
+            }
+
+            return $invoice;
+        });
+    }
+
+    public function void(Invoice $invoice): void
+    {
+        DB::transaction(function () use ($invoice) {
+            $locked = Invoice::lockForUpdate()->findOrFail($invoice->id);
+            if ($locked->status === 'void') {
+                return;
+            }
+            $locked->update(['status' => 'void']);
+            // All lines (picked or custom) go back to pending. Payments linked to this invoice stay:
+            // they are real money received and keep counting toward the client balance.
+            BillableLine::where('invoice_id', $locked->id)->update(['invoice_id' => null]);
+        });
+        $invoice->refresh();
+    }
+
+    /** Assign INV-YYYYMMDD-NN from the highest used sequence (voided numbers stay used); retry on unique collision. */
+    private function insertNumbered(array $attrs, string $day): Invoice
+    {
+        $prefix = "INV-{$day}-";
+        for ($try = 0; $try < 5; $try++) {
+            $last = Invoice::where('number', 'like', $prefix.'%')->orderByRaw('LENGTH(number) desc')->orderByDesc('number')->value('number');
+            $next = $last ? (int) substr($last, strlen($prefix)) + 1 : 1;
+            try {
+                // nested transaction = savepoint, so a collision doesn't poison the outer transaction
+                return DB::transaction(fn () => Invoice::create($attrs + ['number' => $prefix.str_pad((string) $next, 2, '0', STR_PAD_LEFT)]));
+            } catch (UniqueConstraintViolationException $e) {
+                if ($try === 4) {
+                    throw $e;
+                }
+            }
+        }
+    }
+
+    /** Returns the percent in hundredths (10.5% -> 1050). */
+    private function validatedPercent(float $percent): int
+    {
+        $h = Money::toCents(number_format($percent, 2, '.', ''));
+        if ($h < 0 || $h > 10000) {
+            throw ValidationException::withMessages(['tax_percent' => 'Tax must be between 0 and 100.']);
+        }
+
+        return $h;
+    }
+
+    private function validatedCustomLines(array $lines): array
+    {
+        $out = [];
+        foreach ($lines as $i => $l) {
+            $desc = trim((string) ($l['description'] ?? ''));
+            $qty = $l['quantity'] ?? null;
+            $price = $l['unit_price'] ?? null;
+            if ($desc === '' || ! is_numeric($qty) || ! is_numeric($price)) {
+                throw ValidationException::withMessages(["custom.$i" => 'Custom lines need a description, quantity and unit price.']);
+            }
+            $qtyH = Money::toCents($qty); // quantity in hundredths
+            $unit = Money::toCents($price);
+            if ($qtyH <= 0 || $unit < 0) {
+                throw ValidationException::withMessages(["custom.$i" => 'Quantity must be above 0 and price cannot be negative.']);
+            }
+            $out[] = [
+                'description' => $desc,
+                'quantity' => sprintf('%d.%02d', intdiv($qtyH, 100), $qtyH % 100),
+                'unit_price_cents' => $unit,
+                'amount_cents' => intdiv($qtyH * $unit + 50, 100),
+            ];
+        }
+
+        return $out;
+    }
+}

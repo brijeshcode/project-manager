@@ -26,6 +26,11 @@ class BillableLine extends Model
         return $this->belongsTo(Client::class);
     }
 
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class);
+    }
+
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
