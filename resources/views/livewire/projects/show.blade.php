@@ -78,7 +78,7 @@
                             @elseif ($module->description)
                                 <p class="mt-1 text-xs text-slate-500">{{ $module->description }}</p>
                             @endif
-                            @if ($canMoney)
+                            @can('manage-money')
                                 @php $hourly = $project->client->billing_mode === \App\Enums\BillingMode::Hourly; @endphp
                                 <div class="mt-2 text-xs text-slate-500" x-data="{ editingBudget: false }">
                                     <div x-show="!editingBudget" class="flex items-center gap-2">
@@ -103,7 +103,7 @@
                                         </div>
                                     </form>
                                 </div>
-                            @endif
+                            @endcan
                         </div>
 
                         <ul class="divide-y divide-slate-100">

@@ -116,3 +116,38 @@ it('shows a billing mode select on the client form', function () {
         ->call('save');
     expect(Client::where('name', 'X')->first()->billing_mode)->toBe(BillingMode::Hourly);
 });
+
+it('never renders budgets to non-owners, even when tampering', function () {
+    $m = bcModule();
+    $m->update(['budget_amount_cents' => 123456]);
+    $owner = bcUser('super_admin');
+
+    Livewire::actingAs($owner)->test(Show::class, ['project' => $m->project])
+        ->assertSee('Budget:')->assertSee('$1,234.56');
+
+    foreach (['project_manager', 'developer', 'client'] as $role) {
+        $u = bcUser($role, $m->project);
+        $c = Livewire::actingAs($u)->test(Show::class, ['project' => $m->project]);
+        $c->assertDontSee('Budget:')->assertDontSee('1,234.56')->assertDontSee('1234.56');
+
+    }
+
+    // tamper attempts last: a thrown set() leaves the Livewire test harness unusable
+    $u = bcUser('project_manager', $m->project);
+    $c = Livewire::actingAs($u)->test(Show::class, ['project' => $m->project]);
+    expect(fn () => $c->set('canMoney', true))->toThrow('Public property [$canMoney] not found');
+});
+
+it('rejects tampering with canManage', function () {
+    $m = bcModule();
+    $c = Livewire::actingAs(bcUser('developer', $m->project))->test(Show::class, ['project' => $m->project]);
+    expect(fn () => $c->set('canManage', true))->toThrow(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
+});
+
+it('computes budgetCents with integer math', function () {
+    $m = bcModule('hourly');
+    $m->update(['budget_hours' => 0.33, 'hourly_rate_cents' => 1001]);
+    expect($m->fresh()->budgetCents())->toBe(330); // 0.33 * 1001 = 330.33 -> 330
+    $m->update(['budget_hours' => 0.5, 'hourly_rate_cents' => 1001]);
+    expect($m->fresh()->budgetCents())->toBe(501); // 500.5 -> 501 half-up
+});

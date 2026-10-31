@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\BillingMode;
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,7 +36,7 @@ class Module extends Model
     {
         if ($this->project->client->billing_mode === BillingMode::Hourly) {
             return $this->budget_hours !== null && $this->hourly_rate_cents !== null
-                ? (int) round((float) $this->budget_hours * $this->hourly_rate_cents)
+                ? intdiv(Money::toCents((string) $this->budget_hours) * $this->hourly_rate_cents + 50, 100) // hours x100, integer half-up
                 : null;
         }
 

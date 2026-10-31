@@ -11,12 +11,14 @@ use App\Support\Money;
 use App\Models\Subtask;
 use App\Models\Task;
 use App\Services\ProgressService;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class Show extends Component
 {
     public Project $project;
 
+    #[Locked]
     public bool $canManage = false;
 
     public string $newModuleName = '';
@@ -40,18 +42,14 @@ class Show extends Component
     /** Budget inputs per module id: hours, rate, amount (major units), deadline, reason. Owner only. */
     public array $budget = [];
 
-    public bool $canMoney = false;
-
     public function mount(Project $project): void
     {
         $this->authorize('view', $project);
         $this->project = $project;
         $this->canManage = auth()->user()->can('update', $project);
 
-        $this->canMoney = auth()->user()->can('manage-money');
-
         foreach ($project->modules()->with('tasks')->get() as $module) {
-            if ($this->canMoney) {
+            if (auth()->user()->can('manage-money')) {
                 $this->fillBudget($module);
             }
             $this->moduleDescriptions[$module->id] = $module->description ?? '';
@@ -229,6 +227,7 @@ class Show extends Component
                 'tasks' => fn ($q) => $q->visibleTo(auth()->user())->orderBy('position'),
                 'tasks.subtasks',
                 'tasks.checklistItems',
+                'project.client',
             ])
             ->get();
 
