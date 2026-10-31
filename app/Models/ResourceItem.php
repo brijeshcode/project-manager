@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -36,5 +37,27 @@ class ResourceItem extends Model
     public function comments(): MorphMany
     {
         return $this->morphMany(Comment::class, 'commentable');
+    }
+
+    /**
+     * Super admin: all. Others: assigned to the item AND have project access
+     * (client role: projects.client_id match; else active project_members row).
+     * ponytail: per-project access_scope sections ignored; they don't apply to resources.
+     */
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        if ($user->hasRole('super_admin')) {
+            return $query;
+        }
+
+        $project = $user->hasRole('client')
+            ? fn (Builder $p) => $p->where('projects.client_id', $user->client_id)
+            : fn (Builder $p) => $p->whereHas('members', fn (Builder $m) => $m
+                ->where('users.id', $user->id)
+                ->where('project_members.active', true));
+
+        return $query
+            ->whereHas('assignees', fn (Builder $a) => $a->where('users.id', $user->id))
+            ->whereHas('resource.project', $project);
     }
 }
