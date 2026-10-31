@@ -32,9 +32,9 @@ class Recurring extends Component
             'client_id'   => 'required|exists:clients,id',
             'project_id'  => ['nullable', Rule::exists('projects', 'id')->where('client_id', $this->client_id)],
             'description' => 'required|string|max:255',
-            'amount'      => ['required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('The amount must be greater than zero.')],
+            'amount'      => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('The amount must be greater than zero.')],
             'frequency'   => ['required', new Enum(RecurringFrequency::class)],
-            'next_due_on' => 'required|date',
+            'next_due_on' => 'required|date_format:Y-m-d',
         ]);
 
         RecurringCharge::create([
@@ -50,7 +50,7 @@ class Recurring extends Component
     {
         $this->authorize('manage-money');
         $c = RecurringCharge::findOrFail($id);
-        $c->update(['active' => ! $c->active]);
+        $c->setActive(! $c->active, today());
     }
 
     public function render()
@@ -58,7 +58,7 @@ class Recurring extends Component
         return view('livewire.billing.recurring', [
             'charges'  => RecurringCharge::with(['client', 'project'])->orderByDesc('active')->orderBy('next_due_on')->get(),
             'clients'  => Client::orderBy('name')->get(),
-            'projects' => $this->client_id ? Client::findOrFail($this->client_id)->projects()->orderBy('name')->get() : collect(),
+            'projects' => $this->client_id ? Client::find($this->client_id)?->projects()->orderBy('name')->get() ?? collect() : collect(),
         ]);
     }
 }

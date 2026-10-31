@@ -34,11 +34,33 @@ class RecurringCharge extends Model
         return $this->belongsTo(Project::class);
     }
 
-    /** Creates a pending line for every due period up to $today (catch-up), advancing one period each time. Returns lines created. */
+    private const MAX_PERIODS_PER_RUN = 36;
+
+    /** Date one period after $due, keeping the due_day anchor. */
+    private function advance(CarbonInterface $due): Carbon
+    {
+        $first = Carbon::parse($due)->startOfMonth()->{$this->frequency === RecurringFrequency::Monthly ? 'addMonth' : 'addYear'}();
+
+        return $first->day(min($this->due_day, $first->daysInMonth));
+    }
+
+    /** Resuming skips paused periods: next_due_on moves to the first anchored date >= today. */
+    public function setActive(bool $active, CarbonInterface $today): void
+    {
+        if ($active && ! $this->active) {
+            while ($this->next_due_on->lt($today->copy()->startOfDay())) {
+                $this->next_due_on = $this->advance($this->next_due_on);
+            }
+        }
+        $this->active = $active;
+        $this->save();
+    }
+
+    /** Creates a pending line per due period up to $today (max 36 per run, rest next run), advancing one period each time. Returns lines created. */
     public function generateDue(CarbonInterface $today): int
     {
         $created = 0;
-        while ($this->active && $this->next_due_on->lte($today)) {
+        for ($i = 0; $i < self::MAX_PERIODS_PER_RUN && $this->active && $this->next_due_on->lte($today); $i++) {
             $due = $this->next_due_on;
             $monthly = $this->frequency === RecurringFrequency::Monthly;
             $line = BillableLine::createOrFirst(
@@ -48,8 +70,7 @@ class RecurringCharge extends Model
             );
             $created += (int) $line->wasRecentlyCreated;
 
-            $first = $due->copy()->startOfMonth()->{$monthly ? 'addMonth' : 'addYear'}();
-            $this->next_due_on = $first->day(min($this->due_day, $first->daysInMonth));
+            $this->next_due_on = $this->advance($due);
             $this->save();
         }
 

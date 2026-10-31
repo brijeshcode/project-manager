@@ -96,9 +96,11 @@ it('carries project_id', function () {
 });
 
 it('command generates for all charges and is scheduled', function () {
+    Carbon::setTestNow('2026-09-01');
     rcCharge();
     $this->artisan('billing:generate-recurring')->assertExitCode(0);
-    expect(BillableLine::count())->toBeGreaterThanOrEqual(1);
+    expect(BillableLine::count())->toBe(1);
+    Carbon::setTestNow();
     $cmds = collect(app(Schedule::class)->events())->pluck('command')->implode(' ');
     expect($cmds)->toContain('billing:generate-recurring');
 });
@@ -137,5 +139,91 @@ it('rejects a project from another client and bad amounts', function () {
 it('re-authorizes actions for non-owners', function () {
     $c = rcCharge();
     Livewire::actingAs(User::factory()->create()->assignRole('project_manager'))->test(Recurring::class)->assertForbidden();
+    expect($c->fresh()->active)->toBeTrue();
+});
+
+it('rejects malformed, non-positive and huge amounts without erroring', function () {
+    $client = rcClient();
+    foreach (['1e3', 'abc', '1.2.3', '-5', '0', '0.00', '99999999999999999999'] as $bad) {
+        Livewire::actingAs(rcOwner())->test(Recurring::class)
+            ->set('client_id', $client->id)->set('description', 'H')->set('amount', $bad)
+            ->set('frequency', 'monthly')->set('next_due_on', '2026-11-01')->call('save')->assertHasErrors('amount');
+    }
+    expect(RecurringCharge::count())->toBe(0);
+});
+
+it('rejects a non Y-m-d due date', function () {
+    Livewire::actingAs(rcOwner())->test(Recurring::class)
+        ->set('client_id', rcClient()->id)->set('description', 'H')->set('amount', '5')
+        ->set('frequency', 'monthly')->set('next_due_on', '11/01/2026')->call('save')->assertHasErrors('next_due_on');
+});
+
+it('caps catch-up at 36 periods per run and continues next run without duplicates', function () {
+    $today = Carbon::parse('2026-10-31');
+    $c = rcCharge(['next_due_on' => '2021-10-01']);
+    expect($c->generateDue($today))->toBe(36);
+    expect($c->fresh()->next_due_on->toDateString())->toBe('2024-10-01');
+    expect($c->fresh()->generateDue($today))->toBe(25);
+    expect(BillableLine::count())->toBe(61);
+    expect(BillableLine::distinct('period')->count('period'))->toBe(61);
+    expect($c->fresh()->next_due_on->toDateString())->toBe('2026-11-01');
+    expect($c->fresh()->generateDue($today))->toBe(0);
+});
+
+it('skips paused periods when resumed', function () {
+    Carbon::setTestNow('2026-10-31');
+    $c = rcCharge(['next_due_on' => '2026-06-01', 'active' => false]);
+    Livewire::actingAs(rcOwner())->test(Recurring::class)->call('toggle', $c->id);
+    expect($c->fresh()->active)->toBeTrue();
+    expect($c->fresh()->next_due_on->toDateString())->toBe('2026-11-01');
+    expect($c->fresh()->generateDue(today()))->toBe(0);
+    expect(BillableLine::count())->toBe(0);
+    Carbon::setTestNow();
+});
+
+it('resume keeps the anchor day and pausing changes nothing else', function () {
+    Carbon::setTestNow('2027-02-10');
+    $c = rcCharge(['next_due_on' => '2026-10-31', 'active' => false]);
+    Livewire::actingAs(rcOwner())->test(Recurring::class)->call('toggle', $c->id)->call('toggle', $c->id);
+    expect($c->fresh()->active)->toBeFalse();
+    expect($c->fresh()->next_due_on->toDateString())->toBe('2027-02-28');
+    Carbon::setTestNow();
+});
+
+it('anchors Feb 29 monthly charges', function () {
+    $c = rcCharge(['next_due_on' => '2028-01-29']);
+    $c->generateDue(Carbon::parse('2028-03-29'));
+    expect($c->fresh()->next_due_on->toDateString())->toBe('2028-04-29');
+    $d = rcCharge(['next_due_on' => '2028-02-29']);
+    $d->generateDue(Carbon::parse('2028-03-29'));
+    expect($d->fresh()->next_due_on->toDateString())->toBe('2028-04-29');
+    expect(BillableLine::where('recurring_charge_id', $d->id)->pluck('period')->sort()->values()->all())->toBe(['2028-02', '2028-03']);
+});
+
+it('save re-authorizes when the user is no longer an owner', function () {
+    $client = rcClient();
+    $c = rcCharge(['client_id' => $client->id]);
+    $t = Livewire::actingAs(rcOwner())->test(Recurring::class);
+    $this->actingAs(User::factory()->create()->assignRole('project_manager'));
+    $t->set('client_id', $client->id)->set('description', 'H')->set('amount', '5')->set('frequency', 'monthly')->set('next_due_on', '2026-11-01')
+        ->call('save')->assertForbidden();
+    expect(RecurringCharge::count())->toBe(1);
+    expect($c->fresh()->active)->toBeTrue();
+});
+
+it('tolerates a tampered client_id on render', function () {
+    Livewire::actingAs(rcOwner())->test(Recurring::class)->set('client_id', 99999)->assertOk();
+});
+
+it('shows the Billing nav only to owners', function () {
+    $this->actingAs(rcOwner())->get(route('dashboard'))->assertSee('Billing');
+    $this->actingAs(User::factory()->create()->assignRole('project_manager'))->get(route('dashboard'))->assertDontSee('Billing');
+});
+
+it('toggle re-authorizes when the user is no longer an owner', function () {
+    $c = rcCharge();
+    $t = Livewire::actingAs(rcOwner())->test(Recurring::class);
+    $this->actingAs(User::factory()->create()->assignRole('project_manager'));
+    $t->call('toggle', $c->id)->assertForbidden();
     expect($c->fresh()->active)->toBeTrue();
 });
