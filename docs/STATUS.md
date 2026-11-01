@@ -1,6 +1,6 @@
 # Project Tracker ("Helm") — Status & Next Steps
 
-_Last updated: 2026-10-31. Branch: `phase-2` (not yet merged to `main`). Tests: **270 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
+_Last updated: 2026-11-01. Branch: `phase-3` (not yet merged to `main`). Tests: **420 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
 
 This is the living "where are we / what's next" doc. The task-by-task build plan is
 [docs/superpowers/plans/2026-10-26-project-tracker-phase-1.md](superpowers/plans/2026-10-26-project-tracker-phase-1.md);
@@ -52,6 +52,21 @@ admin only), encrypted values, private files with a permission-checked download 
 comments on items, and a client portal embed with staff names hidden from clients.
 `DemoSeeder` also adds one demo Resource (idempotent).
 
+### ✅ Phase 3 Money — built (2026-11-01)
+Spec: [docs/superpowers/specs/2026-10-31-phase-3-money-design.md](superpowers/specs/2026-10-31-phase-3-money-design.md);
+plan: [docs/superpowers/plans/2026-10-31-phase-3-money.md](superpowers/plans/2026-10-31-phase-3-money.md).
+Money is owner-only (`manage-money` gate); amounts are integer cents.
+
+- Client billing mode (fixed/hourly) + module budgets (hours, rate, amount, deadline) with a change log.
+- Pending billable lines from Done tasks, plus recurring charges (monthly/yearly, client or project)
+  generated daily by `billing:generate-recurring`.
+- Invoices numbered `INV-YYYYMMDD-NN`, tax, optional INR line, terms, void, and an **encrypted bank-account snapshot**.
+- Invoice PDF (dompdf) + queued email with items in the body; Resend button.
+- Payments; per-client balance + a soft balance (unbilled work) shown to the owner.
+- Client portal: Invoices and Payments sections, balance, cross-client isolation.
+- Owner-only project economics (revenue vs. derived cost; flat-rate cost counted once per project).
+- `DemoSeeder` also seeds hourly billing, one module budget, one recurring charge and one demo bank account (idempotent; no invoices/payments).
+
 ---
 
 ## Frontend pass — completed items
@@ -80,9 +95,8 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
 ## What's next
 
 ### Later phases (from the spec)
-- **Phase 3 — Money (next)**: payments, invoices (replace manual PDFs), expenses, profit/loss,
-  client-visible payment standing.
-- **Phase 4 — Chat**: in-app chat per project + chat-to-task.
+- **Phase 4 — Chat (next)**: in-app chat per project + chat-to-task.
+- Deferred by design: the owner's separate business-expenses feature (AI, marketing, employee costs).
 - **Phase 5 — Multi-tenancy**: spatie multi-DB (one DB/tenant) + landlord DB + feature flags.
 
 ---
@@ -93,7 +107,7 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
   a user who is frontend on project A + backend on B sees both sections. Accepted ceiling;
   pinned by a test. Fix with a per-project correlated join when it matters.
 - **Flat-rate time cost** `derivedCost()` returns the flat amount **per entry**; the
-  "once per project" de-dup is Phase 3's aggregation job (documented; contract test exists).
+  "once per project" de-dup is done in Phase 3's `ProjectEconomics` aggregation.
 - **Time Logger** shows all users' entries for a task (no per-user scope) — confirm intended.
 - `client_approval` and task `section` are raw nullable strings (no enum cast) — fine, tidy later.
 - Cypress deferred on this machine (Electron illegal-instruction crash) — run specs on CI.
@@ -107,6 +121,21 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
 - Test helper `rpSetup()` is shared across test files via `require_once`.
 - Comments are unordered.
 - Null `client_id` guard in the `ResourceItem` scope.
+
+## Phase 3 deferred items / known limits
+
+- **Payments are immutable**: no delete/reverse flow and no double-submit guard on Save, so a
+  mistaken/duplicate payment can't be corrected yet. Recommend a reverse/delete flow soon.
+- Overpayment is allowed silently (acts as credit).
+- INR rate is typed manually (no API fetch). Single-currency assumption for cost rates.
+- Invoice-number retry is only race-safe on SQLite/Postgres (MySQL REPEATABLE READ would need
+  `lockForUpdate` on the max query); `BillableService` `lockForUpdate` is a no-op on SQLite.
+- Economics aggregates run in memory (move to SQL at ~100k entries).
+- Invoice PDF layout only verified via tests — eyeball a real PDF.
+- Shared `_body` partial lost mobile stacking on the invoice Show page.
+- `emailed_at` means "queued", not "delivered" (Resend is the recovery path).
+- `amount_cents` on billable_lines/payments is 32-bit in Postgres/MySQL; per-line cap of
+  2,000,000,000 cents is enforced in the service.
 
 ---
 
@@ -123,6 +152,12 @@ php artisan db:seed --class=DemoSeeder   # demo client + projects + tasks (idemp
 npm run build                  # or: npm run dev
 php artisan serve              # http://127.0.0.1:8000
 ```
+
+**Phase 3 setup:**
+- `.env` keys for invoices: `BILLING_COMPANY_NAME`, `BILLING_TAGLINE`, `BILLING_CONTACT_EMAIL`, `BILLING_CONTACT_PHONES`.
+- Invoice emails are queued: run `php artisan queue:work`.
+- Recurring charges need the scheduler: `php artisan schedule:work` in dev, cron `schedule:run` every minute in prod.
+- Real email delivery needs `MAIL_*` config (currently `MAIL_MAILER=log`).
 
 **Logins:** super admin `admin@example.com` / `password`; client (portal) `client@example.com` / `password`.
 

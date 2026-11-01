@@ -2,10 +2,14 @@
 
 namespace Database\Seeders;
 
+use App\Enums\BillingMode;
+use App\Enums\RecurringFrequency;
+use App\Models\BankAccount;
 use App\Models\ChecklistItem;
 use App\Models\Client;
 use App\Models\Module;
 use App\Models\Project;
+use App\Models\RecurringCharge;
 use App\Models\Resource;
 use App\Models\Task;
 use App\Models\TimeEntry;
@@ -26,6 +30,7 @@ class DemoSeeder extends Seeder
         }
 
         $this->seedResource();
+        $this->seedBilling();
     }
 
     private function seedResource(): void
@@ -51,6 +56,36 @@ class DemoSeeder extends Seeder
             'created_by' => $admin->id,
         ]);
         $item->assignees()->sync(User::whereIn('email', ['admin@example.com', 'client@example.com'])->pluck('id'));
+    }
+
+    private function seedBilling(): void
+    {
+        $client = Client::where('name', 'Northwind Trading')->first();
+        $project = Project::where('name', 'Northwind Storefront')->first();
+        $admin = User::where('email', 'admin@example.com')->first();
+        if (! $client || ! $project || ! $admin) {
+            return;
+        }
+
+        if ($client->billing_mode === BillingMode::Fixed) {
+            $client->update(['billing_mode' => BillingMode::Hourly]);
+        }
+
+        // Never overwrite an owner-set budget.
+        $module = $project->modules()->orderBy('position')->first();
+        if ($module && $module->hourly_rate_cents === null && $module->budget_hours === null) {
+            $module->update(['hourly_rate_cents' => 7500, 'budget_hours' => 40]);
+        }
+
+        RecurringCharge::firstOrCreate(
+            ['client_id' => $client->id, 'description' => 'Hosting & maintenance'],
+            ['amount_cents' => 12000, 'frequency' => RecurringFrequency::Monthly, 'next_due_on' => now()->addMonthNoOverflow()->startOfMonth()],
+        );
+
+        BankAccount::firstOrCreate(
+            ['label' => 'Demo business account'],
+            ['account_name' => 'Demo Business', 'bank_name' => 'Demo Bank', 'account_number' => '000000000000', 'ifsc_swift' => 'DEMO0000000'],
+        );
     }
 
     private function seedWorkspace(): void
