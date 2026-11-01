@@ -1,6 +1,6 @@
 # Project Tracker ("Helm") — Status & Next Steps
 
-_Last updated: 2026-11-01. Branch: `phase-3` (not yet merged to `main`). Tests: **439 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
+_Last updated: 2026-11-01. Branch: `phase-3` (not yet merged to `main`). Tests: **628 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
 
 This is the living "where are we / what's next" doc. The task-by-task build plan is
 [docs/superpowers/plans/2026-10-26-project-tracker-phase-1.md](superpowers/plans/2026-10-26-project-tracker-phase-1.md);
@@ -66,6 +66,17 @@ Money is owner-only (`manage-money` gate); amounts are integer cents.
 - Client portal: Invoices and Payments sections, balance, cross-client isolation.
 - Owner-only project economics (revenue vs. derived cost; flat-rate cost counted once per project).
 - `DemoSeeder` also seeds hourly billing, one module budget, one recurring charge and one demo bank account (idempotent; no invoices/payments).
+
+### ✅ Local currency — built (branch `local-currency`)
+Spec: [docs/superpowers/specs/2026-11-02-local-currency-design.md](superpowers/specs/2026-11-02-local-currency-design.md). Owner-only; **the client portal, invoice PDF and invoice email never show local currency**.
+
+- **Setting:** system-wide local currency, default **INR**, on the owner-only **Settings** page. It locks once any money is recorded.
+- **Exchange rates:** per client currency, insert-only history with one active rate (older rows are only deactivated). The active rate prefills the payment and invoice forms and stays editable; rates are positive with up to 6 decimals.
+- **Payments** store a frozen exchange rate plus the local amount and currency, and show both. Legacy payments get a backfilled local value and can have a rate set later.
+- **Invoices** freeze a rate when created; the local total shows on the owner list/detail only, never in print or email.
+- **Dashboard, project and client pages** show local figures with all-or-nothing totals: if any payment/invoice lacks a rate the total is hidden and a "N without a rate" note is shown.
+- **Payment documents:** up to 5 per payment (PDF/image), stored on the private disk, owner-only download route (`nosniff`), removed with the payment.
+- Guard: `tests/Feature/PortalLocalCurrencyPrivacyTest.php` renders every portal page as a client and asserts no local figure, rate, document name or settings text appears.
 
 ---
 
@@ -136,6 +147,17 @@ Still open by choice:
 - `amount_cents` on billable_lines/payments is 32-bit in Postgres/MySQL; per-line cap of
   2,000,000,000 cents is enforced in the service.
 
+
+## Local currency deferred items / known limits
+
+- No live rate lookup: rates are typed manually.
+- No FX gain/loss tracking between invoice and payment rates.
+- Partial totals are hidden rather than estimated.
+- Old invoices without a rate show no local total (not backfilled).
+- The `restrictOnDelete` client migration is still deferred.
+- Deleting a client cascades its payments' document rows but orphans the files on disk.
+- `database/seeders/DemoDataSeeder.php` (the owner's own uncommitted file) still writes the renamed `inr_rate` column; change it to `exchange_rate`.
+
 ---
 
 ## How to resume
@@ -157,6 +179,8 @@ php artisan serve              # http://127.0.0.1:8000
 - Invoice emails are queued: run `php artisan queue:work`.
 - Recurring charges need the scheduler: `php artisan schedule:work` in dev, cron `schedule:run` every minute in prod.
 - Real email delivery needs `MAIL_*` config (currently `MAIL_MAILER=log`).
+
+**Local currency setup:** run `php artisan migrate` (adds rates, local columns, payment documents), open **Settings** as the owner, confirm the local currency (default INR) and enter a rate for each client currency. Set it before recording money, because it locks afterwards. Documents live on the private `local` disk (`storage/app/private`), not `public`.
 
 **Logins:** super admin `admin@example.com` / `password`; client (portal) `client@example.com` / `password`.
 

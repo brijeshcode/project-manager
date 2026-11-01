@@ -103,6 +103,23 @@ it('404s when removing an unknown document', function () {
 it('forbids removing and uploading for non-owners', function () {
     $dev = User::factory()->create()->assignRole('developer');
     Livewire::actingAs($dev)->test(Index::class)->assertForbidden();
+
+    $p = pdPayment();
+    $d = pdDoc($p);
+    $c = Livewire::actingAs($this->owner)->test(Index::class)->assertOk();
+    $c2 = Livewire::actingAs($this->owner)->test(Index::class)->assertOk();
+    $c->set("rowDocs.{$p->id}", [UploadedFile::fake()->create('x.pdf', 10, 'application/pdf')]);
+    $this->actingAs($dev);
+    $c->call('addDocument', $p->id)->assertForbidden();
+    $c2->call('removeDocument', $d->id)->assertForbidden();
+    expect($p->documents()->count())->toBe(1)->and(PaymentDocument::find($d->id))->not->toBeNull();
+    Storage::disk('local')->assertExists($d->path);
+});
+
+it('404s the download when the file is missing from disk', function () {
+    $d = pdDoc(pdPayment());
+    Storage::disk('local')->delete($d->path);
+    $this->actingAs($this->owner)->get(route('payment-documents.download', $d->id))->assertNotFound();
 });
 
 it('deletes the files when a payment is deleted', function () {

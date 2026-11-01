@@ -33,9 +33,10 @@ it('shows the page and menu entry to the owner', function () {
 
 it('forbids developers and clients on route and component', function (string $role) {
     $u = stUser($role);
+    $u->update(['client_id' => $role === 'client' ? \App\Models\Client::create(['name' => 'C', 'currency' => 'USD', 'billing_mode' => 'fixed'])->id : null]);
     actingAs($u)->get(route('settings.index'))->assertForbidden();
     Livewire::actingAs($u)->test(Index::class)->assertForbidden();
-    actingAs($u)->get('/dashboard')->assertDontSee(route('settings.index'));
+    actingAs($u)->get($role === 'client' ? route('portal.dashboard') : '/dashboard')->assertOk()->assertDontSee(route('settings.index'));
 })->with(['developer', 'client']);
 
 it('saves the local currency with a toast', function () {
