@@ -14,7 +14,7 @@ class ExchangeRates
     public static function normalize(string $currency): string
     {
         $c = strtoupper(trim($currency));
-        if (! preg_match('/^[A-Z]{3}$/', $c)) {
+        if (! preg_match('/\A[A-Z]{3}\z/', $c)) {
             throw ValidationException::withMessages(['currency' => 'Currency must be a 3-letter code.']);
         }
 
@@ -23,7 +23,7 @@ class ExchangeRates
 
     public function active(string $currency): ?string
     {
-        return ExchangeRate::where('currency', strtoupper($currency))->where('is_active', true)->latest('id')->first()?->rate;
+        return ExchangeRate::where('currency', self::normalize($currency))->where('is_active', true)->latest('id')->first()?->rate;
     }
 
     /** Insert-only history: the previous active row is only deactivated, never edited otherwise. */
@@ -51,6 +51,6 @@ class ExchangeRates
 
     public function history(string $currency): Collection
     {
-        return ExchangeRate::with('creator')->where('currency', strtoupper($currency))->orderByDesc('id')->get();
+        return ExchangeRate::with('creator')->where('currency', self::normalize($currency))->orderByDesc('id')->get();
     }
 }

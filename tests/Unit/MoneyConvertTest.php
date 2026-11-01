@@ -55,7 +55,7 @@ it('guards overflow', function () {
     Money::convert(PHP_INT_MAX, '999999.999999');
 })->throws(InvalidArgumentException::class);
 
-dataset('badRates', ['0', '-1', '1e5', '.5', '1.1234567', '1234567', '', 'abc', '0.000000']);
+dataset('badRates', ['0', '-1', '1e5', '.5', '1.1234567', '1234567', '', 'abc', '0.000000', "83\n", "1.5\n", ' 83 ', '+5', '5.']);
 
 it('rejects invalid rates', function (string $rate) {
     expect(Money::isValidRate($rate))->toBeFalse();

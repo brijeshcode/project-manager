@@ -20,10 +20,10 @@ class LocalCurrency
     public static function set(string $code, User $by): void
     {
         $code = ExchangeRates::normalize($code);
-        if (self::isLocked()) {
-            throw new \DomainException('Local currency cannot change once payments or invoices have been converted.');
-        }
         DB::transaction(function () use ($code) {
+            if (self::isLocked()) {
+                throw new \DomainException('Local currency cannot change once payments or invoices have been converted.');
+            }
             Settings::set('local_currency', $code);
             self::backfill();
         });

@@ -21,7 +21,7 @@ class Money
 
     public static function isValidRate(string $rate): bool
     {
-        return preg_match('/^\d{1,6}(\.\d{1,6})?$/', $rate) === 1 && (float) $rate > 0;
+        return preg_match('/\A\d{1,6}(\.\d{1,6})?\z/', $rate) === 1 && (float) $rate > 0;
     }
 
     /**

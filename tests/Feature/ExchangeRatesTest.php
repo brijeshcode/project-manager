@@ -34,3 +34,10 @@ it('rejects invalid input without writing', function () {
     }
     expect(ExchangeRate::count())->toBe(0);
 });
+
+it('trims and uppercases lookups', function () {
+    $u = User::factory()->create();
+    $svc = new ExchangeRates;
+    $svc->setRate('usd', '83', $u);
+    expect($svc->active('usd '))->toBe('83.000000')->and($svc->history(' usd'))->toHaveCount(1);
+});
