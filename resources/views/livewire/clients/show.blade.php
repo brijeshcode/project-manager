@@ -66,7 +66,7 @@
     <div class="card">
         <div class="border-b border-gray-200 dark:border-gray-700">
             <nav class="-mb-px flex gap-8 px-6" aria-label="Tabs" role="tablist">
-                @foreach (['details' => 'Details', 'projects' => 'Projects', 'invoices' => 'Invoices'] as $key => $label)
+                @foreach (['details' => 'Details', 'projects' => 'Projects', 'invoices' => 'Invoices', 'payments' => 'Payments'] as $key => $label)
                     <button type="button" role="tab" :aria-selected="tab === '{{ $key }}'" x-on:click="tab = '{{ $key }}'"
                             :class="tab === '{{ $key }}' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-300'"
                             class="whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium transition-colors">{{ $label }}</button>
@@ -139,7 +139,34 @@
                 </div>
             @endif
         </div>
-    </div>
+
+        <div role="tabpanel" x-show="tab === 'payments'" x-cloak class="p-6">
+            @if ($payments->isEmpty())
+                <x-ui.empty-state title="No payments yet" message="Payments received from this client will appear here." name="credit-card" />
+            @else
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
+                        <thead><tr><th class="table-th">Date</th><th class="table-th">Amount</th><th class="table-th">Type</th><th class="table-th">Project</th><th class="table-th">Invoice</th><th class="table-th">Method</th></tr></thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
+                            @foreach ($payments as $payment)
+                                <tr wire:key="payment-{{ $payment->id }}">
+                                    <td class="table-td">{{ $payment->paid_on?->format('M j, Y') }}</td>
+                                    <td class="table-td tabular-nums font-medium">{{ \App\Support\Money::format($payment->amount_cents, $client->currency) }}</td>
+                                    <td class="table-td">{{ str_replace('_', ' ', ucfirst($payment->type->value)) }}</td>
+                                    <td class="table-td">{{ $payment->project?->name ?? '—' }}</td>
+                                    <td class="table-td">
+                                        @if ($payment->invoice)
+                                            <a href="{{ route('invoices.show', $payment->invoice) }}" wire:navigate class="link">{{ $payment->invoice->number }}</a>
+                                        @else — @endif
+                                    </td>
+                                    <td class="table-td">{{ $payment->method ?: '—' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>    </div>
 
     <x-clients.delete-modal />
 </div>

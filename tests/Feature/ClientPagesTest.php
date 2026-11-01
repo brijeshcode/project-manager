@@ -233,3 +233,21 @@ it('rejects a tampered clientId on the form', function () {
 it('index corrects a bad perPage back to 15', function () {
     Livewire::actingAs(cpAdmin())->test(Index::class)->set('perPage', 7)->assertSet('perPage', 15)->set('perPage', 50)->assertSet('perPage', 50);
 });
+
+it('show lists this client\'s payments with type, project, invoice and method — and no one else\'s', function () {
+    $c = cpClient(['name' => 'Initech']);
+    $other = cpClient(['name' => 'Other Co']);
+    $p = Project::create(['client_id' => $c->id, 'name' => 'Portal Build', 'status' => 'active']);
+    $inv = cpInvoice($c, 20000, 'sent', 'INV-88');
+    Payment::create(['client_id' => $c->id, 'project_id' => $p->id, 'invoice_id' => $inv->id, 'amount_cents' => 123400, 'paid_on' => '2026-10-05', 'type' => 'project_update', 'method' => 'Bank transfer', 'notes' => 'PRIVATE-NOTE']);
+    cpPayment($other, 987600);
+
+    Livewire::actingAs(cpAdmin())->test(Show::class, ['client' => $c])->assertOk()
+        ->assertSee(['$1,234.00', 'Oct 5, 2026', 'Project update', 'Portal Build', 'INV-88', 'Bank transfer'])
+        ->assertSee(route('invoices.show', $inv))
+        ->assertDontSee('$9,876.00')->assertDontSee('PRIVATE-NOTE')->assertDontSee('No payments yet');
+});
+
+it('show has a payments empty state', function () {
+    Livewire::actingAs(cpAdmin())->test(Show::class, ['client' => cpClient()])->assertOk()->assertSee('No payments yet');
+});

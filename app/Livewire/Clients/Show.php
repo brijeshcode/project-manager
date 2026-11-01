@@ -41,6 +41,7 @@ class Show extends Component
             'billed' => $t['billed'],
             'received' => $t['received'],
             'projects' => $client->projects()->orderBy('name')->get(),
+            'payments' => $client->payments()->with(['project:id,name', 'invoice:id,number'])->latest('paid_on')->latest('id')->get(),
             'invoices' => $client->invoices()->latest('issued_on')->latest('id')->get(),
         ]);
     }
