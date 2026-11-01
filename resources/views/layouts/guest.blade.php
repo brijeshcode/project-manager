@@ -12,7 +12,7 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @livewireStyles
     </head>
-    <body class="h-full font-sans bg-slate-50 text-slate-800 antialiased">
+    <body class="h-full font-sans antialiased">
         <div class="flex min-h-full flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
             <div class="mb-8 text-center">
                 <span class="font-display text-2xl font-bold tracking-tight text-slate-900">

@@ -216,8 +216,8 @@ it('tolerates a tampered client_id on render', function () {
 });
 
 it('shows the Billing nav only to owners', function () {
-    $this->actingAs(rcOwner())->get(route('dashboard'))->assertSee('Billing');
-    $this->actingAs(User::factory()->create()->assignRole('project_manager'))->get(route('dashboard'))->assertDontSee('Billing');
+    $this->actingAs(rcOwner())->get(route('dashboard'))->assertSee('Recurring');
+    $this->actingAs(User::factory()->create()->assignRole('project_manager'))->get(route('dashboard'))->assertDontSee('Recurring');
 });
 
 it('toggle re-authorizes when the user is no longer an owner', function () {
