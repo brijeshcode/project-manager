@@ -13,6 +13,11 @@ use Illuminate\Validation\ValidationException;
 
 class InvoiceService
 {
+    // Bounds keep all integer math below PHP_INT_MAX: 40e9 subtotal x 2 (100% tax) = 8e10 total;
+    // x 99,999,999 (max INR rate 9999.9999 scaled by 1e4) = 8e18 < 9.22e18.
+    public const MAX_LINE_CENTS = 2_000_000_000;
+    public const MAX_SUBTOTAL_CENTS = 40_000_000_000;
+
     /**
      * @param  array<int>  $lineIds  pending lines of this client
      * @param  array<int, array{description:string, quantity:mixed, unit_price:mixed}>  $customLines
@@ -33,7 +38,13 @@ class InvoiceService
                 throw ValidationException::withMessages(['lines' => 'Some lines are not pending lines of this client.']);
             }
 
+            if ($picked->max('amount_cents') > self::MAX_LINE_CENTS) {
+                throw ValidationException::withMessages(['lines' => 'A line amount is too large to invoice.']);
+            }
             $subtotal = (int) $picked->sum('amount_cents') + array_sum(array_column($custom, 'amount_cents'));
+            if ($subtotal > self::MAX_SUBTOTAL_CENTS) {
+                throw ValidationException::withMessages(['lines' => 'The invoice subtotal is too large.']);
+            }
             // half-up: percent is in hundredths, so tax = subtotal * pct / 10000
             $tax = intdiv($subtotal * $pctHundredths + 5000, 10000);
 
@@ -125,11 +136,15 @@ class InvoiceService
             if ($qtyH <= 0 || $unit < 0) {
                 throw ValidationException::withMessages(["custom.$i" => 'Quantity must be above 0 and price cannot be negative.']);
             }
+            $amount = intdiv($qtyH * $unit + 50, 100);
+            if ($amount > self::MAX_LINE_CENTS) {
+                throw ValidationException::withMessages(["custom.$i" => 'This line amount is too large.']);
+            }
             $out[] = [
                 'description' => $desc,
                 'quantity' => sprintf('%d.%02d', intdiv($qtyH, 100), $qtyH % 100),
                 'unit_price_cents' => $unit,
-                'amount_cents' => intdiv($qtyH * $unit + 50, 100),
+                'amount_cents' => $amount,
             ];
         }
 

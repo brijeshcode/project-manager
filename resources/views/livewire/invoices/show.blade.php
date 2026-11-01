@@ -9,5 +9,6 @@
             @endif
         </x-slot:actions>
     </x-ui.page-header>
+    @if (session('status'))<p class="mb-4 text-sm text-green-700">{{ session('status') }}</p>@endif
     <div class="card overflow-hidden p-0">@include('invoices._body', ['invoice' => $invoice])</div>
 </div>

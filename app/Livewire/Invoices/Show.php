@@ -22,6 +22,7 @@ class Show extends Component
     {
         $this->authorize('manage-money');
         $svc->void(Invoice::findOrFail($this->invoiceId));
+        session()->flash('status', 'Invoice voided.');
     }
 
     public function render()

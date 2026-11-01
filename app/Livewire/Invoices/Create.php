@@ -42,6 +42,7 @@ class Create extends Component
     public function choose(): void
     {
         $this->authorize('manage-money');
+        $this->validate(['pick' => ['required', Rule::exists('clients', 'id')]], ['pick.required' => 'Choose a client.']);
         $this->redirectRoute('invoices.create', ['client' => (int) $this->pick]);
     }
 
@@ -65,11 +66,12 @@ class Create extends Component
 
         $positive = fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('Must be greater than zero.');
         $this->validate([
-            'selected' => 'array',
+            'selected' => 'array|max:500',
+            'custom' => 'array|max:50',
             'selected.*' => ['bail', 'regex:/^\d{1,18}$/'],
             'taxPercent' => ['bail', 'required', 'regex:/^\d{1,3}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) <= 10000 || $fail('Tax must be between 0 and 100.')],
             'bankAccountId' => ['nullable', 'regex:/^\d{1,18}$/', Rule::exists('bank_accounts', 'id')],
-            'inrRate' => ['bail', 'nullable', 'regex:/^\d{1,6}(\.\d{1,4})?$/', fn ($a, $v, $fail) => (float) $v > 0 || $fail('Must be greater than zero.')],
+            'inrRate' => ['bail', 'nullable', 'regex:/^\d{1,4}(\.\d{1,4})?$/', fn ($a, $v, $fail) => (float) $v > 0 || $fail('Must be greater than zero.')],
             'custom.*.description' => ['bail', 'required', 'string', 'max:255'],
             'custom.*.quantity' => ['bail', 'required', 'regex:/^\d{1,6}(\.\d{1,2})?$/', $positive],
             'custom.*.unit_price' => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', $positive],

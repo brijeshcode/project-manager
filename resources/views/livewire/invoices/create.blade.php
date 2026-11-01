@@ -10,6 +10,7 @@
                     @foreach ($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
                 </select>
             </div>
+            @error('pick') <p class="text-sm text-red-600">{{ $message }}</p> @enderror
             <button type="submit" class="btn btn-primary">Continue</button>
         </form>
     @else

@@ -164,3 +164,61 @@ it('shows the Invoices nav only to owners', function () {
     $this->actingAs(ibOwner())->get(route('dashboard'))->assertSee('Invoices');
     $this->actingAs(User::factory()->create()->assignRole('project_manager'))->get(route('dashboard'))->assertDontSee('Invoices');
 });
+
+it('rejects an oversized custom line, oversized pending line and oversized subtotal', function () {
+    $c = ibClient();
+    ibCreate($c)->call('addCustom')->set('custom.0.description', 'X')->set('custom.0.quantity', '999999')->set('custom.0.unit_price', '9999999')->call('save')->assertHasErrors('custom.0');
+    $big = ibLine($c, 2_000_000_001);
+    ibCreate($c)->call('save')->assertHasErrors('lines');
+    $big->delete();
+    ibLine($c, 2_000_000_000);
+    foreach (range(1, 21) as $i) {
+        ibLine($c, 2_000_000_000);
+    }
+    ibCreate($c)->call('save')->assertHasErrors('lines'); // 22 x 2e9 = 4.4e10 > 4e10
+    expect(Invoice::count())->toBe(0);
+});
+
+it('saves and renders an invoice exactly at the bounds', function () {
+    $c = ibClient();
+    foreach (range(1, 20) as $i) {
+        ibLine($c, 2_000_000_000);
+    }
+    ibCreate($c)->set('taxPercent', '100')->set('inrRate', '9999.9999')->call('save')->assertHasNoErrors();
+    $inv = Invoice::first();
+    expect($inv->total_cents)->toBe(80_000_000_000);
+    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->assertOk()->assertSee('INR');
+});
+
+it('rejects INR rate 10000 and 51 custom lines', function () {
+    $c = ibClient();
+    ibLine($c, 1000);
+    ibCreate($c)->set('inrRate', '10000')->call('save')->assertHasErrors('inrRate');
+    $t = ibCreate($c);
+    foreach (range(1, 51) as $i) {
+        $t->call('addCustom');
+    }
+    $t->call('save')->assertHasErrors('custom');
+    expect(Invoice::count())->toBe(0);
+});
+
+it('voiding twice is a no-op and flashes status', function () {
+    $c = ibClient();
+    $inv = app(InvoiceService::class)->create($c, [ibLine($c, 1000)->id]);
+    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->call('void')->assertSee('Invoice voided.')->call('void')->assertHasNoErrors();
+    expect($inv->fresh()->status)->toBe('void');
+});
+
+it('choose requires a valid client and non-owners cannot call builder actions', function () {
+    $t = Livewire::actingAs(ibOwner())->test(Create::class);
+    $t->set('pick', '')->call('choose')->assertHasErrors('pick');
+    $t->set('pick', '9999')->call('choose')->assertHasErrors('pick');
+    $this->actingAs(User::factory()->create()->assignRole('project_manager'));
+    $t->call('choose')->assertForbidden();
+    foreach ([['addCustom'], ['removeCustom', 0]] as $call) {
+        $this->actingAs(ibOwner());
+        $u = Livewire::test(Create::class);
+        $this->actingAs(User::factory()->create()->assignRole('developer'));
+        $u->call(...$call)->assertForbidden();
+    }
+});
