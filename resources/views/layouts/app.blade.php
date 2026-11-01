@@ -20,7 +20,9 @@
                 ['label' => 'Invoices',  'route' => 'invoices.index','pattern' => 'invoices.*', 'icon' => 'building', 'show' => $u && $u->can('manage-money')],
                 ['label' => 'Payments',  'route' => 'payments.index','pattern' => 'payments.*', 'icon' => 'building', 'show' => $u && $u->can('manage-money')],
                 ['label' => 'Billing',   'route' => 'billing.recurring','pattern' => 'billing.*', 'icon' => 'building', 'show' => $u && $u->can('manage-money')],
-                ['label' => 'My projects','route' => 'portal.dashboard','pattern' => 'portal.*',  'icon' => 'folder',   'show' => $u && $u->hasRole('client')],
+                ['label' => 'My projects','route' => 'portal.dashboard','pattern' => ['portal.dashboard', 'portal.project'],  'icon' => 'folder',   'show' => $u && $u->hasRole('client')],
+                ['label' => 'Invoices',  'route' => 'portal.invoices','pattern' => 'portal.invoices', 'icon' => 'building', 'show' => $u && $u->hasRole('client')],
+                ['label' => 'Payments',  'route' => 'portal.payments','pattern' => 'portal.payments', 'icon' => 'building', 'show' => $u && $u->hasRole('client')],
             ])->where('show', true);
 
             $icons = [

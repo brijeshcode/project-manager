@@ -1,6 +1,16 @@
 <div>
     <x-ui.page-header title="Your projects" subtitle="Progress on the work we're doing for you." />
 
+    <div class="card mb-4 p-5">
+        <div class="text-xs font-medium text-slate-500">Account balance</div>
+        <div class="mt-1 font-display text-2xl font-semibold tabular-nums text-slate-900">
+            @if ($balance < 0) You owe {{ \App\Support\Money::format(-$balance, $currency) }}
+            @elseif ($balance > 0) Credit {{ \App\Support\Money::format($balance, $currency) }}
+            @else All settled
+            @endif
+        </div>
+    </div>
+
     @if ($projects->isEmpty())
         <x-ui.empty-state title="Nothing here yet" message="Your projects will appear here as soon as they're set up." />
     @else
@@ -22,6 +32,9 @@
                             <div class="h-full rounded-full bg-brand-500 transition-all" style="width: {{ round($checklist) }}%"></div>
                         </div>
                     </div>
+                    @if (($expected[$project->id] ?? 0) > 0)
+                        <p class="mt-3 text-xs text-slate-500">Expected: <span class="font-semibold tabular-nums">{{ \App\Support\Money::format($expected[$project->id], $currency) }}</span> <span>(forecast, not yet invoiced)</span></p>
+                    @endif
                 </a>
             @endforeach
         </div>

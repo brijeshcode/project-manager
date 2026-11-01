@@ -32,6 +32,8 @@ Route::view('profile', 'profile')
 Route::middleware(['auth', 'role:client'])->prefix('portal')->name('portal.')->group(function () {
     Route::get('/', PortalDashboard::class)->name('dashboard');
     Route::get('/projects/{project}', PortalProjectView::class)->name('project');
+    Route::get('/invoices', \App\Livewire\Portal\Invoices::class)->name('invoices');
+    Route::get('/payments', \App\Livewire\Portal\Payments::class)->name('payments');
 });
 
 // Client management — super_admin only

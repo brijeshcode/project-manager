@@ -3,6 +3,7 @@
 namespace App\Livewire\Portal;
 
 use App\Models\Project;
+use App\Services\ClientAccount;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
@@ -32,8 +33,15 @@ class Dashboard extends Component
 
     public function render()
     {
+        $account = app(ClientAccount::class);
+        $projects = $this->projects;
+        $projects->load('modules');
+
         return view('livewire.portal.dashboard', [
-            'projects' => $this->projects,
+            'projects' => $projects,
+            'balance' => $account->balanceCents(auth()->user()->client),
+            'currency' => auth()->user()->client->currency,
+            'expected' => $projects->mapWithKeys(fn ($p) => [$p->id => $account->softBalanceCents($p)]),
         ])->layout('layouts.app');
     }
 }
