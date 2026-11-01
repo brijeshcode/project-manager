@@ -67,3 +67,29 @@ it('doughnut shows all four legend labels, and an empty state with no segments w
         expect($html)->toContain('</span>'.$l.'</li>');
     }
 });
+
+it('line chart labels non-zero dots with compact amounts, none for zero points', function () {
+    $html = lineChart([0, 123400, 1234500, 120000000, 0], ['A', 'B', 'C', 'D', 'E']);
+
+    expect(substr_count($html, 'data-label='))->toBe(3)
+        ->and($html)->toContain('>1,234<')->toContain('>12.3K<')->toContain('>1.2M<')
+        ->toContain('text-anchor="middle"')->toContain('dark:fill-gray-200')
+        // the full amount stays in the tooltip
+        ->toContain('<title>C: ₹12,345.00</title>');
+});
+
+it('line chart always labels the peak and drops smaller overlapping neighbours', function () {
+    $c = array_fill(0, 30, 0);
+    $c[10] = 500000; // 5,000
+    $c[11] = 400000; // 4,000, about 18 units away: overlaps the peak label
+    $c[25] = 300000; // 3,000, far away: kept
+    $html = lineChart($c);
+
+    expect($html)->toContain('data-label="10">5,000<')->toContain('data-label="25">3,000<')
+        ->not->toContain('>4,000<');
+});
+
+it('line chart labels a lone point and nothing for an all-zero series', function () {
+    expect(lineChart([8350000]))->toContain('>83.5K<')->and(lineChart([83500]))->toContain('>835<')
+        ->and(lineChart([0, 0, 0]))->not->toContain('data-label=');
+});

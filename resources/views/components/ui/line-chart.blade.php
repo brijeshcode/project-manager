@@ -2,7 +2,7 @@
 @props(['points', 'currency'])
 
 @php
-    $w = 600; $h = 256; $padL = 56; $padR = 14; $padT = 12; $padB = 60;
+    $w = 600; $h = 256; $padL = 56; $padR = 14; $padT = 26; $padB = 60;
     $plotW = $w - $padL - $padR; $plotH = $h - $padT - $padB; $baseY = $padT + $plotH;
     $n = count($points);
     $peak = (int) collect($points)->max('cents');
@@ -40,6 +40,28 @@
         [$c1x, $c1y] = $cp($i - 1, 1); [$c2x, $c2y] = $cp($i, -1);
         $d .= ' C'.round($c1x, 2).' '.round($c1y, 2).' '.round($c2x, 2).' '.round($c2y, 2).' '.round($x, 2).' '.round($ys[$i], 2);
     }
+    // value labels above the dots: compact text from integer minor units (display rounding only)
+    $compact = function (int $cents) {
+        $u = intdiv($cents + 50, 100);
+        if ($u < 10000) { return number_format($u); }
+        $t = intdiv($u + 50, 100); // tenths of K
+        if ($t < 10000) { return intdiv($t, 10).($t % 10 ? '.'.($t % 10) : '').'K'; }
+        $t = intdiv($u + 50000, 100000); // tenths of M
+
+        return number_format(intdiv($t, 10)).($t % 10 ? '.'.($t % 10) : '').'M';
+    };
+    $order = collect($points)->map(fn ($p, $i) => [$p['cents'], $i])->filter(fn ($r) => $r[0] > 0)
+        ->sort(fn ($a, $b) => [$b[0], $a[1]] <=> [$a[0], $b[1]])->pluck(1);
+    $labels = []; $spans = [];
+    foreach ($order as $i) {
+        $txt = $compact($points[$i]['cents']); $lw = 6 * strlen($txt);
+        $x = $xs[$i]; $anchor = 'middle'; $l = $x - $lw / 2; $r = $x + $lw / 2;
+        if ($l < 2) { $anchor = 'start'; $x = 2; $l = 2; $r = 2 + $lw; }
+        elseif ($r > $w - 2) { $anchor = 'end'; $x = $w - 2; $r = $x; $l = $x - $lw; }
+        foreach ($spans as [$a, $b]) { if ($l < $b + 4 && $r > $a - 4) { continue 2; } }
+        $spans[] = [$l, $r];
+        $labels[$i] = [$txt, $x, max(11, $ys[$i] - 9), $anchor];
+    }
     $every = max(1, (int) ceil($n / 12));
 @endphp
 
@@ -60,6 +82,9 @@
             <g>
                 <title>{{ $p['label'] }}: {{ \App\Support\Money::format($p['cents'], $currency) }}</title>
                 <circle cx="{{ round($xs[$i], 2) }}" cy="{{ round($ys[$i], 2) }}" r="3.5" class="fill-blue-500 stroke-white dark:stroke-gray-800" stroke-width="1"/>
+                @if (isset($labels[$i]))
+                    <text x="{{ round($labels[$i][1], 2) }}" y="{{ round($labels[$i][2], 2) }}" text-anchor="{{ $labels[$i][3] }}" class="fill-gray-700 dark:fill-gray-200" font-size="10" data-label="{{ $i }}">{{ $labels[$i][0] }}</text>
+                @endif
                 @if ($i % $every === 0)
                     <text x="{{ round($xs[$i], 2) }}" y="{{ $baseY + 14 }}" text-anchor="end" transform="rotate(-45 {{ round($xs[$i], 2) }} {{ $baseY + 14 }})" class="fill-gray-500 dark:fill-gray-400" font-size="11">{{ $p['label'] }}</text>
                 @endif
