@@ -1,5 +1,5 @@
 <div>
-    <x-ui.page-header title="Payments" subtitle="Record money received from clients. Payments cannot be edited once recorded." />
+    <x-ui.page-header title="Payments" subtitle="Record money received from clients. Payments can be deleted but not edited." />
 
     <form wire:submit="save" class="card mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
@@ -75,7 +75,7 @@
         <div class="card overflow-hidden p-0">
             <table class="min-w-full divide-y divide-slate-200 text-sm">
                 <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    <tr><th class="px-5 py-3">Date</th><th class="px-5 py-3">Client</th><th class="px-5 py-3">Amount</th><th class="px-5 py-3">Type</th><th class="px-5 py-3">Applied to</th><th class="px-5 py-3">Notes</th></tr>
+                    <tr><th class="px-5 py-3">Date</th><th class="px-5 py-3">Client</th><th class="px-5 py-3">Amount</th><th class="px-5 py-3">Type</th><th class="px-5 py-3">Applied to</th><th class="px-5 py-3">Notes</th><th class="px-5 py-3"></th></tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @foreach ($payments as $p)
@@ -86,6 +86,7 @@
                             <td class="px-5 py-3">{{ ucfirst(str_replace('_', ' ', $p->type->value)) }}@if ($p->method) <span class="text-slate-500">({{ $p->method }})</span>@endif</td>
                             <td class="px-5 py-3">{{ $p->invoice?->number }}@if ($p->project) <span class="text-slate-500">{{ $p->project->name }}</span>@endif</td>
                             <td class="px-5 py-3">{{ $p->notes }}</td>
+                            <td class="px-5 py-3 text-right"><button type="button" wire:click="deletePayment({{ $p->id }})" wire:confirm="Delete this payment? The client balance will change." class="text-sm text-red-600 hover:underline">Delete</button></td>
                         </tr>
                     @endforeach
                 </tbody>

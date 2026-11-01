@@ -18,7 +18,8 @@ class ClientAccount
 
     public function softBalanceCents(Project $project): int
     {
-        $budget = $project->modules->sum(fn ($m) => $m->budgetCents() ?? 0);
+        // float sum then clamp: absurd stored budgets must not overflow into a float/TypeError
+        $budget = (int) min((float) PHP_INT_MAX / 2, $project->modules->sum(fn ($m) => (float) ($m->budgetCents() ?? 0)));
         $paid = (int) Payment::where('project_id', $project->id)->where('client_id', $project->client_id)->sum('amount_cents');
 
         return max(0, $budget - $paid);

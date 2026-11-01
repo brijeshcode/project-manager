@@ -1,6 +1,6 @@
 # Project Tracker ("Helm") — Status & Next Steps
 
-_Last updated: 2026-11-01. Branch: `phase-3` (not yet merged to `main`). Tests: **420 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
+_Last updated: 2026-11-01. Branch: `phase-3` (not yet merged to `main`). Tests: **439 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
 
 This is the living "where are we / what's next" doc. The task-by-task build plan is
 [docs/superpowers/plans/2026-10-26-project-tracker-phase-1.md](superpowers/plans/2026-10-26-project-tracker-phase-1.md);
@@ -124,8 +124,10 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
 
 ## Phase 3 deferred items / known limits
 
-- **Payments are immutable**: no delete/reverse flow and no double-submit guard on Save, so a
-  mistaken/duplicate payment can't be corrected yet. Recommend a reverse/delete flow soon.
+- **Payments can be deleted (owner, audit-logged) but not edited**; Livewire disables the submit button during a request.
+- Pending custom/recurring lines can be discarded in the builder; task-sourced lines re-sync from tasks and cannot.
+- Invoices keep a `lines_snapshot` (JSON) so voided/edited work never changes what an invoice shows; legacy invoices fall back to live lines.
+- Budgets are bounded (hours 99999.99, rate/amount 9,999,999.99); `budgetCents()` returns null on absurd stored values.
 - Overpayment is allowed silently (acts as credit).
 - INR rate is typed manually (no API fetch). Single-currency assumption for cost rates.
 - Invoice-number retry is only race-safe on SQLite/Postgres (MySQL REPEATABLE READ would need

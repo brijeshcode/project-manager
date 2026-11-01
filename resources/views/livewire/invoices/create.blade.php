@@ -18,11 +18,16 @@
             <div class="card">
                 <h2 class="mb-3 font-semibold">Pending work</h2>
                 @forelse ($lines as $l)
-                    <label wire:key="line-{{ $l->id }}" class="flex items-center gap-3 border-b border-slate-100 py-2 text-sm">
-                        <input type="checkbox" wire:model="selected" value="{{ $l->id }}" class="rounded border-slate-300" />
-                        <span class="flex-1">{{ $l->description }}</span>
-                        <span>{{ \App\Support\Money::format($l->amount_cents, $client->currency) }}</span>
-                    </label>
+                    <div wire:key="line-{{ $l->id }}" class="flex items-center gap-3 border-b border-slate-100 py-2 text-sm">
+                        <label class="flex flex-1 items-center gap-3">
+                            <input type="checkbox" wire:model="selected" value="{{ $l->id }}" class="rounded border-slate-300" />
+                            <span class="flex-1">{{ $l->description }}</span>
+                            <span>{{ \App\Support\Money::format($l->amount_cents, $client->currency) }}</span>
+                        </label>
+                        @unless ($l->source_type)
+                            <button type="button" wire:click="discardLine({{ $l->id }})" wire:confirm="Discard this pending line permanently?" class="btn btn-ghost">Discard</button>
+                        @endunless
+                    </div>
                 @empty
                     <p class="text-sm text-slate-500">No pending lines. Add a custom line below.</p>
                 @endforelse

@@ -3,6 +3,7 @@
 namespace App\Livewire\Invoices;
 
 use App\Models\BankAccount;
+use App\Models\BillableLine;
 use App\Models\Client;
 use App\Services\BillableService;
 use App\Services\InvoiceService;
@@ -57,6 +58,14 @@ class Create extends Component
         $this->authorize('manage-money');
         unset($this->custom[$i]);
         $this->custom = array_values($this->custom);
+    }
+
+    public function discardLine(int $lineId): void
+    {
+        $this->authorize('manage-money');
+        // task-sourced lines re-sync from tasks, so only custom/recurring lines of this client may be dropped
+        BillableLine::where('client_id', $this->clientId)->whereNull('invoice_id')->whereNull('source_type')->findOrFail($lineId)->delete();
+        $this->selected = array_values(array_diff($this->selected, [(string) $lineId]));
     }
 
     public function save(InvoiceService $svc)

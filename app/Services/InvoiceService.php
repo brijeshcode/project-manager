@@ -71,10 +71,16 @@ class InvoiceService
                 'terms' => $terms,
             ], $issued->format('Ymd'));
 
-            BillableLine::whereIn('id', $picked->pluck('id'))->update(['invoice_id' => $invoice->id]);
-            foreach ($custom as $line) {
-                BillableLine::create($line + ['client_id' => $client->id, 'invoice_id' => $invoice->id]);
+            $claimed = BillableLine::whereIn('id', $picked->pluck('id'))->whereNull('invoice_id')->update(['invoice_id' => $invoice->id]);
+            if ($claimed !== $picked->count()) {
+                throw ValidationException::withMessages(['lines' => 'Some lines were just invoiced elsewhere. Reload and retry.']);
             }
+            $created = collect($custom)->map(fn ($line) => BillableLine::create($line + ['client_id' => $client->id, 'invoice_id' => $invoice->id]));
+            // frozen copy so a voided invoice (whose lines return to pending) and later line edits never change what it shows
+            $invoice->update(['lines_snapshot' => $picked->concat($created)->map(fn ($l) => [
+                'description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price_cents' => (int) $l->unit_price_cents,
+                'amount_cents' => (int) $l->amount_cents, 'project_id' => $l->project_id,
+            ])->values()->all()]);
 
             return $invoice;
         });

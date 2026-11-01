@@ -52,7 +52,7 @@ it('rejects duplicate recurring charge periods but allows many null pairs', func
     expect(BillableLine::count())->toBe(4);
 });
 
-it('balance is payments only for now', function () {
+it('balance is payments received when nothing is invoiced', function () {
     $c = caProject()->client;
     caPay($c, 30000);
     expect(app(ClientAccount::class)->balanceCents($c))->toBe(30000);

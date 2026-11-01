@@ -75,9 +75,16 @@ it('sends only once', function () {
     Mail::fake();
     $inv = idInvoice(idClient());
     $svc = app(InvoiceService::class);
-    expect($svc->send($inv->fresh()))->toBeFalse();
-    expect($svc->send($inv->fresh()))->toBeFalse();
+    // stale instance: emailed_at null in memory, already set in the DB -> the atomic claim must refuse
+    $stale = $inv->fresh();
+    $stale->emailed_at = null;
+    expect($svc->send($stale))->toBeFalse();
     Mail::assertQueued(InvoiceMail::class, 1);
+    // two sequential sends on fresh models after clearing: exactly one more
+    Invoice::whereKey($inv->id)->update(['emailed_at' => null]);
+    expect($svc->send($inv->fresh()))->toBeTrue();
+    expect($svc->send($inv->fresh()))->toBeFalse();
+    Mail::assertQueued(InvoiceMail::class, 2);
 });
 
 it('does not send void invoices or clients without email', function () {
@@ -108,8 +115,10 @@ it('does not fail create when dispatch throws, and leaves emailed_at null', func
 it('resend works for owner and re-sets emailed_at', function () {
     Mail::fake();
     $inv = idInvoice(idClient());
+    Invoice::whereKey($inv->id)->update(['emailed_at' => '2020-01-01 00:00:00']);
     Livewire::actingAs(idOwner())->test(Show::class, ['invoice' => $inv])->call('resend');
     Mail::assertQueued(InvoiceMail::class, 2);
+    expect($inv->fresh()->emailed_at->year)->toBeGreaterThan(2020);
 });
 
 it('resend is refused for non-owners at action level', function () {

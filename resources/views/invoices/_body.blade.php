@@ -14,6 +14,9 @@
         }
     }
     $__phones = config('billing.contact_phones');
+    $__lines = $invoice->lines_snapshot ?? $invoice->lines->map(fn ($l) => [
+        'description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price_cents' => $l->unit_price_cents, 'amount_cents' => $l->amount_cents,
+    ])->all();
 @endphp
 {{-- Tables + inline styles (no flex/grid) so this renders in dompdf and email clients as well as the browser. --}}
 <div class="bg-white text-sm text-slate-800" style="background:#fff;color:#1e293b;font-size:13px;">
@@ -25,6 +28,7 @@
         <td style="padding:18px 24px;text-align:right;vertical-align:top;">
             <div style="font-size:22px;font-weight:bold;letter-spacing:2px;">INVOICE</div>
             <div>{{ $invoice->number }}</div>
+            @if ($invoice->status === 'void')<div style="margin-top:6px;display:inline-block;border:2px solid #fca5a5;color:#fca5a5;padding:2px 10px;font-size:16px;font-weight:bold;letter-spacing:3px;">VOID</div>@endif
         </td>
     </tr></table>
 
@@ -50,13 +54,13 @@
             <tr style="background:#f1f5f9;color:#64748b;font-size:11px;text-transform:uppercase;"><th style="padding:8px 12px;text-align:left;">#</th><th style="padding:8px 12px;text-align:left;">Description</th><th style="padding:8px 12px;text-align:right;">Qty</th><th style="padding:8px 12px;text-align:right;">Unit price</th><th style="padding:8px 12px;text-align:right;">Amount</th></tr>
         </thead>
         <tbody>
-            @foreach ($invoice->lines as $line)
+            @foreach ($__lines as $line)
                 <tr style="border-bottom:1px solid #f1f5f9;">
                     <td style="padding:8px 12px;">{{ $loop->iteration }}</td>
-                    <td style="padding:8px 12px;">{{ $line->description }}</td>
-                    <td style="padding:8px 12px;text-align:right;">{{ rtrim(rtrim((string) $line->quantity, '0'), '.') }}</td>
-                    <td style="padding:8px 12px;text-align:right;">{{ \App\Support\Money::format($line->unit_price_cents, $__cur) }}</td>
-                    <td style="padding:8px 12px;text-align:right;">{{ \App\Support\Money::format($line->amount_cents, $__cur) }}</td>
+                    <td style="padding:8px 12px;">{{ $line['description'] }}</td>
+                    <td style="padding:8px 12px;text-align:right;">{{ rtrim(rtrim((string) $line['quantity'], '0'), '.') }}</td>
+                    <td style="padding:8px 12px;text-align:right;">{{ \App\Support\Money::format($line['unit_price_cents'], $__cur) }}</td>
+                    <td style="padding:8px 12px;text-align:right;">{{ \App\Support\Money::format($line['amount_cents'], $__cur) }}</td>
                 </tr>
             @endforeach
         </tbody>

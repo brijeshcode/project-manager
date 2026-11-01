@@ -136,7 +136,7 @@ it('rejects a project from another client and bad amounts', function () {
     expect(RecurringCharge::count())->toBe(0);
 });
 
-it('re-authorizes actions for non-owners', function () {
+it('denies mounting the page to non-owners', function () {
     $c = rcCharge();
     Livewire::actingAs(User::factory()->create()->assignRole('project_manager'))->test(Recurring::class)->assertForbidden();
     expect($c->fresh()->active)->toBeTrue();

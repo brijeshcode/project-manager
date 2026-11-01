@@ -10,7 +10,7 @@ class Invoice extends Model
 {
     protected $fillable = [
         'number', 'client_id', 'status', 'issued_on', 'due_on', 'currency', 'subtotal_cents', 'tax_percent',
-        'tax_cents', 'total_cents', 'bank_account_id', 'bank_snapshot', 'inr_rate', 'terms', 'emailed_at',
+        'tax_cents', 'total_cents', 'bank_account_id', 'bank_snapshot', 'inr_rate', 'terms', 'emailed_at', 'lines_snapshot',
     ];
 
     protected $hidden = ['bank_snapshot'];
@@ -24,6 +24,7 @@ class Invoice extends Model
             'bank_snapshot' => 'encrypted:array',
             'tax_percent' => 'decimal:2',
             'inr_rate' => 'decimal:4',
+            'lines_snapshot' => 'array',
         ];
     }
 

@@ -132,9 +132,9 @@ it('is forbidden for non-owners on routes and actions', function () {
 it('voids from Show and the list shows void', function () {
     $c = ibClient();
     $inv = app(InvoiceService::class)->create($c, [ibLine($c, 1000)->id]);
-    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->call('void')->assertSee('void');
+    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->call('void')->assertSee('VOID');
     expect($inv->fresh()->status)->toBe('void');
-    Livewire::actingAs(ibOwner())->test(Index::class)->assertSee($inv->number)->assertSee('void');
+    Livewire::actingAs(ibOwner())->test(Index::class)->assertSee($inv->number)->assertSeeHtml('badge badge-red');
 });
 
 it('lists newest first, filters by client and derives paid', function () {

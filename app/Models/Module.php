@@ -35,9 +35,16 @@ class Module extends Model
     public function budgetCents(): ?int
     {
         if ($this->project->client->billing_mode === BillingMode::Hourly) {
-            return $this->budget_hours !== null && $this->hourly_rate_cents !== null
-                ? intdiv(Money::toCents((string) $this->budget_hours) * $this->hourly_rate_cents + 50, 100) // hours x100, integer half-up
-                : null;
+            if ($this->budget_hours === null || $this->hourly_rate_cents === null) {
+                return null;
+            }
+            $h = Money::toCents((string) $this->budget_hours);
+            // absurd rows must not overflow int math (saveBudget bounds make this unreachable)
+            if ((float) $h * $this->hourly_rate_cents > PHP_INT_MAX / 2) {
+                return null;
+            }
+
+            return intdiv($h * $this->hourly_rate_cents + 50, 100); // hours x100, integer half-up
         }
 
         return $this->budget_amount_cents;

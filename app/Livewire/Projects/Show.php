@@ -92,10 +92,12 @@ class Show extends Component
         $this->authorize('manage-money');
 
         $module = $this->project->modules()->findOrFail($moduleId);
+        // commas are stripped, so bound the digits that remain (max 9,999,999.99)
+        $money = fn ($a, $v, $fail) => preg_match('/^\d{1,7}(\.\d{1,2})?$/', str_replace(',', '', (string) $v)) || $fail('Too large.');
         $this->validate([
-            "budget.$moduleId.hours"    => 'nullable|numeric|min:0|max:999999',
-            "budget.$moduleId.rate"     => ['nullable', 'regex:/^[\d,]{1,14}(\.\d{1,3})?$/'],
-            "budget.$moduleId.amount"   => ['nullable', 'regex:/^[\d,]{1,14}(\.\d{1,3})?$/'],
+            "budget.$moduleId.hours"    => ['bail', 'nullable', 'regex:/^\d{1,5}(\.\d{1,2})?$/'],
+            "budget.$moduleId.rate"     => ['bail', 'nullable', 'regex:/^[\d,]{1,11}(\.\d{1,2})?$/', $money],
+            "budget.$moduleId.amount"   => ['bail', 'nullable', 'regex:/^[\d,]{1,11}(\.\d{1,2})?$/', $money],
             "budget.$moduleId.deadline" => 'nullable|date',
             "budget.$moduleId.reason"   => 'nullable|string|max:1000',
         ]);

@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\ClientAccount;
 use App\Support\Money;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Livewire\Component;
@@ -67,6 +68,15 @@ class Index extends Component
 
         $this->reset('project_id', 'invoice_id', 'amount', 'method', 'notes');
         $this->resetPage();
+    }
+
+    public function deletePayment(int $paymentId): void
+    {
+        $this->authorize('manage-money');
+        $p = Payment::findOrFail($paymentId);
+        $p->delete();
+        // audit trail only: ids and amounts, never the free-text notes
+        Log::info('payment deleted', ['id' => $p->id, 'client_id' => $p->client_id, 'amount_cents' => $p->amount_cents, 'paid_on' => $p->paid_on->toDateString(), 'user_id' => auth()->id()]);
     }
 
     public function render()
