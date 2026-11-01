@@ -109,7 +109,7 @@ it('non-owners cannot reach client pages', function (string $role) {
     $u->assignRole($role);
     $this->actingAs($u)->get(route('clients.show', $c))->assertForbidden();
     Livewire::actingAs($u)->test(Show::class, ['client' => $c])->assertForbidden();
-})->with(['developer', 'client']);
+})->with(['developer', 'client', 'project_manager']);
 
 // ---- show
 it('show renders summary, tabs, notes, and never bank details', function () {
@@ -162,7 +162,7 @@ it('refuses to delete a client that has related data', function (string $what, C
     Livewire::actingAs(cpAdmin())->test(Index::class)->call('delete', $c->id)
         ->assertDispatched('toast', fn ($name, $p) => $p['type'] === 'error' && str_contains($p['message'], $what) && str_contains($p['message'], 'archiv'));
     expect(Client::count())->toBe(1);
-    Livewire::actingAs(cpAdmin())->test(Show::class, ['client' => $c])->call('delete', $c->id)->assertNoRedirect();
+    Livewire::actingAs(cpAdmin())->test(Show::class, ['client' => $c])->call('delete', $c->id)->assertNoRedirect()->assertDispatched('toast', fn ($n, $p) => $p['type'] === 'error');
     expect(Client::count())->toBe(1);
 })->with([
     'projects' => ['projects', fn ($c) => Project::create(['client_id' => $c->id, 'name' => 'P', 'status' => 'active'])],
@@ -219,4 +219,17 @@ it('edit saves, keeps the code, and redirects to show with a toast', function ()
 it('preselects the client on a new project via query string', function () {
     $c = cpClient();
     Livewire::withQueryParams(['client' => $c->id])->actingAs(cpAdmin())->test(\App\Livewire\Projects\Form::class)->assertSet('client_id', $c->id);
+});
+
+it('rejects a tampered clientId on the form', function () {
+    $a = cpClient(['name' => 'A']);
+    $b = cpClient(['name' => 'B']);
+    expect(fn () => Livewire::actingAs(cpAdmin())->test(Form::class, ['client' => $a->fresh()])->set('clientId', $b->id))
+        ->toThrow(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
+    expect(fn () => Livewire::actingAs(cpAdmin())->test(Form::class)->set('clientId', $b->id))
+        ->toThrow(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
+});
+
+it('index corrects a bad perPage back to 15', function () {
+    Livewire::actingAs(cpAdmin())->test(Index::class)->set('perPage', 7)->assertSet('perPage', 15)->set('perPage', 50)->assertSet('perPage', 50);
 });

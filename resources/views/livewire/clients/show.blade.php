@@ -65,16 +65,16 @@
     {{-- Tabs --}}
     <div class="card">
         <div class="border-b border-gray-200 dark:border-gray-700">
-            <nav class="-mb-px flex gap-8 px-6" aria-label="Tabs">
+            <nav class="-mb-px flex gap-8 px-6" aria-label="Tabs" role="tablist">
                 @foreach (['details' => 'Details', 'projects' => 'Projects', 'invoices' => 'Invoices'] as $key => $label)
-                    <button type="button" x-on:click="tab = '{{ $key }}'"
+                    <button type="button" role="tab" :aria-selected="tab === '{{ $key }}'" x-on:click="tab = '{{ $key }}'"
                             :class="tab === '{{ $key }}' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-300'"
                             class="whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium transition-colors">{{ $label }}</button>
                 @endforeach
             </nav>
         </div>
 
-        <div x-show="tab === 'details'" class="space-y-8 p-6">
+        <div role="tabpanel" x-show="tab === 'details'" class="space-y-8 p-6">
             @foreach ($sections as $title => $fields)
                 <section>
                     <h3 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">{{ $title }}</h3>
@@ -96,7 +96,7 @@
             @endif
         </div>
 
-        <div x-show="tab === 'projects'" x-cloak class="p-6">
+        <div role="tabpanel" x-show="tab === 'projects'" x-cloak class="p-6">
             @if ($projects->isEmpty())
                 <x-ui.empty-state title="No projects yet" message="Projects for this client will appear here.">
                     <x-slot name="action"><a href="{{ route('projects.create', ['client' => $client->id]) }}" wire:navigate class="btn btn-primary">Add Project</a></x-slot>
@@ -118,7 +118,7 @@
             @endif
         </div>
 
-        <div x-show="tab === 'invoices'" x-cloak class="p-6">
+        <div role="tabpanel" x-show="tab === 'invoices'" x-cloak class="p-6">
             @if ($invoices->isEmpty())
                 <x-ui.empty-state title="No invoices yet" message="Invoices issued to this client will appear here." name="document" />
             @else

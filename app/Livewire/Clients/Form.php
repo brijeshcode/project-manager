@@ -7,12 +7,15 @@ use App\Enums\ClientStatus;
 use App\Enums\ClientType;
 use App\Models\Client;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class Form extends Component
 {
+    #[Locked]
     public ?int $clientId = null;
 
+    #[Locked]
     public ?string $client_code = null; // display only, generated on create
 
     public string $name     = '';

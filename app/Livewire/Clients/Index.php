@@ -24,6 +24,14 @@ class Index extends Component
         $this->authorize('viewAny', Client::class);
     }
 
+    public function updatedPerPage(): void
+    {
+        if (! in_array((int) $this->perPage, self::PER_PAGE, true)) {
+            $this->perPage = 15;
+        }
+        $this->resetPage();
+    }
+
     public function updatingPerPage(): void
     {
         $this->resetPage();

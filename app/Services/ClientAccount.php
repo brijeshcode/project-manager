@@ -9,7 +9,7 @@ use App\Models\Project;
 
 class ClientAccount
 {
-    // payments received minus everything invoiced (non-void); positive = client has credit
+    // payments received minus everything invoiced (sent invoices only; draft and void excluded); positive = client has credit
     public function balanceCents(Client $client): int
     {
         return (int) $client->payments()->sum('amount_cents')

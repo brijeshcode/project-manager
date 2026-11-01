@@ -16,7 +16,9 @@ trait DeletesClient
         $blockers = DB::transaction(function () use ($client) {
             $locked = Client::whereKey($client->id)->lockForUpdate()->firstOrFail();
             $blockers = $locked->deleteBlockers();
-            $blockers || $locked->delete();
+            if (! $blockers) {
+                $locked->delete();
+            }
 
             return $blockers;
         });
