@@ -15,7 +15,10 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
-beforeEach(fn () => $this->seed(RoleSeeder::class));
+beforeEach(function () {
+    $this->seed(RoleSeeder::class);
+    (new \App\Services\ExchangeRates)->setRate('USD', '83.5', User::factory()->create()); // USD clients need an active rate
+});
 
 function payOwner(): User
 {

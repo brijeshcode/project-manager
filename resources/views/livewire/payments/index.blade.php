@@ -1,5 +1,5 @@
 <div>
-    <x-ui.page-header title="Payments" subtitle="Record money received from clients. Payments can be deleted but not edited." />
+    <x-ui.page-header title="Payments" subtitle="Record money received from clients. Payments can be deleted but not edited. Local currency: {{ $local }}" />
 
     <form wire:submit="save" class="card mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
@@ -30,7 +30,15 @@
             <label for="amount" class="label">Amount</label>
             <input wire:model="amount" id="amount" type="text" inputmode="decimal" placeholder="0.00" class="input" />
             @error('amount') <p class="mt-1 field-error">{{ $message }}</p> @enderror
+            @if ($preview)<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">≈ {{ $preview }}</p>@endif
         </div>
+        @if ($client_id && ! $sameCurrency)
+            <div>
+                <label for="exchange_rate" class="label">Rate to {{ $local }}</label>
+                <input wire:model.live.debounce.300ms="exchange_rate" id="exchange_rate" type="text" inputmode="decimal" autocomplete="off" class="input" />
+                @error('exchange_rate') <p class="mt-1 field-error">{{ $message }}</p> @enderror
+            </div>
+        @endif
         <div>
             <label for="paid_on" class="label">Paid on</label>
             <input wire:model="paid_on" id="paid_on" type="date" max="{{ today()->toDateString() }}" class="input" />
@@ -94,7 +102,18 @@
                         <tr wire:key="pay-{{ $p->id }}">
                             <td class="table-td">{{ $p->paid_on->toFormattedDateString() }}</td>
                             <td class="table-td">{{ $p->client->name }}</td>
-                            <td class="table-td">{{ \App\Support\Money::format($p->amount_cents, $p->client->currency) }}</td>
+                            <td class="table-td">{{ \App\Support\Money::format($p->amount_cents, $p->client->currency) }}
+                                @if ($p->hasLocal() && strtoupper($p->client->currency) !== $p->local_currency)
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ \App\Support\Money::format($p->local_amount_cents, $p->local_currency) }} @ {{ rtrim(rtrim($p->exchange_rate, '0'), '.') }}</div>
+                                @elseif (! $p->hasLocal() && strtoupper($p->client->currency) !== $local)
+                                    <form wire:submit="setRate({{ $p->id }})" class="mt-1 flex items-center gap-1">
+                                        <label for="rowRate-{{ $p->id }}" class="sr-only">Rate to {{ $local }}</label>
+                                        <input wire:model="rowRate.{{ $p->id }}" id="rowRate-{{ $p->id }}" type="text" inputmode="decimal" placeholder="Rate" class="input w-24 py-1 text-xs" />
+                                        <button type="submit" class="btn btn-secondary py-1 text-xs">Set rate</button>
+                                    </form>
+                                    @error("rowRate.{$p->id}") <p class="field-error">{{ $message }}</p> @enderror
+                                @endif
+                            </td>
                             <td class="table-td">{{ ucfirst(str_replace('_', ' ', $p->type->value)) }}@if ($p->method) <span class="text-slate-500">({{ $p->method }})</span>@endif</td>
                             <td class="table-td">{{ $p->invoice?->number }}@if ($p->project) <span class="text-slate-500">{{ $p->project->name }}</span>@endif</td>
                             <td class="table-td">{{ $p->notes }}</td>

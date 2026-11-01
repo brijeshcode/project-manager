@@ -8,11 +8,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Payment extends Model
 {
-    protected $fillable = ['client_id', 'project_id', 'invoice_id', 'amount_cents', 'paid_on', 'type', 'method', 'notes'];
+    protected $fillable = ['client_id', 'project_id', 'invoice_id', 'amount_cents', 'paid_on', 'type', 'method', 'notes', 'exchange_rate', 'local_amount_cents', 'local_currency'];
 
     protected function casts(): array
     {
-        return ['paid_on' => 'date', 'type' => PaymentType::class];
+        return ['paid_on' => 'date', 'type' => PaymentType::class, 'exchange_rate' => 'decimal:6'];
+    }
+
+    public function hasLocal(): bool
+    {
+        return $this->local_amount_cents !== null;
     }
 
     public function client(): BelongsTo
