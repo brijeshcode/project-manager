@@ -102,7 +102,7 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
   2. **Local currency** — select the system's local currency (default today: INR).
   3. **Time zone** — select the system time zone (not a setting yet; dates currently use the app default).
   4. **Users** — add the first user(s) (the owner/super admin, then team).
-  5. **Account** — the business/bank account used on invoices (company details and at least one bank account; today these come from `BILLING_*` env keys and the Bank accounts page).
+  5. **Business details** (owner confirmed 2026-11-02 that "account" means this) — the business's own details used on invoices: company name, tagline, contact email and phones (today `BILLING_*` env keys), plus the bank account(s) shown on invoices (today the Bank accounts page).
   The wizard should block normal use until these are done, and is the natural onboarding step for each tenant in Phase 5. Not designed or built yet.
 - **Phase 5 — Multi-tenancy**: spatie multi-DB (one DB/tenant) + landlord DB + feature flags.
 
