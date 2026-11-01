@@ -91,8 +91,8 @@
 
 /* DARK OVERRIDES — remaps raw utilities used in views; prefer component classes in new code */
 .dark .bg-white { background-color: #1f2937; }
-.dark .bg-slate-50 { background-color: rgb(55 65 81 / 0.3); }
-.dark .bg-slate-100 { background-color: rgb(55 65 81 / 0.5); }
+.dark .bg-slate-50 { background-color: #1f2937; }
+.dark .bg-slate-100 { background-color: #374151; }
 .dark .border-slate-100 { border-color: #1f2937; }
 .dark .border-slate-200 { border-color: #374151; }
 .dark .border-slate-300 { border-color: #4b5563; }
@@ -110,3 +110,17 @@
 .dark .bg-brand-50 { background-color: rgb(30 58 138 / 0.2); }
 .dark .text-brand-600 { color: #60a5fa; }
 .dark .text-brand-700 { color: #93c5fd; }
+[x-cloak] { display: none !important; }
+.dark .bg-slate-200 { background-color: #4b5563; }
+.dark .bg-slate-300 { background-color: #6b7280; }
+.dark .text-slate-300 { color: #6b7280; }
+.dark .hover\:text-slate-700:hover,
+.dark .hover\:text-slate-800:hover,
+.dark .focus\:text-slate-800:focus { color: #f9fafb; }
+.dark .hover\:border-slate-300:hover { border-color: #6b7280; }
+.dark .hover\:bg-slate-200:hover { background-color: #4b5563; }
+.dark .focus\:bg-slate-50:focus,
+.dark .focus\:bg-slate-100:focus { background-color: #374151; }
+.dark .hover\:text-brand-700:hover { color: #93c5fd; }
+.dark .bg-brand-100 { background-color: rgb(30 58 138 / 0.4); }
+.dark .focus\:bg-brand-50:focus { background-color: rgb(30 58 138 / 0.2); }

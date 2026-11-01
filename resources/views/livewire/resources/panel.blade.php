@@ -12,7 +12,7 @@
             <div class="flex items-center justify-between">
                 <h3 class="font-semibold text-slate-900">{{ $resource->title }}</h3>
                 @if ($isAdmin)
-                    <button type="button" wire:click="deleteResource({{ $resource->id }})" wire:confirm="Delete this resource and all its items?" class="text-xs text-red-600">Delete</button>
+                    <button type="button" wire:click="deleteResource({{ $resource->id }})" wire:confirm="Delete this resource and all its items?" class="text-xs text-rose-600 hover:underline dark:text-rose-400">Delete</button>
                 @endif
             </div>
             @if ($resource->description)
@@ -31,7 +31,7 @@
                         @elseif ($item->type === 'image')
                             <img src="{{ route('resource-items.download', $item->id) }}" alt="{{ $item->original_name }}" class="mt-1 max-h-40 rounded">
                         @elseif ($item->type === 'file')
-                            <a href="{{ route('resource-items.download', $item->id) }}" class="mt-1 inline-block text-indigo-600 underline">{{ $item->original_name }}</a>
+                            <a href="{{ route('resource-items.download', $item->id) }}" class="mt-1 inline-block link underline">{{ $item->original_name }}</a>
                         @endif
                         <p class="mt-1 text-xs text-slate-500">{{ $item->created_at?->format('M j, Y') }}@if (! $isClient || $item->created_by === auth()->id()) · {{ $isClient ? 'You' : $item->creator?->name }}@endif</p>
                         <div class="mt-1 flex flex-wrap gap-1">
@@ -68,7 +68,7 @@
                                         @error("editValue.{$item->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
                                     @endif
                                     <button type="submit" class="btn btn-secondary text-xs">Save</button>
-                                    <button type="button" wire:click="deleteItem({{ $item->id }})" wire:confirm="Delete this item?" class="text-xs text-red-600">Delete item</button>
+                                    <button type="button" wire:click="deleteItem({{ $item->id }})" wire:confirm="Delete this item?" class="text-xs text-rose-600 hover:underline dark:text-rose-400">Delete item</button>
                                 </form>
                             </details>
                             <div class="mt-2 flex gap-2">

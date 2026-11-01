@@ -20,7 +20,7 @@
                 @forelse ($lines as $l)
                     <div wire:key="line-{{ $l->id }}" class="flex items-center gap-3 border-b border-slate-100 py-2 text-sm">
                         <label class="flex flex-1 items-center gap-3">
-                            <input type="checkbox" wire:model="selected" value="{{ $l->id }}" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                            <input type="checkbox" wire:model="selected" value="{{ $l->id }}" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700" />
                             <span class="flex-1">{{ $l->description }}</span>
                             <span>{{ \App\Support\Money::format($l->amount_cents, $client->currency) }}</span>
                         </label>

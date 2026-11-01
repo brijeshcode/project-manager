@@ -54,11 +54,11 @@
 
             <div class="flex items-center gap-6">
                 <label class="inline-flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" wire:model="is_idea" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <input type="checkbox" wire:model="is_idea" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700">
                     <span class="text-sm font-medium text-slate-700">Idea / backlog item</span>
                 </label>
                 <label class="inline-flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" wire:model="client_visible" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <input type="checkbox" wire:model="client_visible" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700">
                     <span class="text-sm font-medium text-slate-700">Visible to client</span>
                 </label>
             </div>
@@ -95,7 +95,7 @@
             <div class="flex items-center justify-between mb-4">
                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Testing add-on</p>
                 <label class="inline-flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" wire:model="testing_enabled" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                    <input type="checkbox" wire:model="testing_enabled" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700">
                     <span class="text-sm font-medium text-slate-700">Enable</span>
                 </label>
             </div>
@@ -125,7 +125,7 @@
                 @foreach($allLabels as $label)
                     <label class="inline-flex items-center gap-1.5 cursor-pointer">
                         <input type="checkbox" wire:model="labelIds" value="{{ $label->id }}"
-                               class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                               class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700">
                         <span class="text-sm font-medium text-slate-700">{{ $label->name }}</span>
                         @if($label->color)
                             <span class="inline-block w-3 h-3 rounded-full" style="background:{{ $label->color }}"></span>
@@ -143,7 +143,7 @@
                 @foreach($allUsers as $user)
                     <label class="inline-flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" wire:model="assigneeIds" value="{{ $user->id }}"
-                               class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                               class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700">
                         <span class="text-sm text-slate-700">{{ $user->name }}</span>
                     </label>
                 @endforeach

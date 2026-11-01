@@ -5,7 +5,7 @@
             <span class="font-semibold tabular-nums text-slate-900">{{ number_format($checklistProgress, 1) }}%</span>
         </div>
         <div class="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-            <div class="h-full rounded-full bg-brand-500 transition-all" style="width: {{ min($checklistProgress, 100) }}%"></div>
+            <div class="h-full rounded-full bg-blue-500 transition-all" style="width: {{ min($checklistProgress, 100) }}%"></div>
         </div>
     </div>
 

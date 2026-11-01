@@ -156,3 +156,15 @@ php artisan serve              # http://127.0.0.1:8000
 **Tooling notes for this machine:** run `php artisan test` via bash with a file redirect
 (`php artisan test > out.txt 2>&1; echo $?`) — piping through PowerShell `Select-Object`
 misreports the exit code. Don't run `npx`/node in Git Bash (crashes); use PowerShell for npm.
+
+---
+
+## UI redesign (done)
+
+Blue/slate look with light + dark mode across every screen.
+
+- **Dark mode:** Tailwind `darkMode: 'class'`; an Alpine `theme` store toggles `.dark` on `<html>` (persisted, `_theme-script` partial prevents flash). Toggle is in the user menu.
+- **Where the look lives:** `tailwind.config.js` (palette: `brand` = blue, `slate`/gray), `resources/css/app.css` (`.card .btn* .input .label .badge-* .link` etc.), `resources/views/components/ui` (badge, page-header, stat, table-card, filter-card, toast, health-meter).
+- **Known ceiling:** dark mode for raw utilities (`bg-white`, `text-slate-*`, `border-slate-*`...) is the "DARK OVERRIDES" block at the bottom of `app.css`, not per-view `dark:` classes. An element carrying `bg-white` cannot use `dark:bg-*` (the override wins); use an arbitrary colour or a component class instead. New code should prefer component classes.
+- `docs/desgin-example` is the old Vue reference only and is gitignored by the owner.
+- Sweep note: Playwright/Python are not available on this machine, so the dark sweep was a class audit (grep of used utilities vs overrides), not screenshots.

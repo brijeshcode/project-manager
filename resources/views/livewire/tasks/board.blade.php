@@ -13,7 +13,7 @@
 
     <div class="flex gap-4 overflow-x-auto pb-4">
         @foreach($columnOrder as $col)
-            <div class="flex w-72 shrink-0 flex-col rounded-xl bg-slate-100 p-3">
+            <div class="flex w-72 shrink-0 flex-col rounded-xl bg-gray-100 p-3 dark:bg-gray-800/60">
                 {{-- Column header --}}
                 <div class="mb-3 flex items-center justify-between px-1">
                     <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $col->value }}</h3>
@@ -27,7 +27,7 @@
                     data-column="{{ $col->value }}"
                     wire:ignore.self>
                     @foreach($columns[$col->value] as $task)
-                        <li class="group rounded-lg bg-white p-3 shadow-sm ring-1 ring-slate-900/5 cursor-grab active:cursor-grabbing"
+                        <li class="group rounded-lg bg-[#ffffff] dark:bg-gray-700 p-3 shadow-sm ring-1 ring-slate-900/5 dark:ring-white/10 cursor-grab active:cursor-grabbing"
                             data-task-id="{{ $task->id }}">
                             <p class="text-sm font-medium text-slate-800">{{ $task->title }}</p>
                             @if($task->estimate_hours)

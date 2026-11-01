@@ -125,7 +125,7 @@
                                         @endif
                                     </div>
                                     <div class="mt-2 h-1 w-full overflow-hidden rounded-full bg-slate-100">
-                                        <div class="h-full rounded-full bg-brand-500" style="width: {{ round($taskProgress) }}%"></div>
+                                        <div class="h-full rounded-full bg-blue-500" style="width: {{ round($taskProgress) }}%"></div>
                                     </div>
 
                                     <div x-show="open" x-collapse style="display:none" class="mt-4 space-y-5 pl-7">

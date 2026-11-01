@@ -19,7 +19,7 @@
             <span class="font-semibold tabular-nums text-slate-900">{{ $c }}%</span>
         </div>
         <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div class="h-full rounded-full bg-brand-500 transition-all" style="width: {{ $c }}%"></div>
+            <div class="h-full rounded-full bg-blue-500 transition-all" style="width: {{ $c }}%"></div>
         </div>
     </div>
     <div>
