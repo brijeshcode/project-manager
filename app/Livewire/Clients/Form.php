@@ -81,7 +81,7 @@ class Form extends Component
 
         $data = $this->validate([
             'name'                => 'required|string|max:255',
-            'currency'            => 'required|size:3',
+            'currency'            => ['required', 'regex:/\A[A-Za-z]{3}\z/'],
             'billing_mode'        => ['required', Rule::enum(BillingMode::class)],
             'type'                => ['required', Rule::enum(ClientType::class)],
             'status'              => ['required', Rule::enum(ClientStatus::class)],
@@ -111,6 +111,8 @@ class Form extends Component
         $client = $this->clientId
             ? tap(Client::findOrFail($this->clientId))->update($data)
             : Client::create($data);
+
+        \App\Services\LocalCurrency::backfill();
 
         session()->flash('toast', 'Client saved.');
 

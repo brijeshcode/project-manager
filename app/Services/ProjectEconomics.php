@@ -88,7 +88,7 @@ class ProjectEconomics
             ->get();
         foreach ($rows as $r) {
             $invoiced += (int) $r->s;
-            $rate = $r->rate ?? ($same ? '1' : null);
+            $rate = $r->rate !== null ? number_format((float) $r->rate, 6, ".", "") : ($same ? "1" : null); // raw select skips the decimal cast (SQLite returns floats)
             $rate === null ? $invoicedMissing++ : $invoicedLocal += Money::convert((int) $r->s, $rate);
         }
 

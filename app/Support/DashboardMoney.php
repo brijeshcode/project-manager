@@ -35,7 +35,10 @@ class DashboardMoney
                 continue;
             }
             $cur = strtoupper($clients[$id]);
-            $rate = $rates[$cur] ??= LocalCurrency::rateFor($cur);
+            if (! array_key_exists($cur, $rates)) {
+                $rates[$cur] = LocalCurrency::rateFor($cur);
+            }
+            $rate = $rates[$cur];
             if ($rate === null) {
                 $missing++;
             } else {

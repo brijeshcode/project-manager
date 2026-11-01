@@ -26,6 +26,9 @@ class InvoiceService
      */
     public function create(Client $client, array $lineIds, array $customLines = [], float $taxPercent = 0.0, ?int $bankAccountId = null, ?string $exchangeRate = null): Invoice
     {
+        if ($exchangeRate !== null && ! Money::isValidRate($exchangeRate)) {
+            throw ValidationException::withMessages(['exchangeRate' => 'Enter a positive rate with up to 6 decimals.']);
+        }
         $lineIds = array_values(array_unique($lineIds));
         $pctHundredths = $this->validatedPercent($taxPercent);
         $custom = $this->validatedCustomLines($customLines);

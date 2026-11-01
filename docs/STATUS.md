@@ -1,6 +1,6 @@
 # Project Tracker ("Helm") — Status & Next Steps
 
-_Last updated: 2026-11-01. Branch: `phase-3` (not yet merged to `main`). Tests: **628 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
+_Last updated: 2026-11-01. Branch: `local-currency` (local-currency work on top of phase 3; merge to `main` pending the owner). Tests: **628 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
 
 This is the living "where are we / what's next" doc. The task-by-task build plan is
 [docs/superpowers/plans/2026-10-26-project-tracker-phase-1.md](superpowers/plans/2026-10-26-project-tracker-phase-1.md);
@@ -137,7 +137,7 @@ Still open by choice:
 - Invoices keep a `lines_snapshot` (JSON) so voided/edited work never changes what an invoice shows; legacy invoices fall back to live lines.
 - Budgets are bounded (hours 99999.99, rate/amount 9,999,999.99); `budgetCents()` returns null on absurd stored values.
 - Overpayment is allowed silently (acts as credit).
-- INR rate is typed manually (no API fetch). Single-currency assumption for cost rates.
+- Single-currency assumption for cost rates (exchange rates are covered under Local currency).
 - Invoice-number retry is only race-safe on SQLite/Postgres (MySQL REPEATABLE READ would need
   `lockForUpdate` on the max query); `BillableService` `lockForUpdate` is a no-op on SQLite.
 - Economics aggregates run in memory (move to SQL at ~100k entries).

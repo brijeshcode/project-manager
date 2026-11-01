@@ -24,6 +24,10 @@ class LocalCurrency
             if (self::isLocked()) {
                 throw new \DomainException('Local currency cannot change once payments or invoices have been converted.');
             }
+            if ($code !== self::code()) {
+                // Rates are units of the local currency per 1 unit; old ones are meaningless now (history kept).
+                DB::table('exchange_rates')->where('is_active', true)->update(['is_active' => false]);
+            }
             Settings::set('local_currency', $code);
             self::backfill();
         });
@@ -47,6 +51,11 @@ class LocalCurrency
 
     public static function rateFor(string $clientCurrency): ?string
     {
-        return strtoupper($clientCurrency) === self::code() ? '1' : app(ExchangeRates::class)->active($clientCurrency);
+        $clientCurrency = strtoupper(trim($clientCurrency));
+        if (! preg_match('/\A[A-Z]{3}\z/', $clientCurrency)) {
+            return null;
+        }
+
+        return $clientCurrency === self::code() ? '1' : app(ExchangeRates::class)->active($clientCurrency);
     }
 }
