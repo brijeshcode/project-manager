@@ -22,6 +22,9 @@
         </div>
         <div class="flex items-center gap-2">
             <a href="{{ route('projects.board', $project) }}" wire:navigate class="btn btn-secondary">Board</a>
+            @can('manage-money')
+                <a href="{{ route('projects.economics', $project) }}" wire:navigate class="btn btn-secondary">Economics</a>
+            @endcan
             @unless (auth()->user()->hasRole('client'))
                 <a href="{{ route('projects.edit', $project) }}" wire:navigate class="btn btn-secondary">Edit project</a>
             @endunless
