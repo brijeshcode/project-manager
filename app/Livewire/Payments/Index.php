@@ -6,6 +6,7 @@ use App\Enums\PaymentType;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\PaymentDocument;
 use App\Services\ClientAccount;
 use App\Services\LocalCurrency;
 use App\Support\Money;
@@ -14,10 +15,11 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use App\Livewire\Concerns\WithListSearch;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class Index extends Component
 {
-    use WithListSearch;
+    use WithListSearch, WithFileUploads;
 
     public ?int $client_id = null;
     public ?int $project_id = null;
@@ -31,6 +33,40 @@ class Index extends Component
     public string $clientFilter = '';
     /** @var array<int,string> legacy rows: typed rate per payment id */
     public array $rowRate = [];
+    /** @var array<int,mixed> uploads on the record form */
+    public array $newDocs = [];
+    /** @var array<int,array<int,mixed>> uploads per payment row */
+    public array $rowDocs = [];
+
+    public const DOC_RULE = 'file|mimes:pdf,png,jpg,jpeg,webp,doc,docx,xls,xlsx|max:10240';
+
+    private function storeDocs(Payment $p, array $files): void
+    {
+        foreach ($files as $f) {
+            $name = basename(str_replace(chr(92), '/', $f->getClientOriginalName()));
+            $name = mb_substr(preg_replace('/[\x00-\x1F\x7F]/u', '', $name), 0, 255);
+            $p->documents()->create(['path' => $f->store('payment-documents', 'local'), 'original_name' => $name !== '' ? $name : 'file', 'uploaded_by' => auth()->id()]);
+        }
+    }
+
+    public function addDocument(int $paymentId): void
+    {
+        $this->authorize('manage-money');
+        $p = Payment::findOrFail($paymentId);
+        $this->validate(["rowDocs.{$paymentId}" => 'required|array|min:1|max:5', "rowDocs.{$paymentId}.*" => self::DOC_RULE]);
+        $this->storeDocs($p, $this->rowDocs[$paymentId]);
+        unset($this->rowDocs[$paymentId]);
+        $this->dispatch('toast', message: 'Document added.');
+    }
+
+    public function removeDocument(int $documentId): void
+    {
+        $this->authorize('manage-money');
+        $d = PaymentDocument::findOrFail($documentId);
+        $d->delete();
+        Log::info('payment document removed', ['payment_id' => $d->payment_id, 'name' => $d->original_name, 'user_id' => auth()->id()]);
+        $this->dispatch('toast', message: 'Document removed.');
+    }
 
     public function mount(): void
     {
@@ -77,18 +113,21 @@ class Index extends Component
             'type'       => ['required', new Enum(PaymentType::class)],
             'method'     => 'nullable|string|max:100',
             'notes'      => 'nullable|string|max:500',
+            'newDocs'    => 'array|max:5',
+            'newDocs.*'  => self::DOC_RULE,
         ]);
 
         $rate = $same ? '1' : $data['exchange_rate'];
         $amountCents = Money::toCents($data['amount']);
-        Payment::create([
+        $payment = Payment::create([
             'exchange_rate' => $rate, 'local_amount_cents' => Money::convert($amountCents, $rate), 'local_currency' => LocalCurrency::code(),            'client_id' => $data['client_id'], 'project_id' => $data['project_id'] ?: null,
             'invoice_id' => $data['invoice_id'] ?: null, 'amount_cents' => $amountCents,
             'paid_on' => $data['paid_on'], 'type' => $data['type'],
             'method' => $data['method'] ?: null, 'notes' => $data['notes'] ?: null,
         ]);
 
-        $this->reset('project_id', 'invoice_id', 'amount', 'method', 'notes');
+        $this->storeDocs($payment, $this->newDocs);
+        $this->reset('project_id', 'invoice_id', 'amount', 'method', 'notes', 'newDocs');
         $this->resetPage();
     }
 
@@ -137,7 +176,7 @@ class Index extends Component
             'projects' => $client ? $client->projects()->orderBy('name')->get(['id', 'name']) : collect(),
             'invoices' => $client ? Invoice::where('client_id', $client->id)->where('status', '!=', 'void')->orderByDesc('id')->get(['id', 'number']) : collect(),
             'types'    => PaymentType::cases(),
-            'payments' => $this->fitPage(Payment::with(['client', 'project', 'invoice'])
+            'payments' => $this->fitPage(Payment::with(['client', 'project', 'invoice', 'documents'])
                 ->when($filtered, fn ($q) => $q->where('client_id', $filtered->id))
                 // client name or invoice number only; never the free-text notes
                 ->when($like, fn ($q) => $q->where(fn ($w) => $w

@@ -61,6 +61,12 @@
             <input wire:model="notes" id="notes" type="text" class="input" />
             @error('notes') <p class="mt-1 field-error">{{ $message }}</p> @enderror
         </div>
+        <div class="sm:col-span-2 lg:col-span-3">
+            <label for="newDocs" class="label">Documents (optional, up to 5; pdf, images, Word, Excel; 10 MB each)</label>
+            <input wire:model="newDocs" id="newDocs" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" class="input" />
+            @error('newDocs') <p class="mt-1 field-error">{{ $message }}</p> @enderror
+            @error('newDocs.*') <p class="mt-1 field-error">{{ $message }}</p> @enderror
+        </div>
         <div class="sm:col-span-2 lg:col-span-3"><button type="submit" class="btn btn-primary">Record payment</button></div>
     </form>
 
@@ -95,7 +101,7 @@
         <x-ui.table-card>
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
                 <thead>
-                    <tr><th class="table-th">Date</th><th class="table-th">Client</th><th class="table-th">Amount</th><th class="table-th">Type</th><th class="table-th">Applied to</th><th class="table-th">Notes</th><th class="table-th"></th></tr>
+                    <tr><th class="table-th">Date</th><th class="table-th">Client</th><th class="table-th">Amount</th><th class="table-th">Type</th><th class="table-th">Applied to</th><th class="table-th">Notes</th><th class="table-th">Documents</th><th class="table-th"></th></tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
                     @foreach ($payments as $p)
@@ -117,6 +123,24 @@
                             <td class="table-td">{{ ucfirst(str_replace('_', ' ', $p->type->value)) }}@if ($p->method) <span class="text-slate-500">({{ $p->method }})</span>@endif</td>
                             <td class="table-td">{{ $p->invoice?->number }}@if ($p->project) <span class="text-slate-500">{{ $p->project->name }}</span>@endif</td>
                             <td class="table-td">{{ $p->notes }}</td>
+                            <td class="table-td">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{{ $p->documents->count() }} {{ \Illuminate\Support\Str::plural('document', $p->documents->count()) }}</span>
+                                <ul class="mt-1 space-y-1 text-sm">
+                                    @foreach ($p->documents as $d)
+                                        <li wire:key="doc-{{ $d->id }}" class="flex items-center gap-2">
+                                            <a href="{{ route('payment-documents.download', $d->id) }}" class="text-indigo-600 hover:underline dark:text-indigo-400">{{ $d->original_name }}</a>
+                                            <button type="button" wire:click="removeDocument({{ $d->id }})" wire:confirm="Remove this document?" class="text-xs text-rose-600 hover:underline dark:text-rose-400">Remove</button>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                                <form wire:submit="addDocument({{ $p->id }})" class="mt-1 flex items-center gap-1">
+                                    <label for="rowDocs-{{ $p->id }}" class="sr-only">Add document</label>
+                                    <input wire:model="rowDocs.{{ $p->id }}" id="rowDocs-{{ $p->id }}" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" class="input w-40 py-1 text-xs" />
+                                    <button type="submit" class="btn btn-secondary py-1 text-xs">Add document</button>
+                                </form>
+                                @error("rowDocs.{$p->id}") <p class="field-error">{{ $message }}</p> @enderror
+                                @error("rowDocs.{$p->id}.*") <p class="field-error">{{ $message }}</p> @enderror
+                            </td>
                             <td class="table-td text-right"><button type="button" wire:click="deletePayment({{ $p->id }})" wire:confirm="Delete this payment? The client balance will change." class="text-sm font-medium text-rose-600 hover:underline dark:text-rose-400">Delete</button></td>
                         </tr>
                     @endforeach

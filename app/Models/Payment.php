@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\PaymentType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Payment extends Model
 {
@@ -13,6 +14,17 @@ class Payment extends Model
     protected function casts(): array
     {
         return ['paid_on' => 'date', 'type' => PaymentType::class, 'exchange_rate' => 'decimal:6'];
+    }
+
+    protected static function booted(): void
+    {
+        // the DB cascade removes the rows but not the files; delete per model so files go too
+        static::deleting(fn (self $p) => $p->documents->each->delete());
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(PaymentDocument::class);
     }
 
     public function hasLocal(): bool
