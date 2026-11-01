@@ -38,6 +38,10 @@ it('owner sees single local-currency money cards, never a second currency line',
     $r->assertOk();
     $r->assertSee('Total Revenue')->assertSee('Outstanding Balance')->assertSee('Active Clients')->assertSee('This Month');
     $r->assertSee('₹105,566.00', false)->assertDontSee('$1,234.00', false);
+    $html = $r->getContent();
+    $cards = substr($html, 0, strpos($html, 'Revenue Trend'));
+    expect($cards)->toContain('₹105,566.00')->not->toContain('₹5,566.00')->not->toContain('₹100,000.00');
+    $r->assertSeeInOrder(['Top Clients', '₹100,000.00', '₹5,566.00'], false);
     $r->assertDontSee('no exchange rate')->assertDontSee('without a rate');
 });
 
@@ -180,3 +184,18 @@ it('developers and clients get none of the new owner sections', function (string
         $r->assertDontSee($t);
     }
 })->with(['developer', 'client']);
+
+it('recent invoices and upcoming dues show local totals only, never the invoice currency', function () {
+    $usd = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    $inr = Client::create(['name' => 'Bharat', 'currency' => 'INR', 'billing_mode' => 'fixed']);
+    $mk = fn ($c, $n, $o = []) => \App\Models\Invoice::create($o + ['number' => $n, 'client_id' => $c->id, 'status' => 'sent', 'issued_on' => now()->toDateString(),
+        'due_on' => now()->addDays(2)->toDateString(), 'currency' => $c->currency, 'subtotal_cents' => 10000, 'tax_percent' => 0, 'tax_cents' => 0, 'total_cents' => 10000]);
+    $mk($usd, 'INV-RATED', ['exchange_rate' => '80']);
+    $mk($inr, 'INV-LOCAL');
+    $mk($usd, 'INV-NORATE');
+
+    $r = actingAs(dbUser('super_admin'))->get('/dashboard');
+    $r->assertOk()->assertSee('₹8,000.00', false)->assertSee('₹100.00', false)->assertDontSee('$100.00', false);
+    expect(substr_count($r->getContent(), '₹8,000.00'))->toBe(2)   // recent + upcoming
+        ->and(substr_count($r->getContent(), '>—</span>'))->toBeGreaterThanOrEqual(2);
+});

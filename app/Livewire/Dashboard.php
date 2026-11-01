@@ -55,7 +55,6 @@ class Dashboard extends Component
             'topClients' => DashboardMoney::topClients($from, now()),
             'revenue' => $this->revenueSeries(),
             'money' => DashboardMoney::forPeriodLocal(now()->subDays($this->period - 1)->startOfDay(), now()),
-            'owing' => DashboardMoney::owingClients(),
             'clientCount' => Client::count(),
             'activeClients' => Client::whereHas('projects', fn ($q) => $q->where('status', 'active'))->count(),
             'projectCount' => Project::count(),

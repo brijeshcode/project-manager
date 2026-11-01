@@ -35,6 +35,12 @@ class Invoice extends Model
         return $this->exchange_rate === null ? null : Money::convert($this->total_cents, $this->exchange_rate);
     }
 
+    /** Total in the local currency: own total when already local, else the frozen-rate figure; null when neither. */
+    public function localDisplayCents(): ?int
+    {
+        return strtoupper($this->currency) === \App\Services\LocalCurrency::code() ? $this->total_cents : $this->localTotalCents();
+    }
+
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);

@@ -199,11 +199,4 @@ class DashboardMoney
             ];
         })->all();
     }
-
-    public static function owingClients(): int
-    {
-        $account = app(ClientAccount::class);
-
-        return Client::all()->filter(fn ($c) => $account->balanceCents($c) < 0)->count();
-    }
 }

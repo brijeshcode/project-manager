@@ -1,5 +1,6 @@
 @php
     $loc = fn (int $c) => \App\Support\Money::format($c, $money['currency']);
+    $invLocal = fn ($i) => ($l = $i->localDisplayCents()) === null ? '<span class="text-gray-400">—</span>' : e($loc($l));
     $badge = ['paid' => 'green', 'pending' => 'amber', 'overdue' => 'rose', 'void' => 'slate'];
     $h2 = 'text-lg font-medium text-gray-900 dark:text-white';
 @endphp
@@ -77,7 +78,7 @@
                         <p class="truncate text-xs text-gray-500 dark:text-gray-400">{{ $inv->client->name }}</p>
                     </div>
                     <div class="flex items-center gap-3">
-                        <span class="text-sm font-medium tabular-nums text-gray-900 dark:text-white">{{ \App\Support\Money::format($inv->total_cents, $inv->currency) }}</span>
+                        <span class="text-sm font-medium tabular-nums text-gray-900 dark:text-white">{!! $invLocal($inv) !!}</span>
                         <x-ui.badge :color="$badge[$state]">{{ ucfirst($state) }}</x-ui.badge>
                     </div>
                 </div>
@@ -131,7 +132,7 @@
                     <p class="truncate text-xs text-gray-500 dark:text-gray-400">{{ $inv->client->name }}</p>
                 </div>
                 <div class="text-right">
-                    <p class="text-sm font-medium tabular-nums text-gray-900 dark:text-white">{{ \App\Support\Money::format($inv->total_cents, $inv->currency) }}</p>
+                    <p class="text-sm font-medium tabular-nums text-gray-900 dark:text-white">{!! $invLocal($inv) !!}</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Due {{ $inv->due_on->format('M j, Y') }}</p>
                 </div>
             </div>
