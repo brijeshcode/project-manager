@@ -134,7 +134,7 @@ it('voids from Show and the list shows void', function () {
     $inv = app(InvoiceService::class)->create($c, [ibLine($c, 1000)->id]);
     Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->call('void')->assertSee('VOID');
     expect($inv->fresh()->status)->toBe('void');
-    Livewire::actingAs(ibOwner())->test(Index::class)->assertSee($inv->number)->assertSeeHtml('badge badge-red');
+    Livewire::actingAs(ibOwner())->test(Index::class)->assertSee($inv->number)->assertSeeHtml('badge badge-rose');
 });
 
 it('lists newest first, filters by client and derives paid', function () {

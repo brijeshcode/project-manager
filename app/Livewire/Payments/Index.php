@@ -11,12 +11,12 @@ use App\Support\Money;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
+use App\Livewire\Concerns\WithListSearch;
 use Livewire\Component;
-use Livewire\WithPagination;
 
 class Index extends Component
 {
-    use WithPagination;
+    use WithListSearch;
 
     public ?int $client_id = null;
     public ?int $project_id = null;
@@ -86,15 +86,20 @@ class Index extends Component
         $client = $this->client_id ? Client::find($this->client_id) : null;
         $filtered = $this->clientFilter !== '' ? Client::find((int) $this->clientFilter) : null;
         $balanceClient = $filtered ?? $client;
+        $like = $this->likeTerm();
 
         return view('livewire.payments.index', [
             'clients'  => Client::orderBy('name')->get(['id', 'name']),
             'projects' => $client ? $client->projects()->orderBy('name')->get(['id', 'name']) : collect(),
             'invoices' => $client ? Invoice::where('client_id', $client->id)->where('status', '!=', 'void')->orderByDesc('id')->get(['id', 'number']) : collect(),
             'types'    => PaymentType::cases(),
-            'payments' => Payment::with(['client', 'project', 'invoice'])
+            'payments' => $this->fitPage(Payment::with(['client', 'project', 'invoice'])
                 ->when($filtered, fn ($q) => $q->where('client_id', $filtered->id))
-                ->orderByDesc('paid_on')->orderByDesc('id')->paginate(20),
+                // client name or invoice number only; never the free-text notes
+                ->when($like, fn ($q) => $q->where(fn ($w) => $w
+                    ->whereHas('client', fn ($c) => $c->whereRaw("name LIKE ? ESCAPE '!'", [$like]))
+                    ->orWhereHas('invoice', fn ($i) => $i->whereRaw("number LIKE ? ESCAPE '!'", [$like]))))
+                ->orderByDesc('paid_on')->orderByDesc('id'), 15),
             'balanceClient' => $balanceClient,
             'balance'  => $balanceClient ? app(ClientAccount::class)->balanceCents($balanceClient) : null,
         ]);

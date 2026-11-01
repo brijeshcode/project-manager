@@ -56,42 +56,54 @@
         <div class="sm:col-span-2 lg:col-span-3"><button type="submit" class="btn btn-primary">Record payment</button></div>
     </form>
 
-    <div class="mb-4 flex items-center gap-4">
-        <label for="clientFilter" class="sr-only">Client</label>
-        <select wire:model.live="clientFilter" id="clientFilter" class="rounded-md border-slate-300 text-sm">
-            <option value="">All clients</option>
-            @foreach ($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
-        </select>
+    <x-ui.filter-card>
+        <div class="sm:col-span-2">
+            <label for="search" class="sr-only">Search payments</label>
+            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by client or invoice number..." class="input" />
+        </div>
+        <div>
+            <label for="clientFilter" class="sr-only">Client</label>
+            <select wire:model.live="clientFilter" id="clientFilter" class="select">
+                <option value="">All clients</option>
+                @foreach ($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
+            </select>
+        </div>
         @if ($balanceClient)
-            <p class="text-sm">{{ $balanceClient->name }} balance:
+            <p class="self-center text-sm">{{ $balanceClient->name }} balance:
                 <strong class="{{ $balance < 0 ? 'text-red-600' : 'text-green-700' }}">{{ \App\Support\Money::format($balance, $balanceClient->currency) }}</strong>
                 <span class="text-slate-500">({{ $balance < 0 ? 'owes' : 'credit' }})</span></p>
         @endif
-    </div>
+    </x-ui.filter-card>
 
     @if ($payments->isEmpty())
-        <x-ui.empty-state title="No payments" message="Record one above." />
+        @if ($search !== '' || $clientFilter !== '')
+            <x-ui.empty-state title="No matches" message="No payments match your filters.">
+                <x-slot name="action"><button type="button" wire:click="clearFilters" class="btn btn-secondary">Clear filters</button></x-slot>
+            </x-ui.empty-state>
+        @else
+            <x-ui.empty-state title="No payments" message="Record one above." />
+        @endif
     @else
-        <div class="card overflow-hidden p-0">
-            <table class="min-w-full divide-y divide-slate-200 text-sm">
-                <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    <tr><th class="px-5 py-3">Date</th><th class="px-5 py-3">Client</th><th class="px-5 py-3">Amount</th><th class="px-5 py-3">Type</th><th class="px-5 py-3">Applied to</th><th class="px-5 py-3">Notes</th><th class="px-5 py-3"></th></tr>
+        <x-ui.table-card>
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
+                <thead>
+                    <tr><th class="table-th">Date</th><th class="table-th">Client</th><th class="table-th">Amount</th><th class="table-th">Type</th><th class="table-th">Applied to</th><th class="table-th">Notes</th><th class="table-th"></th></tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
                     @foreach ($payments as $p)
                         <tr wire:key="pay-{{ $p->id }}">
-                            <td class="px-5 py-3">{{ $p->paid_on->toFormattedDateString() }}</td>
-                            <td class="px-5 py-3">{{ $p->client->name }}</td>
-                            <td class="px-5 py-3">{{ \App\Support\Money::format($p->amount_cents, $p->client->currency) }}</td>
-                            <td class="px-5 py-3">{{ ucfirst(str_replace('_', ' ', $p->type->value)) }}@if ($p->method) <span class="text-slate-500">({{ $p->method }})</span>@endif</td>
-                            <td class="px-5 py-3">{{ $p->invoice?->number }}@if ($p->project) <span class="text-slate-500">{{ $p->project->name }}</span>@endif</td>
-                            <td class="px-5 py-3">{{ $p->notes }}</td>
-                            <td class="px-5 py-3 text-right"><button type="button" wire:click="deletePayment({{ $p->id }})" wire:confirm="Delete this payment? The client balance will change." class="text-sm text-red-600 hover:underline">Delete</button></td>
+                            <td class="table-td">{{ $p->paid_on->toFormattedDateString() }}</td>
+                            <td class="table-td">{{ $p->client->name }}</td>
+                            <td class="table-td">{{ \App\Support\Money::format($p->amount_cents, $p->client->currency) }}</td>
+                            <td class="table-td">{{ ucfirst(str_replace('_', ' ', $p->type->value)) }}@if ($p->method) <span class="text-slate-500">({{ $p->method }})</span>@endif</td>
+                            <td class="table-td">{{ $p->invoice?->number }}@if ($p->project) <span class="text-slate-500">{{ $p->project->name }}</span>@endif</td>
+                            <td class="table-td">{{ $p->notes }}</td>
+                            <td class="table-td text-right"><button type="button" wire:click="deletePayment({{ $p->id }})" wire:confirm="Delete this payment? The client balance will change." class="text-sm font-medium text-rose-600 hover:underline dark:text-rose-400">Delete</button></td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
-        </div>
-        <div class="mt-4">{{ $payments->links() }}</div>
+            <x-slot name="footer">{{ $payments->links() }}</x-slot>
+        </x-ui.table-card>
     @endif
 </div>

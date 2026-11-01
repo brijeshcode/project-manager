@@ -5,39 +5,61 @@
         </x-slot:actions>
     </x-ui.page-header>
 
-    <div class="mb-4">
-        <label for="clientFilter" class="sr-only">Client</label>
-        <select wire:model.live="clientFilter" id="clientFilter" class="rounded-md border-slate-300 text-sm">
-            <option value="">All clients</option>
-            @foreach ($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
-        </select>
-    </div>
+    <x-ui.filter-card>
+        <div class="sm:col-span-2">
+            <label for="search" class="sr-only">Search invoices</label>
+            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by number or client..." class="input" />
+        </div>
+        <div>
+            <label for="clientFilter" class="sr-only">Client</label>
+            <select wire:model.live="clientFilter" id="clientFilter" class="select">
+                <option value="">All clients</option>
+                @foreach ($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
+            </select>
+        </div>
+        <div>
+            <label for="status" class="sr-only">Status</label>
+            <select wire:model.live="status" id="status" class="select">
+                <option value="">All statuses</option>
+                <option value="sent">Sent</option>
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
+                <option value="void">Void</option>
+            </select>
+        </div>
+    </x-ui.filter-card>
 
     @if ($invoices->isEmpty())
-        <x-ui.empty-state title="No invoices" message="Create one from a client's pending work." />
+        @if ($search !== '' || $status !== '' || $clientFilter !== '')
+            <x-ui.empty-state title="No matches" message="No invoices match your filters.">
+                <x-slot name="action"><button type="button" wire:click="clearFilters" class="btn btn-secondary">Clear filters</button></x-slot>
+            </x-ui.empty-state>
+        @else
+            <x-ui.empty-state title="No invoices" message="Create one from a client's pending work." />
+        @endif
     @else
-        <div class="card overflow-hidden p-0">
-            <table class="min-w-full divide-y divide-slate-200 text-sm">
-                <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    <tr><th class="px-5 py-3">Number</th><th class="px-5 py-3">Client</th><th class="px-5 py-3">Issued</th><th class="px-5 py-3">Total</th><th class="px-5 py-3">Status</th></tr>
+        <x-ui.table-card>
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
+                <thead>
+                    <tr><th class="table-th">Number</th><th class="table-th">Client</th><th class="table-th">Issued</th><th class="table-th">Total</th><th class="table-th">Status</th></tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
                     @foreach ($invoices as $i)
                         @php
                             $paid = $i->status !== 'void' && $i->total_cents > 0 && (int) $i->payments_sum_amount_cents >= $i->total_cents;
-                            [$label, $color] = $i->status === 'void' ? ['void', 'red'] : ($paid ? ['paid', 'green'] : ['sent', 'slate']);
+                            [$label, $color] = $i->status === 'void' ? ['void', 'rose'] : ($paid ? ['paid', 'green'] : ['sent', 'slate']);
                         @endphp
                         <tr wire:key="inv-{{ $i->id }}">
-                            <td class="px-5 py-3"><a href="{{ route('invoices.show', $i) }}" class="text-indigo-600 hover:underline">{{ $i->number }}</a></td>
-                            <td class="px-5 py-3">{{ $i->client->name }}</td>
-                            <td class="px-5 py-3">{{ $i->issued_on->toFormattedDateString() }}</td>
-                            <td class="px-5 py-3">{{ \App\Support\Money::format($i->total_cents, $i->currency) }}</td>
-                            <td class="px-5 py-3"><x-ui.badge :color="$color">{{ $label }}</x-ui.badge></td>
+                            <td class="table-td"><a href="{{ route('invoices.show', $i) }}" class="link">{{ $i->number }}</a></td>
+                            <td class="table-td">{{ $i->client->name }}</td>
+                            <td class="table-td">{{ $i->issued_on->toFormattedDateString() }}</td>
+                            <td class="table-td">{{ \App\Support\Money::format($i->total_cents, $i->currency) }}</td>
+                            <td class="table-td"><x-ui.badge :color="$color">{{ $label }}</x-ui.badge></td>
                         </tr>
                     @endforeach
                 </tbody>
             </table>
-        </div>
-        <div class="mt-4">{{ $invoices->links() }}</div>
+            <x-slot name="footer">{{ $invoices->links() }}</x-slot>
+        </x-ui.table-card>
     @endif
 </div>

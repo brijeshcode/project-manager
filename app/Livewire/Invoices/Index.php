@@ -4,12 +4,12 @@ namespace App\Livewire\Invoices;
 
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Livewire\Concerns\WithListSearch;
 use Livewire\Component;
-use Livewire\WithPagination;
 
 class Index extends Component
 {
-    use WithPagination;
+    use WithListSearch;
 
     public string $clientFilter = '';
 
@@ -27,10 +27,20 @@ class Index extends Component
     {
         $this->authorize('manage-money');
 
+        $like = $this->likeTerm();
+        // paid = sent with payments covering a positive total (same rule as the row badge)
+        $paidSql = '(select coalesce(sum(amount_cents), 0) from payments where payments.invoice_id = invoices.id) >= invoices.total_cents and invoices.total_cents > 0';
+
         return view('livewire.invoices.index', [
-            'invoices' => Invoice::with('client')->withSum('payments', 'amount_cents')
+            'invoices' => $this->fitPage(Invoice::with('client')->withSum('payments', 'amount_cents')
                 ->when($this->clientFilter !== '', fn ($q) => $q->where('client_id', (int) $this->clientFilter))
-                ->orderByDesc('id')->paginate(20),
+                ->when($like, fn ($q) => $q->where(fn ($w) => $w
+                    ->whereRaw("invoices.number LIKE ? ESCAPE '!'", [$like])
+                    ->orWhereHas('client', fn ($c) => $c->whereRaw("name LIKE ? ESCAPE '!'", [$like]))))
+                ->when(in_array($this->status, ['sent', 'void']), fn ($q) => $q->where('invoices.status', $this->status))
+                ->when($this->status === 'paid', fn ($q) => $q->where('invoices.status', 'sent')->whereRaw($paidSql))
+                ->when($this->status === 'unpaid', fn ($q) => $q->where('invoices.status', 'sent')->whereRaw("not ($paidSql)"))
+                ->orderByDesc('id'), 15),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
         ]);
     }
