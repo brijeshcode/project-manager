@@ -26,6 +26,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
+    (new \App\Services\ExchangeRates)->setRate('USD', '83.5', User::factory()->create()->assignRole('super_admin'));
     Mail::fake();
 });
 

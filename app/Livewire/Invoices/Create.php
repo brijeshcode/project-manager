@@ -7,6 +7,7 @@ use App\Models\BillableLine;
 use App\Models\Client;
 use App\Services\BillableService;
 use App\Services\InvoiceService;
+use App\Services\LocalCurrency;
 use App\Support\Money;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
@@ -25,7 +26,7 @@ class Create extends Component
 
     public string $taxPercent = '0';
     public string $bankAccountId = '';
-    public string $inrRate = '';
+    public string $exchangeRate = '';
     public string $pick = '';
 
     public function mount(BillableService $billable): void
@@ -36,8 +37,15 @@ class Create extends Component
         if ($client) {
             $this->clientId = $client->id;
             $billable->syncCompletedWork($client);
+            $this->exchangeRate = self::tidy(LocalCurrency::rateFor($client->currency));
             $this->selected = $billable->pendingFor($client)->pluck('id')->map(fn ($i) => (string) $i)->all();
         }
+    }
+
+    /** 83.500000 -> 83.5, 1 stays 1, null -> empty. */
+    private static function tidy(?string $r): string
+    {
+        return $r === null ? '' : (str_contains($r, '.') ? rtrim(rtrim($r, '0'), '.') : $r);
     }
 
     public function choose(): void
@@ -73,6 +81,7 @@ class Create extends Component
         $this->authorize('manage-money');
         $client = Client::findOrFail($this->clientId);
 
+        $same = strtoupper($client->currency) === LocalCurrency::code();
         $positive = fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('Must be greater than zero.');
         $this->validate([
             'selected' => 'array|max:500',
@@ -80,7 +89,7 @@ class Create extends Component
             'selected.*' => ['bail', 'regex:/^\d{1,18}$/'],
             'taxPercent' => ['bail', 'required', 'regex:/^\d{1,3}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) <= 10000 || $fail('Tax must be between 0 and 100.')],
             'bankAccountId' => ['nullable', 'regex:/^\d{1,18}$/', Rule::exists('bank_accounts', 'id')],
-            'inrRate' => ['bail', 'nullable', 'regex:/^\d{1,4}(\.\d{1,4})?$/', fn ($a, $v, $fail) => (float) $v > 0 || $fail('Must be greater than zero.')],
+            'exchangeRate' => $same ? 'nullable' : ['bail', 'required', 'string', fn ($a, $v, $fail) => Money::isValidRate((string) $v) || $fail('Enter a positive rate with up to 6 decimals (max 999999.999999).')],
             'custom.*.description' => ['bail', 'required', 'string', 'max:255'],
             'custom.*.quantity' => ['bail', 'required', 'regex:/^\d{1,6}(\.\d{1,2})?$/', $positive],
             'custom.*.unit_price' => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', $positive],
@@ -92,7 +101,7 @@ class Create extends Component
             array_values($this->custom),
             (float) $this->taxPercent,
             $this->bankAccountId === '' ? null : (int) $this->bankAccountId,
-            $this->inrRate === '' ? null : (float) $this->inrRate,
+            $same ? null : $this->exchangeRate,
         );
 
         return $this->redirectRoute('invoices.show', $invoice);
@@ -105,6 +114,8 @@ class Create extends Component
 
         return view('livewire.invoices.create', [
             'client' => $client,
+            'local' => LocalCurrency::code(),
+            'sameCurrency' => $client && strtoupper($client->currency) === LocalCurrency::code(),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'lines' => $client ? app(BillableService::class)->pendingFor($client) : collect(),
             'banks' => BankAccount::orderBy('label')->get(['id', 'label', 'bank_name']),

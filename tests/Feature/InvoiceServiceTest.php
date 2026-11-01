@@ -232,5 +232,5 @@ it('snapshots the bank account encrypted and keeps it after edit or delete', fun
 
 it('stores the inr rate', function () {
     $c = ivClient();
-    expect(ivSvc()->create($c, [ivLine($c, 100)->id], [], 0.0, null, 83.5)->fresh()->inr_rate)->toBe('83.5000');
+    expect(ivSvc()->create($c, [ivLine($c, 100)->id], [], 0.0, null, '83.5')->fresh()->exchange_rate)->toBe('83.500000');
 });

@@ -16,8 +16,7 @@ use Illuminate\Validation\ValidationException;
 
 class InvoiceService
 {
-    // Bounds keep all integer math below PHP_INT_MAX: 40e9 subtotal x 2 (100% tax) = 8e10 total;
-    // x 99,999,999 (max INR rate 9999.9999 scaled by 1e4) = 8e18 < 9.22e18.
+    // Bounds keep Money::convert (split math, any valid rate) far inside PHP_INT_MAX: 8e10 max total.
     public const MAX_LINE_CENTS = 2_000_000_000;
     public const MAX_SUBTOTAL_CENTS = 40_000_000_000;
 
@@ -25,7 +24,7 @@ class InvoiceService
      * @param  array<int>  $lineIds  pending lines of this client
      * @param  array<int, array{description:string, quantity:mixed, unit_price:mixed}>  $customLines
      */
-    public function create(Client $client, array $lineIds, array $customLines = [], float $taxPercent = 0.0, ?int $bankAccountId = null, ?float $inrRate = null): Invoice
+    public function create(Client $client, array $lineIds, array $customLines = [], float $taxPercent = 0.0, ?int $bankAccountId = null, ?string $exchangeRate = null): Invoice
     {
         $lineIds = array_values(array_unique($lineIds));
         $pctHundredths = $this->validatedPercent($taxPercent);
@@ -35,7 +34,7 @@ class InvoiceService
             throw ValidationException::withMessages(['lines' => 'Add at least one line.']);
         }
 
-        $invoice = DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $inrRate) {
+        $invoice = DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $exchangeRate) {
             $picked = BillableLine::pending()->where('client_id', $client->id)->whereIn('id', $lineIds)->lockForUpdate()->get();
             if ($picked->count() !== count($lineIds)) {
                 throw ValidationException::withMessages(['lines' => 'Some lines are not pending lines of this client.']);
@@ -67,7 +66,7 @@ class InvoiceService
                 'total_cents' => $subtotal + $tax,
                 'bank_account_id' => $bank?->id,
                 'bank_snapshot' => $bank ? $bank->only(['account_name', 'bank_name', 'account_number', 'ifsc_swift', 'email']) : null,
-                'inr_rate' => $inrRate,
+                'exchange_rate' => $exchangeRate,
                 'terms' => $terms,
             ], $issued->format('Ymd'));
 

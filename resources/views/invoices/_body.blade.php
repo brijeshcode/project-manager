@@ -2,17 +2,6 @@
     $__client = $invoice->client;
     $__cur = $invoice->currency;
     $__bank = $invoice->bank_snapshot;
-    // INR approx: whole rupees = round_half_up(total_cents * rate / 100); rate scaled to 4 decimals as integer, so
-    // inr = intdiv(total_cents * rateScaled + 500000, 1000000). Integer math only.
-    $__inr = null;
-    if ($invoice->inr_rate !== null) {
-        [$__ri, $__rf] = array_pad(explode('.', (string) $invoice->inr_rate), 2, '0');
-        $__rate = (int) $__ri * 10000 + (int) str_pad(substr($__rf, 0, 4), 4, '0');
-        // skip rather than overflow (InvoiceService bounds make this unreachable)
-        if ((float) $invoice->total_cents * $__rate < 9.0e18) {
-            $__inr = intdiv($invoice->total_cents * $__rate + 500000, 1000000);
-        }
-    }
     $__phones = config('billing.contact_phones');
     $__lines = $invoice->lines_snapshot ?? $invoice->lines->map(fn ($l) => [
         'description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price_cents' => $l->unit_price_cents, 'amount_cents' => $l->amount_cents,
@@ -70,7 +59,6 @@
         <div>Subtotal: {{ \App\Support\Money::format($invoice->subtotal_cents, $__cur) }}</div>
         <div>Tax ({{ rtrim(rtrim((string) $invoice->tax_percent, '0'), '.') ?: '0' }}%): {{ \App\Support\Money::format($invoice->tax_cents, $__cur) }}</div>
         <div style="font-size:16px;font-weight:bold;">Total: {{ \App\Support\Money::format($invoice->total_cents, $__cur) }}</div>
-        @if ($__inr !== null)<div style="color:#64748b;">Approx. INR {{ number_format($__inr) }} @ {{ $invoice->inr_rate }}</div>@endif
     </div>
 
     <table style="width:100%;border-collapse:collapse;"><tr>

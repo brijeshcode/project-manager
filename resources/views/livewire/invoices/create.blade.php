@@ -73,11 +73,13 @@
                     </select>
                     @error('bankAccountId') <p class="mt-1 field-error">{{ $message }}</p> @enderror
                 </div>
-                <div>
-                    <label for="inrRate" class="label">INR rate (optional)</label>
-                    <input wire:model="inrRate" id="inrRate" type="text" inputmode="decimal" placeholder="e.g. 83.5" class="input" />
-                    @error('inrRate') <p class="mt-1 field-error">{{ $message }}</p> @enderror
-                </div>
+                @unless ($sameCurrency)
+                    <div>
+                        <label for="exchangeRate" class="label">Exchange rate to {{ $local }}</label>
+                        <input wire:model="exchangeRate" id="exchangeRate" type="text" inputmode="decimal" placeholder="e.g. 83.5" class="input" />
+                        @error('exchangeRate') <p class="mt-1 field-error">{{ $message }}</p> @enderror
+                    </div>
+                @endunless
             </div>
 
             <button type="submit" class="btn btn-primary">Create invoice</button>

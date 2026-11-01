@@ -15,7 +15,11 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
-beforeEach(fn () => $this->seed(RoleSeeder::class));
+beforeEach(function () {
+    $this->seed(RoleSeeder::class);
+    // local INR default: USD clients' invoices prefill this active rate
+    (new \App\Services\ExchangeRates)->setRate('USD', '83.5', User::factory()->create()->assignRole('super_admin'));
+});
 
 function ibOwner(): User
 {
@@ -60,17 +64,17 @@ it('invoices ticked lines and leaves unticked pending', function () {
     expect($b->fresh()->invoice_id)->toBeNull();
 });
 
-it('adds custom lines with bank, tax and INR rate and renders them', function () {
+it('adds custom lines with bank, tax and exchange rate and renders them', function () {
     $c = ibClient();
     ibLine($c, 100000, 'Build');
     $bank = ibBank();
     ibCreate($c)->call('addCustom')->set('custom.0.description', 'Extra')->set('custom.0.quantity', '2')->set('custom.0.unit_price', '400')
-        ->set('taxPercent', '10')->set('bankAccountId', (string) $bank->id)->set('inrRate', '83.5')->call('save')->assertHasNoErrors();
+        ->set('taxPercent', '10')->set('bankAccountId', (string) $bank->id)->set('exchangeRate', '83.5')->call('save')->assertHasNoErrors();
     $inv = Invoice::first();
     expect([$inv->subtotal_cents, $inv->total_cents])->toBe([180000, 198000]);
     Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])
         ->assertSee('$1,980.00')->assertSee('Extra')->assertSee('HDFC')->assertSee('50100012341447')
-        ->assertSee('INR')->assertSee('165,330'); // 1980.00 * 83.5 = 165330
+        ->assertSee('165,330.00')->assertSee('83.5'); // 1980.00 * 83.5 = 165330
 });
 
 it('removes a custom line before saving', function () {
@@ -97,8 +101,8 @@ it('rejects malformed numerics and creates nothing', function () {
     foreach (['1e3', 'abc', '-1', '999999999', 'NaN', '1.234', '101'] as $bad) {
         ibCreate($c)->set('taxPercent', $bad)->call('save')->assertHasErrors('taxPercent');
     }
-    foreach (['1e3', 'abc', '-1', '999999999', '0', '1.23456'] as $bad) {
-        ibCreate($c)->set('inrRate', $bad)->call('save')->assertHasErrors('inrRate');
+    foreach (['1e3', 'abc', '-1', '999999999', '0', '1.2345678'] as $bad) {
+        ibCreate($c)->set('exchangeRate', $bad)->call('save')->assertHasErrors('exchangeRate');
         ibCreate($c)->call('addCustom')->set('custom.0.description', 'X')->set('custom.0.quantity', $bad)->set('custom.0.unit_price', '5')->call('save')->assertHasErrors('custom.0.quantity');
         ibCreate($c)->call('addCustom')->set('custom.0.description', 'X')->set('custom.0.quantity', '1')->set('custom.0.unit_price', $bad)->call('save')->assertHasErrors('custom.0.unit_price');
     }
@@ -184,16 +188,16 @@ it('saves and renders an invoice exactly at the bounds', function () {
     foreach (range(1, 20) as $i) {
         ibLine($c, 2_000_000_000);
     }
-    ibCreate($c)->set('taxPercent', '100')->set('inrRate', '9999.9999')->call('save')->assertHasNoErrors();
+    ibCreate($c)->set('taxPercent', '100')->set('exchangeRate', '999999.999999')->call('save')->assertHasNoErrors();
     $inv = Invoice::first();
     expect($inv->total_cents)->toBe(80_000_000_000);
-    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->assertOk()->assertSee('INR');
+    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->assertOk()->assertSee('800,000,000.00');
 });
 
-it('rejects INR rate 10000 and 51 custom lines', function () {
+it('rejects exchange rate 1000000 and 51 custom lines', function () {
     $c = ibClient();
     ibLine($c, 1000);
-    ibCreate($c)->set('inrRate', '10000')->call('save')->assertHasErrors('inrRate');
+    ibCreate($c)->set('exchangeRate', '1000000')->call('save')->assertHasErrors('exchangeRate');
     $t = ibCreate($c);
     foreach (range(1, 51) as $i) {
         $t->call('addCustom');

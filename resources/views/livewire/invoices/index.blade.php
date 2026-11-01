@@ -53,7 +53,12 @@
                             <td class="table-td"><a href="{{ route('invoices.show', $i) }}" class="link">{{ $i->number }}</a></td>
                             <td class="table-td">{{ $i->client->name }}</td>
                             <td class="table-td">{{ $i->issued_on->toFormattedDateString() }}</td>
-                            <td class="table-td">{{ \App\Support\Money::format($i->total_cents, $i->currency) }}</td>
+                            <td class="table-td">
+                                {{ \App\Support\Money::format($i->total_cents, $i->currency) }}
+                                @if ($i->localTotalCents() !== null && strtoupper($i->currency) !== $local)
+                                    <div class="text-xs text-slate-500 dark:text-gray-400">{{ \App\Support\Money::format($i->localTotalCents(), $local) }}</div>
+                                @endif
+                            </td>
                             <td class="table-td"><x-ui.badge :color="$color">{{ $label }}</x-ui.badge></td>
                         </tr>
                     @endforeach

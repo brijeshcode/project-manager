@@ -4,6 +4,7 @@ namespace App\Livewire\Invoices;
 
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Services\LocalCurrency;
 use App\Livewire\Concerns\WithListSearch;
 use Livewire\Component;
 
@@ -41,6 +42,7 @@ class Index extends Component
                 ->when($this->status === 'paid', fn ($q) => $q->where('invoices.status', 'sent')->whereRaw($paidSql))
                 ->when($this->status === 'unpaid', fn ($q) => $q->where('invoices.status', 'sent')->whereRaw("not ($paidSql)"))
                 ->orderByDesc('id'), 15),
+            'local' => LocalCurrency::code(),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
         ]);
     }
