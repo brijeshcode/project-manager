@@ -49,6 +49,14 @@ it('clients: search narrows and % is literal', function () {
         ->set('search', 'zzz')->assertSee('No matches')->assertSee('Clear filters');
 });
 
+it('clients: _ and ! are literal in search', function () {
+    lfClient('a_b'); lfClient('axb'); lfClient('Hot! Deal'); lfClient('Hot Deal');
+    Livewire::test(ClientsIndex::class)->assertOk()
+        ->set('search', 'a_b')->assertSee('a_b')->assertDontSee('axb')
+        ->set('search', 'Hot!')->assertSee('Hot! Deal')->assertDontSee('Hot Deal')
+        ->set('search', '!')->assertSee('Hot! Deal')->assertDontSee('a_b');
+});
+
 it('clients: shows nothing-yet state with no rows', function () {
     Livewire::test(ClientsIndex::class)->assertOk()->assertSee('No clients yet')->assertDontSee('Clear filters');
 });
@@ -57,7 +65,7 @@ it('clients: page 2 reachable, page 1 item absent, beyond-last does not error', 
     foreach (range(1, 16) as $i) { lfClient(sprintf('Client %02d', $i)); }
     Livewire::test(ClientsIndex::class)->assertOk()->assertSee('Client 01')->assertDontSee('Client 16')
         ->call('gotoPage', 2)->assertOk()->assertSee('Client 16')->assertDontSee('Client 01')
-        ->call('gotoPage', 99)->assertOk();
+        ->call('gotoPage', 99)->assertOk()->assertSee('Client 16');
 });
 
 // ---- projects
@@ -88,7 +96,7 @@ it('projects: developer search only sees member projects; paginates 12', functio
     foreach (range(1, 12) as $i) { Project::create(['client_id' => $c->id, 'name' => sprintf('Proj %02d', $i), 'status' => 'active']); }
     Livewire::test(ProjectsIndex::class)->assertOk()->assertSee('Mine App')->assertDontSee('Proj 12')
         ->call('gotoPage', 2)->assertSee('Proj 12')->assertDontSee('Mine App')
-        ->call('gotoPage', 50)->assertOk();
+        ->call('gotoPage', 50)->assertOk()->assertSee('Proj 12');
 });
 
 // ---- invoices
@@ -115,7 +123,7 @@ it('invoices: % literal in client name, page 2, beyond-last safe', function () {
     foreach (range(1, 15) as $i) { lfInvoice($o, sprintf('INV-X%02d', $i)); }
     Livewire::test(InvoicesIndex::class)->assertOk()->assertDontSee('INV-PCT')
         ->call('gotoPage', 2)->assertSee('INV-PCT')->assertDontSee('INV-X15')
-        ->call('gotoPage', 99)->assertOk();
+        ->call('gotoPage', 99)->assertOk()->assertSee('INV-PCT');
 });
 
 // ---- payments
@@ -131,11 +139,12 @@ it('payments: search by client name, never notes', function () {
 it('payments: % literal, page 2, beyond-last safe', function () {
     $p = lfClient('100% Pure'); $o = lfClient('Other');
     lfPayment($p, 777700, ['paid_on' => today()->subDays(30)]);
-    Livewire::test(PaymentsIndex::class)->assertOk()->set('search', '%')->assertSee('7,777.00');
+    lfPayment($o, 333300);
+    Livewire::test(PaymentsIndex::class)->assertOk()->set('search', '%')->assertSee('7,777.00')->assertDontSee('3,333.00');
     foreach (range(1, 15) as $i) { lfPayment($o, 100, ['paid_on' => today()]); }
     Livewire::test(PaymentsIndex::class)->assertOk()->assertDontSee('7,777.00')
         ->call('gotoPage', 2)->assertSee('7,777.00')
-        ->call('gotoPage', 99)->assertOk();
+        ->call('gotoPage', 99)->assertOk()->assertSee('7,777.00');
 });
 
 it('clients cannot reach invoices or payments lists', function () {
