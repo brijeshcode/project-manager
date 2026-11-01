@@ -53,6 +53,7 @@ Route::middleware(['auth', 'can:manage-money'])->prefix('invoices')->name('invoi
 });
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('invoices/{invoice}/pdf', \App\Http\Controllers\InvoicePdfController::class)->name('invoices.pdf');
     Route::get('projects', ProjectIndex::class)->name('projects.index');
     Route::get('projects/create', ProjectForm::class)->name('projects.create');
     Route::get('projects/{project}', ProjectShow::class)->name('projects.show');

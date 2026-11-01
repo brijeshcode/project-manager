@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Mail\InvoiceMail;
 use App\Models\BankAccount;
 use App\Models\BillableLine;
 use App\Models\Client;
@@ -9,6 +10,8 @@ use App\Models\Invoice;
 use App\Support\Money;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class InvoiceService
@@ -32,7 +35,7 @@ class InvoiceService
             throw ValidationException::withMessages(['lines' => 'Add at least one line.']);
         }
 
-        return DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $inrRate) {
+        $invoice = DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $inrRate) {
             $picked = BillableLine::pending()->where('client_id', $client->id)->whereIn('id', $lineIds)->lockForUpdate()->get();
             if ($picked->count() !== count($lineIds)) {
                 throw ValidationException::withMessages(['lines' => 'Some lines are not pending lines of this client.']);
@@ -75,6 +78,61 @@ class InvoiceService
 
             return $invoice;
         });
+
+        // after commit: a mail problem must never fail or roll back invoice creation
+        $this->send($invoice);
+
+        return $invoice;
+    }
+
+    /** Email once: false if already emailed, void, or the client has no contact email. */
+    public function send(Invoice $invoice): bool
+    {
+        if ($invoice->emailed_at !== null || ! $this->deliverable($invoice)) {
+            return false;
+        }
+        // atomic claim so concurrent callers cannot double-dispatch
+        if (Invoice::whereKey($invoice->id)->whereNull('emailed_at')->update(['emailed_at' => now()]) !== 1) {
+            return false;
+        }
+        if (! $this->queueMail($invoice)) {
+            Invoice::whereKey($invoice->id)->update(['emailed_at' => null]);
+
+            return false;
+        }
+        $invoice->refresh();
+
+        return true;
+    }
+
+    /** Owner-triggered re-send: ignores emailed_at, still refuses void / no contact email. */
+    public function resend(Invoice $invoice): bool
+    {
+        if (! $this->deliverable($invoice) || ! $this->queueMail($invoice)) {
+            return false;
+        }
+        Invoice::whereKey($invoice->id)->update(['emailed_at' => now()]);
+        $invoice->refresh();
+
+        return true;
+    }
+
+    private function deliverable(Invoice $invoice): bool
+    {
+        return $invoice->status !== 'void' && filled($invoice->client?->contact_email);
+    }
+
+    private function queueMail(Invoice $invoice): bool
+    {
+        try {
+            Mail::queue(new InvoiceMail($invoice));
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('Invoice email failed to queue', ['invoice' => $invoice->id, 'error' => $e->getMessage()]);
+
+            return false;
+        }
     }
 
     public function void(Invoice $invoice): void

@@ -25,6 +25,13 @@ class Show extends Component
         session()->flash('status', 'Invoice voided.');
     }
 
+    public function resend(InvoiceService $svc): void
+    {
+        $this->authorize('manage-money');
+        $ok = $svc->resend(Invoice::with('client')->findOrFail($this->invoiceId));
+        session()->flash('status', $ok ? 'Invoice email queued.' : 'Could not email this invoice (void, no contact email, or mail error).');
+    }
+
     public function render()
     {
         $this->authorize('manage-money');
