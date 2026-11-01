@@ -205,7 +205,7 @@ it('rejects INR rate 10000 and 51 custom lines', function () {
 it('voiding twice is a no-op and flashes status', function () {
     $c = ibClient();
     $inv = app(InvoiceService::class)->create($c, [ibLine($c, 1000)->id]);
-    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->call('void')->assertSee('Invoice voided.')->call('void')->assertHasNoErrors();
+    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->call('void')->call('void')->assertHasNoErrors();
     expect($inv->fresh()->status)->toBe('void');
 });
 

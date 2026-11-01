@@ -14,6 +14,5 @@
         </x-slot:actions>
     </x-ui.page-header>
     @unless ($invoice->client->contact_email)<div class="mb-4"><x-ui.badge color="amber">No contact email — invoice not emailed</x-ui.badge></div>@endunless
-    @if (session('status'))<p class="mb-4 text-sm text-green-700">{{ session('status') }}</p>@endif
     <div class="card overflow-x-auto p-0">@include('invoices._body', ['invoice' => $invoice])</div>
 </div>

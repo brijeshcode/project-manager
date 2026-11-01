@@ -6,19 +6,19 @@
     @else
         <div class="card overflow-x-auto">
             <table class="min-w-full text-sm">
-                <thead><tr class="text-left text-xs text-slate-500">
-                    <th class="p-3">Date</th><th class="p-3 text-right">Amount</th><th class="p-3">Type</th><th class="p-3">Method</th>
-                    <th class="p-3">Invoice</th><th class="p-3">Project</th>
+                <thead><tr>
+                    <th class="table-th">Date</th><th class="table-th text-right">Amount</th><th class="table-th">Type</th><th class="table-th">Method</th>
+                    <th class="table-th">Invoice</th><th class="table-th">Project</th>
                 </tr></thead>
                 <tbody>
                 @foreach ($payments as $payment)
-                    <tr class="border-t border-slate-100">
-                        <td class="p-3">{{ $payment->paid_on->format('d M Y') }}</td>
-                        <td class="p-3 text-right tabular-nums">{{ \App\Support\Money::format($payment->amount_cents, $currency) }}</td>
-                        <td class="p-3">{{ ucwords(str_replace('_', ' ', $payment->type->value)) }}</td>
-                        <td class="p-3">{{ $payment->method ?: '—' }}</td>
-                        <td class="p-3">{{ $payment->invoice?->number ?? '—' }}</td>
-                        <td class="p-3">{{ $payment->project?->name ?? '—' }}</td>
+                    <tr class="border-t border-slate-100 dark:border-gray-700">
+                        <td class="table-td">{{ $payment->paid_on->format('d M Y') }}</td>
+                        <td class="table-td text-right tabular-nums">{{ \App\Support\Money::format($payment->amount_cents, $currency) }}</td>
+                        <td class="table-td">{{ ucwords(str_replace('_', ' ', $payment->type->value)) }}</td>
+                        <td class="table-td">{{ $payment->method ?: '—' }}</td>
+                        <td class="table-td">{{ $payment->invoice?->number ?? '—' }}</td>
+                        <td class="table-td">{{ $payment->project?->name ?? '—' }}</td>
                     </tr>
                 @endforeach
                 </tbody>

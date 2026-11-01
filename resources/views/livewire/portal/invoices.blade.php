@@ -6,20 +6,20 @@
     @else
         <div class="card overflow-x-auto">
             <table class="min-w-full text-sm">
-                <thead><tr class="text-left text-xs text-slate-500">
-                    <th class="p-3">Number</th><th class="p-3">Issued</th><th class="p-3">Pay by</th>
-                    <th class="p-3 text-right">Total</th><th class="p-3">Status</th><th class="p-3"></th>
+                <thead><tr>
+                    <th class="table-th">Number</th><th class="table-th">Issued</th><th class="table-th">Pay by</th>
+                    <th class="table-th text-right">Total</th><th class="table-th">Status</th><th class="table-th"></th>
                 </tr></thead>
                 <tbody>
                 @foreach ($invoices as $invoice)
                     @php $paid = $invoice->total_cents > 0 && (int) $invoice->payments_sum_amount_cents >= $invoice->total_cents; @endphp
-                    <tr class="border-t border-slate-100">
-                        <td class="p-3 font-medium">{{ $invoice->number }}</td>
-                        <td class="p-3">{{ $invoice->issued_on->format('d M Y') }}</td>
-                        <td class="p-3">{{ $invoice->due_on?->format('d M Y') }}</td>
-                        <td class="p-3 text-right tabular-nums">{{ \App\Support\Money::format($invoice->total_cents, $invoice->currency) }}</td>
-                        <td class="p-3"><x-ui.badge :color="$paid ? 'green' : 'slate'">{{ $paid ? 'Paid' : 'Due' }}</x-ui.badge></td>
-                        <td class="p-3"><a class="text-brand-700 hover:underline" href="{{ route('invoices.pdf', $invoice) }}">Download PDF</a></td>
+                    <tr class="border-t border-slate-100 dark:border-gray-700">
+                        <td class="table-td font-medium">{{ $invoice->number }}</td>
+                        <td class="table-td">{{ $invoice->issued_on->format('d M Y') }}</td>
+                        <td class="table-td">{{ $invoice->due_on?->format('d M Y') }}</td>
+                        <td class="table-td text-right tabular-nums">{{ \App\Support\Money::format($invoice->total_cents, $invoice->currency) }}</td>
+                        <td class="table-td"><x-ui.badge :color="$paid ? 'green' : 'slate'">{{ $paid ? 'Paid' : 'Due' }}</x-ui.badge></td>
+                        <td class="table-td"><a class="link" href="{{ route('invoices.pdf', $invoice) }}">Download PDF</a></td>
                     </tr>
                 @endforeach
                 </tbody>
