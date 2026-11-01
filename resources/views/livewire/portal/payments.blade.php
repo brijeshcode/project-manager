@@ -7,7 +7,7 @@
         <div class="card overflow-x-auto">
             <table class="min-w-full text-sm">
                 <thead><tr class="text-left text-xs text-slate-500">
-                    <th class="p-3">Date</th><th class="p-3 text-right">Amount</th><th class="p-3">Type</th>
+                    <th class="p-3">Date</th><th class="p-3 text-right">Amount</th><th class="p-3">Type</th><th class="p-3">Method</th>
                     <th class="p-3">Invoice</th><th class="p-3">Project</th>
                 </tr></thead>
                 <tbody>
@@ -16,6 +16,7 @@
                         <td class="p-3">{{ $payment->paid_on->format('d M Y') }}</td>
                         <td class="p-3 text-right tabular-nums">{{ \App\Support\Money::format($payment->amount_cents, $currency) }}</td>
                         <td class="p-3">{{ ucwords(str_replace('_', ' ', $payment->type->value)) }}</td>
+                        <td class="p-3">{{ $payment->method ?: '—' }}</td>
                         <td class="p-3">{{ $payment->invoice?->number ?? '—' }}</td>
                         <td class="p-3">{{ $payment->project?->name ?? '—' }}</td>
                     </tr>

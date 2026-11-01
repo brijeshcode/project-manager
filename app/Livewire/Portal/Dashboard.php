@@ -35,12 +35,19 @@ class Dashboard extends Component
     {
         $account = app(ClientAccount::class);
         $projects = $this->projects;
+        $client = auth()->user()->client;
         $projects->load('modules');
+        foreach ($projects as $p) {
+            $p->setRelation('client', $client);
+            foreach ($p->modules as $m) {
+                $m->setRelation('project', $p);
+            }
+        }
 
         return view('livewire.portal.dashboard', [
             'projects' => $projects,
-            'balance' => $account->balanceCents(auth()->user()->client),
-            'currency' => auth()->user()->client->currency,
+            'balance' => $account->balanceCents($client),
+            'currency' => $client->currency,
             'expected' => $projects->mapWithKeys(fn ($p) => [$p->id => $account->softBalanceCents($p)]),
         ])->layout('layouts.app');
     }

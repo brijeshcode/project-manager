@@ -19,8 +19,12 @@ class Payments extends Component
     public function render()
     {
         // notes deliberately not selected
-        $payments = Payment::where('client_id', auth()->user()->client_id)
-            ->with(['invoice:id,number', 'project:id,name'])
+        $cid = auth()->user()->client_id;
+        $payments = Payment::where('client_id', $cid)
+            ->with([
+                'invoice' => fn ($q) => $q->where('client_id', $cid)->select('id', 'number', 'client_id'),
+                'project' => fn ($q) => $q->where('client_id', $cid)->select('id', 'name', 'client_id'),
+            ])
             ->latest('paid_on')->latest('id')
             ->paginate(15, ['id', 'client_id', 'project_id', 'invoice_id', 'amount_cents', 'paid_on', 'type', 'method']);
 

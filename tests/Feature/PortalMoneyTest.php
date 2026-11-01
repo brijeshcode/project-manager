@@ -121,3 +121,89 @@ it('redirects guests to login', function () {
     $this->get('/portal/invoices')->assertRedirect('/login');
     $this->get('/portal/payments')->assertRedirect('/login');
 });
+
+it('does not leak another clients invoice or project via a mismatched payment link', function () {
+    [$k, $ku] = pmClient('K');
+    [$l] = pmClient('L');
+    $li = pmInvoice($l, 99999);
+    $lp = Project::create(['client_id' => $l->id, 'name' => 'L-Secret-Project', 'status' => 'active']);
+    pmPay($k, 500, ['invoice_id' => $li->id, 'project_id' => $lp->id]);
+    $this->actingAs($ku)->get('/portal/payments')->assertOk()->assertSee('$5.00')
+        ->assertDontSee($li->number)->assertDontSee('L-Secret-Project');
+});
+
+it('soft balance ignores payments of another client linked to the project', function () {
+    [$k, $ku] = pmClient('K');
+    [$l] = pmClient('L');
+    $p = Project::create(['client_id' => $k->id, 'name' => 'Site K', 'status' => 'active']);
+    Module::create(['project_id' => $p->id, 'name' => 'M', 'budget_amount_cents' => 100000]);
+    pmPay($l, 30000, ['project_id' => $p->id]);
+    $this->actingAs($ku)->get('/portal')->assertSee('$1,000.00');
+});
+
+it('dashboard hides another clients data', function () {
+    [$k, $ku] = pmClient('K');
+    [$l] = pmClient('L');
+    $lp = Project::create(['client_id' => $l->id, 'name' => 'L-Project-Zed', 'status' => 'active']);
+    Module::create(['project_id' => $lp->id, 'name' => 'M', 'budget_amount_cents' => 123400]);
+    pmInvoice($l, 98765);
+    $this->actingAs($ku)->get('/portal')->assertOk()
+        ->assertDontSee('L-Project-Zed')->assertDontSee('$987.65')->assertDontSee('$1,234.00');
+});
+
+it('dashboard is 403 for a client without client_id', function () {
+    [, $u] = pmClient('X', 'client', false);
+    $this->actingAs($u)->get('/portal')->assertForbidden();
+});
+
+it('overpaid shows Paid, zero-total shows Due', function () {
+    [$k, $ku] = pmClient('K');
+    $inv = pmInvoice($k, 10000);
+    pmPay($k, 25000, ['invoice_id' => $inv->id]);
+    $this->actingAs($ku)->get('/portal/invoices')->assertSee('Paid')->assertDontSee('Due');
+    $inv->update(['total_cents' => 0]);
+    $this->actingAs($ku)->get('/portal/invoices')->assertSee('Due');
+});
+
+it('orders both lists newest first', function () {
+    [$k, $ku] = pmClient('K');
+    $old = pmInvoice($k, 100);
+    $new = pmInvoice($k, 200);
+    $old->update(['issued_on' => '2026-01-01']);
+    $new->update(['issued_on' => '2026-06-01']);
+    $this->actingAs($ku)->get('/portal/invoices')->assertSeeInOrder([$new->number, $old->number]);
+    pmPay($k, 1111, ['paid_on' => '2026-01-05']);
+    pmPay($k, 2222, ['paid_on' => '2026-06-05']);
+    $this->actingAs($ku)->get('/portal/payments')->assertSeeInOrder(['$22.22', '$11.11']);
+});
+
+it('payments page shows method but never notes', function () {
+    [$k, $ku] = pmClient('K');
+    pmPay($k, 100, ['method' => 'Bank transfer', 'notes' => 'profit cost note']);
+    $this->actingAs($ku)->get('/portal/payments')->assertSee('Bank transfer')->assertDontSee('profit cost note');
+});
+
+it('no cost or profit words even with owner-only data present', function () {
+    [$k, $ku] = pmClient('K');
+    User::factory()->create(['cost_rate_type' => 'hourly', 'cost_rate_amount' => 777.77])->assignRole('developer');
+    pmInvoice($k, 100);
+    pmPay($k, 100, ['notes' => 'cost profit 777.77']);
+    foreach (['/portal', '/portal/invoices', '/portal/payments'] as $url) {
+        $html = strtolower($this->actingAs($ku)->get($url)->getContent());
+        expect($html)->not->toContain('profit')->not->toContain('cost')->not->toContain('777.77');
+    }
+});
+
+it('dashboard query count does not scale with modules', function () {
+    [$k, $ku] = pmClient('K');
+    foreach (range(1, 3) as $i) {
+        $p = Project::create(['client_id' => $k->id, 'name' => "P$i", 'status' => 'active']);
+        foreach (range(1, 3) as $j) {
+            Module::create(['project_id' => $p->id, 'name' => "M$j", 'budget_amount_cents' => 1000]);
+        }
+    }
+    $this->actingAs($ku);
+    DB::enableQueryLog();
+    $this->get('/portal')->assertOk();
+    expect(count(DB::getQueryLog()))->toBeLessThan(30);
+});

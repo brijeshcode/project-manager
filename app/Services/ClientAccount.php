@@ -19,7 +19,7 @@ class ClientAccount
     public function softBalanceCents(Project $project): int
     {
         $budget = $project->modules->sum(fn ($m) => $m->budgetCents() ?? 0);
-        $paid = (int) Payment::where('project_id', $project->id)->sum('amount_cents');
+        $paid = (int) Payment::where('project_id', $project->id)->where('client_id', $project->client_id)->sum('amount_cents');
 
         return max(0, $budget - $paid);
     }
