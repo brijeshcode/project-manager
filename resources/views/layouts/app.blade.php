@@ -68,6 +68,7 @@
                     </div>
                     <div class="space-y-1">
                         <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Settings</p>
+                        @if ($money)<x-nav.item route="settings.index" icon="cog">Settings</x-nav.item>@endif
                         <x-nav.item route="profile" icon="cog">Profile</x-nav.item>
                     </div>
                 </nav>

@@ -47,6 +47,8 @@ Route::middleware(['auth', 'role:super_admin'])->group(function () {
 
 Route::get('billing/recurring', \App\Livewire\Billing\Recurring::class)
     ->middleware(['auth', 'can:manage-money'])->name('billing.recurring');
+Route::get('settings', \App\Livewire\Settings\Index::class)
+    ->middleware(['auth', 'can:manage-money'])->name('settings.index');
 Route::get('billing/bank-accounts', \App\Livewire\Billing\BankAccounts::class)
     ->middleware(['auth', 'can:manage-money'])->name('billing.bank-accounts');
 
