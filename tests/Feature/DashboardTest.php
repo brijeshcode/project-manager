@@ -38,7 +38,7 @@ it('owner sees single local-currency money cards, never a second currency line',
     $r->assertOk();
     $r->assertSee('Received')->assertSee('Outstanding')->assertSee('Active clients')->assertSee('This month');
     $r->assertSee('₹105,566.00', false)->assertDontSee('$1,234.00', false)->assertDontSee('₹5,566.00', false);
-    $r->assertDontSee('exchange rate and are left out')->assertDontSee('without a rate');
+    $r->assertDontSee('no exchange rate')->assertDontSee('without a rate');
 });
 
 it('dashboard shows notices only when payments or clients lack a rate', function () {
@@ -49,8 +49,8 @@ it('dashboard shows notices only when payments or clients lack a rate', function
     app(\App\Services\InvoiceService::class)->create($eur, [$l->id])->update(['status' => 'sent']);
 
     actingAs(dbUser('super_admin'))->get('/dashboard')->assertOk()
-        ->assertSee('1 payments have no exchange rate')->assertSee(route('payments.index'), false)
-        ->assertSee('1 clients without a rate');
+        ->assertSee('1 payment has no exchange rate')->assertSee(route('payments.index'), false)
+        ->assertSee('1 client without a rate');
 });
 
 it('owner period falls back to 30 when invalid', function () {

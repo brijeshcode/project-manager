@@ -250,17 +250,17 @@
                 @php $money = \App\Services\ProjectEconomics::money($project); $cur = $project->client->currency; @endphp
                 <x-ui.card>
                     <div class="mb-3 flex items-center justify-between">
-                        <h2 class="text-sm font-semibold text-slate-900">Money</h2>
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Money</h2>
                         <a href="{{ route('projects.economics', $project) }}" wire:navigate class="link text-xs font-medium">Economics</a>
                     </div>
                     <dl class="space-y-3 text-sm">
                         <div class="flex justify-between gap-3">
-                            <dt class="text-slate-500">Invoiced</dt>
-                            <dd class="text-right font-medium text-slate-900"><x-ui.money-pair :cents="$money['invoiced_cents']" :currency="$cur" :local="$money['invoiced_local']" :missing="$money['invoiced_missing_rate']" /></dd>
+                            <dt class="text-slate-500 dark:text-gray-400">Invoiced</dt>
+                            <dd class="text-right font-medium text-slate-900 dark:text-white"><x-ui.money-pair :cents="$money['invoiced_cents']" :currency="$cur" :local="$money['invoiced_local']" :missing="$money['invoiced_missing_rate']" /></dd>
                         </div>
                         <div class="flex justify-between gap-3">
-                            <dt class="text-slate-500">Received</dt>
-                            <dd class="text-right font-medium text-slate-900"><x-ui.money-pair :cents="$money['received_cents']" :currency="$cur" :local="$money['received_local']" :missing="$money['received_missing_rate']" /></dd>
+                            <dt class="text-slate-500 dark:text-gray-400">Received</dt>
+                            <dd class="text-right font-medium text-slate-900 dark:text-white"><x-ui.money-pair :cents="$money['received_cents']" :currency="$cur" :local="$money['received_local']" :missing="$money['received_missing_rate']" /></dd>
                         </div>
                     </dl>
                 </x-ui.card>

@@ -41,12 +41,17 @@ class Show extends Component
         $code = LocalCurrency::code();
         $invoices = $client->invoices()->latest('issued_on')->latest('id')->get();
 
-        // Local lines: null (hidden) when the client is already in local currency or no local figure exists yet.
+        // Local lines: hidden for a same-currency client; with any missing rate a note replaces the (otherwise partial) total.
         $billedLocal = $receivedLocal = null;
+        $billedMissing = $receivedMissing = 0;
         if (strtoupper($client->currency) !== $code) {
             $sent = $invoices->where('status', 'sent');
-            $billedLocal = $sent->sum(fn ($i) => $i->localTotalCents() ?? 0) ?: null;
-            $receivedLocal = (int) Payment::where('client_id', $client->id)->where('local_currency', $code)->sum('local_amount_cents') ?: null;
+            $billedMissing = $sent->whereNull('exchange_rate')->count();
+            $billedLocal = $sent->sum(fn ($i) => $i->localTotalCents() ?? 0);
+            $r = Payment::where('client_id', $client->id)
+                ->selectRaw('COALESCE(SUM(CASE WHEN local_currency = ? THEN local_amount_cents ELSE 0 END), 0) as l, COALESCE(SUM(CASE WHEN local_amount_cents IS NULL OR local_currency <> ? THEN 1 ELSE 0 END), 0) as m', [$code, $code])->first();
+            $receivedLocal = (int) $r->l;
+            $receivedMissing = (int) $r->m;
         }
 
         return view('livewire.clients.show', [
@@ -54,10 +59,12 @@ class Show extends Component
             'localCode' => $code,
             'billedLocal' => $billedLocal,
             'receivedLocal' => $receivedLocal,
+            'billedMissing' => $billedMissing,
+            'receivedMissing' => $receivedMissing,
             'billed' => $t['billed'],
             'received' => $t['received'],
             'projects' => $client->projects()->orderBy('name')->get(),
-            'payments' => $client->payments()->with(['project:id,name', 'invoice:id,number'])->latest('paid_on')->latest('id')->get(),
+            'payments' => $client->payments()->with(['project:id,name', 'invoice:id,number', 'documents'])->latest('paid_on')->latest('id')->get(),
             'invoices' => $invoices,
         ]);
     }

@@ -93,7 +93,7 @@ class ProjectEconomics
         }
 
         $p = Payment::where('project_id', $project->id)->where('client_id', $project->client_id)
-            ->selectRaw('COALESCE(SUM(amount_cents), 0) as a, COALESCE(SUM(CASE WHEN local_currency = ? THEN local_amount_cents ELSE 0 END), 0) as l, COALESCE(SUM(CASE WHEN local_amount_cents IS NULL THEN 1 ELSE 0 END), 0) as m', [LocalCurrency::code()])
+            ->selectRaw('COALESCE(SUM(amount_cents), 0) as a, COALESCE(SUM(CASE WHEN local_currency = ? THEN local_amount_cents ELSE 0 END), 0) as l, COALESCE(SUM(CASE WHEN local_amount_cents IS NULL OR local_currency <> ? THEN 1 ELSE 0 END), 0) as m', [LocalCurrency::code(), LocalCurrency::code()])
             ->first();
 
         return [

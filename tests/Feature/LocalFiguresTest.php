@@ -117,3 +117,47 @@ it('a payment with no rate shows no local line, never zero', function () {
     Livewire::actingAs($this->owner)->test(ClientShow::class, ['client' => $p->client])->assertOk()
         ->assertSee('$50.00')->assertDontSee('₹0.00')->assertDontSee('₹');
 });
+
+it('never shows a partial local total: a note with the count replaces it (economics, Money card, client page)', function () {
+    $p = lfocProj();
+    lfocInv($p, 100000, '80');
+    lfocInv($p, 5000, null);              // unrated
+    lfocPay($p, 50000, 4_100_000, '82');
+    lfocPay($p, 1000, null);              // no local
+
+    $pages = [
+        $this->actingAs($this->owner)->get(route('projects.show', $p))->assertOk()->getContent(),
+        $this->get(route('projects.economics', $p))->assertOk()->getContent(),
+        Livewire::test(ClientShow::class, ['client' => $p->client])->assertOk()->html(),
+    ];
+    foreach ($pages as $i => $html) {
+        // the client page's Payments tab legitimately lists the rated payment's own local amount
+        $i < 2 && expect($html)->not->toContain('₹41,000.00');
+        expect($html)->not->toContain('₹80,000.00')
+            ->and($html)->toContain('Local total unavailable — 1 without an exchange rate');
+    }
+});
+
+it('the full local figure shows once every invoice and payment is rated', function () {
+    $p = lfocProj();
+    lfocInv($p, 100000, '80');
+    lfocInv($p, 5000, '80');
+    lfocPay($p, 50000, 4_100_000, '82');
+    lfocPay($p, 1000, 82_000, '82');
+
+    $this->actingAs($this->owner)->get(route('projects.economics', $p))->assertOk()
+        ->assertSee('₹84,000.00')->assertSee('₹41,820.00')->assertDontSee('Local total unavailable');
+});
+
+it('client Payments tab lists document counts and escaped links', function () {
+    $p = lfocProj();
+    lfocPay($p->client, 5000, 410_000, '82');
+    $pay = Payment::firstOrFail();
+    \App\Models\PaymentDocument::create(['payment_id' => $pay->id, 'path' => 'x/a.pdf', 'original_name' => '<script>alert(1)</script>.pdf', 'uploaded_by' => $this->owner->id]);
+    \App\Models\PaymentDocument::create(['payment_id' => $pay->id, 'path' => 'x/b.pdf', 'original_name' => 'receipt.pdf', 'uploaded_by' => $this->owner->id]);
+
+    $t = Livewire::actingAs($this->owner)->test(ClientShow::class, ['client' => $p->client])->assertOk();
+    $doc = $pay->documents()->where('original_name', 'receipt.pdf')->first();
+    $t->assertSee('Documents')->assertSee('receipt.pdf')->assertSee(route('payment-documents.download', $doc), false)
+        ->assertDontSee('<script>alert(1)</script>', false)->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;.pdf', false);
+});

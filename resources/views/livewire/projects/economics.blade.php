@@ -12,8 +12,8 @@
 
     <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <x-ui.card><div class="text-sm text-slate-500">Hours logged</div><div class="text-2xl font-semibold">{{ rtrim(rtrim(number_format($e['hours'], 2, '.', ''), '0'), '.') }}</div></x-ui.card>
-        <x-ui.card><div class="text-sm text-slate-500">Invoiced</div><x-ui.money-pair class="text-2xl font-semibold" :cents="$e['invoiced_cents']" :currency="$c" :local="$e['invoiced_local']" :missing="$e['invoiced_missing_rate']" /></x-ui.card>
-        <x-ui.card><div class="text-sm text-slate-500">Received</div><x-ui.money-pair class="text-2xl font-semibold" :cents="$e['received_cents']" :currency="$c" :local="$e['received_local']" :missing="$e['received_missing_rate']" /></x-ui.card>
+        <x-ui.card><div class="text-sm text-slate-500 dark:text-gray-400">Invoiced</div><x-ui.money-pair class="text-2xl font-semibold" :cents="$e['invoiced_cents']" :currency="$c" :local="$e['invoiced_local']" :missing="$e['invoiced_missing_rate']" /></x-ui.card>
+        <x-ui.card><div class="text-sm text-slate-500 dark:text-gray-400">Received</div><x-ui.money-pair class="text-2xl font-semibold" :cents="$e['received_cents']" :currency="$c" :local="$e['received_local']" :missing="$e['received_missing_rate']" /></x-ui.card>
         <x-ui.card><div class="text-sm text-slate-500">Cost of logged hours</div><div class="text-2xl font-semibold">{{ $m($e['cost_cents']) }}</div></x-ui.card>
         <x-ui.card><div class="text-sm text-slate-500">Profit</div><div class="text-2xl font-semibold {{ $e['profit_cents'] < 0 ? 'text-red-600' : 'text-green-600' }}">{{ $m($e['profit_cents']) }}</div></x-ui.card>
         <x-ui.card><div class="text-sm text-slate-500">Effective hourly (received)</div><div class="text-2xl font-semibold">{{ $m($e['hourly_received_cents']) }}</div></x-ui.card>

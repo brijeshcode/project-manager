@@ -17,10 +17,10 @@
     </x-ui.page-header>
 
     @if ($money['payments_missing_rate'] > 0)
-        <p class="mb-4 text-sm text-amber-700 dark:text-amber-400">{{ $money['payments_missing_rate'] }} payments have no exchange rate and are left out. <a href="{{ route('payments.index') }}" wire:navigate class="link">Set rates</a></p>
+        <p class="mb-4 text-sm text-amber-700 dark:text-amber-400">{{ $money['payments_missing_rate'] }} {{ $money['payments_missing_rate'] === 1 ? 'payment has' : 'payments have' }} no exchange rate and {{ $money['payments_missing_rate'] === 1 ? 'is' : 'are' }} left out. <a href="{{ route('payments.index') }}" wire:navigate class="link">Set rates</a></p>
     @endif
     @if ($money['outstanding_missing_rate'] > 0)
-        <p class="mb-4 text-sm text-amber-700 dark:text-amber-400">{{ $money['outstanding_missing_rate'] }} clients without a rate are left out of Outstanding.</p>
+        <p class="mb-4 text-sm text-amber-700 dark:text-amber-400">{{ $money['outstanding_missing_rate'] }} {{ $money['outstanding_missing_rate'] === 1 ? 'client' : 'clients' }} without a rate {{ $money['outstanding_missing_rate'] === 1 ? 'is' : 'are' }} left out of Outstanding.</p>
     @endif
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -1,5 +1,6 @@
 @php
     $balance = $received - $billed;
+    $localHint = fn (?int $l, int $m) => $m > 0 ? 'Local total unavailable — '.$m.' without an exchange rate' : ($l ? \App\Support\Money::format($l, $localCode) : null);
     $fmt = fn (int $c) => \App\Support\Money::format($c, $client->currency);
     $addressLine = collect([$client->city, $client->state, $client->postal_code, $client->country])->filter()->implode(', ');
     $sections = [
@@ -44,8 +45,8 @@
 
     {{-- Financial summary --}}
     <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <x-ui.stat label="Total Billed" :value="$fmt($billed)" :hint="$billedLocal !== null ? \App\Support\Money::format($billedLocal, $localCode) : null" icon="currency" color="green" />
-        <x-ui.stat label="Total Received" :value="$fmt($received)" :hint="$receivedLocal !== null ? \App\Support\Money::format($receivedLocal, $localCode) : null" icon="credit-card" color="blue" />
+        <x-ui.stat label="Total Billed" :value="$fmt($billed)" :hint="$localHint($billedLocal, $billedMissing)" icon="currency" color="green" />
+        <x-ui.stat label="Total Received" :value="$fmt($received)" :hint="$localHint($receivedLocal, $receivedMissing)" icon="credit-card" color="blue" />
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 @if ($balance < 0)
@@ -146,7 +147,7 @@
             @else
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
-                        <thead><tr><th class="table-th">Date</th><th class="table-th">Amount</th><th class="table-th">Type</th><th class="table-th">Project</th><th class="table-th">Invoice</th><th class="table-th">Method</th></tr></thead>
+                        <thead><tr><th class="table-th">Date</th><th class="table-th">Amount</th><th class="table-th">Type</th><th class="table-th">Project</th><th class="table-th">Invoice</th><th class="table-th">Method</th><th class="table-th">Documents</th></tr></thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
                             @foreach ($payments as $payment)
                                 <tr wire:key="payment-{{ $payment->id }}">
@@ -164,6 +165,11 @@
                                         @else — @endif
                                     </td>
                                     <td class="table-td">{{ $payment->method ?: '—' }}</td>
+                                    <td class="table-td">
+                                        @forelse ($payment->documents as $doc)
+                                            <a href="{{ route('payment-documents.download', $doc) }}" class="link block text-xs">{{ $doc->original_name }}</a>
+                                        @empty — @endforelse
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
