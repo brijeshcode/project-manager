@@ -235,14 +235,9 @@ it('super_admin sees tasks of all sections', function () {
         ->toContain($nullTask->id);
 });
 
-// ── multi-project ceiling: global scope-union behaviour ───────────────────────
-//
-// @todo per-project scope isolation (ponytail ceiling): currently unions scopes globally.
-// A user who is 'frontend' on Project A and 'backend' on Project B sees BOTH frontend and
-// backend tasks from Project A (and Project B). Per-project isolation needs a correlated JOIN.
-// This test pins the CURRENT accepted behaviour so any future change is caught immediately.
+// ── multi-project: access scope is per project ────────────────────────────────
 
-it('user with frontend scope on project A and backend scope on project B sees both sections in project A (global union ceiling)', function () {
+it('user with frontend scope on project A and backend scope on project B sees only frontend and unsectioned tasks in project A (scope is per project)', function () {
     $client = Client::create(['name' => 'Multi Corp', 'currency' => 'USD']);
 
     $projectA = Project::create(['client_id' => $client->id, 'name' => 'Project A', 'status' => 'active']);
@@ -285,13 +280,10 @@ it('user with frontend scope on project A and backend scope on project B sees bo
 
     $visible = Task::visibleTo($user)->pluck('id');
 
-    // CURRENT BEHAVIOUR (global scope-union): the user's backend scope from Project B bleeds
-    // into Project A, so they see the backend task in A as well as the frontend + null tasks.
-    // Change this assertion only after implementing per-project JOIN isolation.
     expect($visible)
-        ->toContain($frontendTaskA->id)  // expected: frontend scope from A
-        ->toContain($backendTaskA->id)   // ceiling: backend scope from B bleeds in globally
-        ->toContain($nullTaskA->id);     // always visible (null-sectioned)
+        ->toContain($frontendTaskA->id)
+        ->toContain($nullTaskA->id)
+        ->not->toContain($backendTaskA->id); // backend scope on B must not leak into A
 });
 
 // ── section filter preserves draft visibility guarantee ───────────────────────

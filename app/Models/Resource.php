@@ -11,6 +11,12 @@ class Resource extends Model
 {
     protected $fillable = ['project_id', 'title', 'description'];
 
+    protected static function booted(): void
+    {
+        // Per-item delete so files and comments are cleaned up (the DB cascade skips model events).
+        static::deleting(fn (self $r) => $r->items->each->delete());
+    }
+
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);

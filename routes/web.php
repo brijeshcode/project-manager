@@ -68,7 +68,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('projects/{project}/edit', ProjectForm::class)->name('projects.edit');
     Route::get('projects/{project}/board', TaskBoard::class)->name('projects.board');
     Route::get('tasks/{task}/edit', TaskForm::class)->name('tasks.edit');
-    Route::get('resource-items/{item}/download', \App\Http\Controllers\ResourceItemDownloadController::class)->name('resource-items.download');
+    Route::get('resource-items/{item}/download', \App\Http\Controllers\ResourceItemDownloadController::class)->whereNumber('item')->name('resource-items.download');
 });
 
 require __DIR__.'/auth.php';

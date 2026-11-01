@@ -101,26 +101,17 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
 
 ---
 
-## Phase 1 deferred items / known tech-debt (carried from the build ledger)
+## Phase 1 and 2 leftovers
 
-- **Access-scope section filter unions a user's scopes globally** (not per-project) —
-  a user who is frontend on project A + backend on B sees both sections. Accepted ceiling;
-  pinned by a test. Fix with a per-project correlated join when it matters.
-- **Flat-rate time cost** `derivedCost()` returns the flat amount **per entry**; the
-  "once per project" de-dup is done in Phase 3's `ProjectEconomics` aggregation.
-- **Time Logger** shows all users' entries for a task (no per-user scope) — confirm intended.
-- `client_approval` and task `section` are raw nullable strings (no enum cast) — fine, tidy later.
-- Cypress deferred on this machine (Electron illegal-instruction crash) — run specs on CI.
-- `approveTask()` silently no-ops on a non-Done task (button hidden in UI).
+Cleared on branch `cleanup-leftovers`: per-project section scope, `approveTask` now 422s on a non-Done task,
+resource edit/delete (files + comments cleaned up), item-type guard, download `nosniff` + `whereNumber`,
+shared `rpSetup()` moved to `tests/Pest.php`, comments oldest-first, null `client_id` guard.
 
-## Phase 2 deferred items
-
-- No delete/edit flow for resources/items (so no file cleanup on delete).
-- Item `type` is a free string at model level (validated only in the panel).
-- Download route hardening: `nosniff` header, `whereNumber('item')`.
-- Test helper `rpSetup()` is shared across test files via `require_once`.
-- Comments are unordered.
-- Null `client_id` guard in the `ResourceItem` scope.
+Still open by choice:
+- **Time Logger** lists every user's entries for a task, showing only date and hours (no names) — kept as the team's total.
+- **Flat-rate time cost** `derivedCost()` returns the flat amount per entry; `ProjectEconomics` de-dups once per project.
+- `client_approval` and task `section` stay raw strings (two values each; an enum adds nothing yet).
+- Cypress cannot run on this machine (Electron crash) — run specs on CI.
 
 ## Phase 3 deferred items / known limits
 

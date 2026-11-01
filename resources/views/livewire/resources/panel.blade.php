@@ -9,7 +9,12 @@
 
     @forelse ($this->resources as $resource)
         <x-ui.card wire:key="res-{{ $resource->id }}">
-            <h3 class="font-semibold text-slate-900">{{ $resource->title }}</h3>
+            <div class="flex items-center justify-between">
+                <h3 class="font-semibold text-slate-900">{{ $resource->title }}</h3>
+                @if ($isAdmin)
+                    <button type="button" wire:click="deleteResource({{ $resource->id }})" wire:confirm="Delete this resource and all its items?" class="text-xs text-red-600">Delete</button>
+                @endif
+            </div>
             @if ($resource->description)
                 <p class="text-sm text-slate-500">{{ $resource->description }}</p>
             @endif
@@ -53,6 +58,19 @@
                             @error("commentBody.{$item->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
                         </div>
                         @if ($isAdmin)
+                            <details class="mt-2">
+                                <summary class="cursor-pointer text-xs text-slate-500">Edit / delete</summary>
+                                <form wire:submit="updateItem({{ $item->id }})" class="mt-1 space-y-1">
+                                    <input type="text" wire:model="editLabel.{{ $item->id }}" value="{{ $item->label }}" placeholder="{{ $item->label }}" class="input w-full text-sm">
+                                    @error("editLabel.{$item->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
+                                    @if ($item->type === 'text')
+                                        <textarea wire:model="editValue.{{ $item->id }}" rows="2" placeholder="New value" class="textarea w-full text-sm"></textarea>
+                                        @error("editValue.{$item->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
+                                    @endif
+                                    <button type="submit" class="btn btn-secondary text-xs">Save</button>
+                                    <button type="button" wire:click="deleteItem({{ $item->id }})" wire:confirm="Delete this item?" class="text-xs text-red-600">Delete item</button>
+                                </form>
+                            </details>
                             <div class="mt-2 flex gap-2">
                                 <select multiple wire:model="assigneeIds.{{ $item->id }}" class="input text-sm">
                                     @foreach ($this->candidates as $u)

@@ -127,9 +127,7 @@ class ProjectView extends Component
     {
         $task = $this->guardTask($taskId);
 
-        if ($task->board_column !== 'Done') {
-            return; // silently ignore — task not complete
-        }
+        abort_unless($task->board_column === 'Done', 422, 'Only completed tasks can be approved.');
 
         $task->update(['client_approval' => 'approved']);
         unset($this->tasks);

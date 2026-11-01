@@ -17,34 +17,6 @@ uses(RefreshDatabase::class);
 
 beforeEach(fn () => $this->seed(RoleSeeder::class));
 
-function rpSetup(): array
-{
-    $client = Client::create(['name' => 'Acme', 'currency' => 'USD']);
-    $project = Project::create(['client_id' => $client->id, 'name' => 'Site', 'buffer_percent' => 0, 'start_date' => now(), 'status' => 'active']);
-    $resource = $project->resources()->create(['title' => 'Creds']);
-    $hidden = $project->resources()->create(['title' => 'Secret']);
-
-    $admin = User::factory()->create();
-    $admin->assignRole('super_admin');
-    $staff = User::factory()->create();
-    $staff->assignRole('developer');
-    $outsider = User::factory()->create();
-    $outsider->assignRole('developer');
-    ProjectMember::create(['project_id' => $project->id, 'user_id' => $staff->id, 'role_on_project' => 'developer', 'access_scope' => AccessScope::All, 'active' => true]);
-    $k = User::factory()->create(['client_id' => $client->id]);
-    $k->assignRole('client');
-
-    $mk = fn ($r, $l) => $r->items()->create(['type' => 'text', 'label' => $l, 'value' => 'x', 'created_by' => $admin->id]);
-    $a = $mk($resource, 'LabelA');
-    $b = $mk($resource, 'LabelB');
-    $c = $mk($resource, 'LabelC');
-    $mk($hidden, 'LabelH')->assignees()->attach($admin);
-    $a->assignees()->attach($staff);
-    $c->assignees()->attach($k);
-
-    return compact('client', 'project', 'resource', 'hidden', 'admin', 'staff', 'outsider', 'k', 'a', 'b', 'c');
-}
-
 it('admin adds a resource', function () {
     extract(rpSetup());
     Livewire::actingAs($admin)->test(Panel::class, ['project' => $project])

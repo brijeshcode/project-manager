@@ -7,9 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\Storage;
 
 class ResourceItem extends Model
 {
+    public const TYPES = ['text', 'image', 'file'];
+
     protected $fillable = ['resource_id', 'type', 'label', 'value', 'original_name', 'created_by'];
 
     protected $hidden = ['value'];
@@ -17,6 +20,23 @@ class ResourceItem extends Model
     protected function casts(): array
     {
         return ['value' => 'encrypted'];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $item) {
+            if (! in_array($item->type, self::TYPES, true)) {
+                throw new \InvalidArgumentException('Unknown resource item type.');
+            }
+        });
+
+        // Comments are polymorphic (no FK cascade) and files live outside the DB.
+        static::deleting(function (self $item) {
+            if ($item->type !== 'text' && $item->value) {
+                Storage::disk('local')->delete($item->value);
+            }
+            $item->comments()->delete();
+        });
     }
 
     public function resource(): BelongsTo
@@ -48,6 +68,11 @@ class ResourceItem extends Model
     {
         if ($user->hasRole('super_admin')) {
             return $query;
+        }
+
+        // A client user with no client link must see nothing (where(col, null) would match NULL rows).
+        if ($user->hasRole('client') && ! $user->client_id) {
+            return $query->whereRaw('0 = 1');
         }
 
         $project = $user->hasRole('client')

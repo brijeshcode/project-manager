@@ -144,7 +144,7 @@ class Task extends Model
      * ('frontend' → frontend+null, 'backend' → backend+null, 'all' → everything).
      * Enforced at query level — Gate::before cannot override this.
      *
-     * ponytail: simple two-branch WHERE; membership sub-join mirrors ProjectPolicy::isMember.
+     * Membership sub-join mirrors ProjectPolicy::isMember.
      */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
@@ -155,19 +155,16 @@ class Task extends Model
             $q->where(function (Builder $pub) use ($user, $isSuperAdmin) {
                 $pub->where('status', TaskStatus::Published->value);
                 if (! $isSuperAdmin) {
-                    // restrict to projects where user is an active member
+                    // Active member of the task's project whose access_scope ON THAT PROJECT allows the
+                    // task's section: 'all', an unsectioned task, or a matching section.
                     $pub->whereHas('module.project.members', function (Builder $m) use ($user) {
                         $m->where('users.id', $user->id)
-                          ->where('project_members.active', true);
+                          ->where('project_members.active', true)
+                          ->where(fn (Builder $s) => $s
+                              ->where('project_members.access_scope', AccessScope::All->value)
+                              ->orWhereNull('tasks.section')
+                              ->orWhereColumn('tasks.section', 'project_members.access_scope'));
                     });
-
-                    // Section filter: restrict to sections allowed by the member's access_scope.
-                    // Collects ALL active membership scopes across ALL projects globally and unions them:
-                    // if a user is 'frontend' on Project A and 'backend' on Project B, they see both
-                    // frontend and backend tasks from EVERY project they belong to.
-                    // ponytail: global scope-union, per-project scope isolation would require a correlated
-                    // subquery or JOIN — upgrade if cross-project section leakage becomes a concern.
-                    $this->applyAccessScopeFilter($pub, $user);
                 }
             });
             // Draft branch — creator only (applies to everyone incl. super_admin)
@@ -175,38 +172,6 @@ class Task extends Model
                 $draft->where('status', TaskStatus::Draft->value)
                       ->where('creator_id', $user->id);
             });
-        });
-    }
-
-    /**
-     * Applies the section visibility filter based on the user's access_scope memberships.
-     * Uses the broadest scope across all active memberships:
-     *   - Any 'all' scope  → no restriction
-     *   - Only 'frontend'  → frontend tasks and null-sectioned tasks
-     *   - Only 'backend'   → backend tasks and null-sectioned tasks
-     *   - Mixed frontend+backend (but no all) → both sections + null
-     */
-    private function applyAccessScopeFilter(Builder $query, User $user): void
-    {
-        $scopes = ProjectMember::where('user_id', $user->id)
-            ->where('active', true)
-            ->pluck('access_scope');
-
-        // If any membership is 'all', no section restriction needed
-        if ($scopes->contains(AccessScope::All)) {
-            return;
-        }
-
-        $allowedSections = $scopes
-            ->map(fn (AccessScope $s) => $s->value)
-            ->unique()
-            ->values()
-            ->all();
-
-        // Allow matching sections + null (unsectioned tasks visible to all scopes)
-        $query->where(function (Builder $s) use ($allowedSections) {
-            $s->whereNull('section')
-              ->orWhereIn('section', $allowedSections);
         });
     }
 }

@@ -13,8 +13,11 @@ class ResourceItemDownloadController extends Controller
         $disk = Storage::disk('local');
         abort_unless($disk->exists($item->value), 404);
 
-        return $item->type === 'image'
+        $response = $item->type === 'image'
             ? $disk->response($item->value, $item->original_name)
             : $disk->download($item->value, $item->original_name);
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+
+        return $response;
     }
 }

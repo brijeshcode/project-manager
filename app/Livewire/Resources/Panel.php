@@ -36,6 +36,11 @@ class Panel extends Component
 
     public array $commentBody = [];
 
+    /** Keyed by item id (admin edit form). */
+    public array $editLabel = [];
+
+    public array $editValue = [];
+
     public function mount(Project $project): void
     {
         $user = auth()->user();
@@ -56,7 +61,7 @@ class Panel extends Component
 
         return Resource::visibleTo($user)
             ->where('project_id', $this->project->id)
-            ->with(['items' => fn ($q) => $q->visibleTo($user)->with(['assignees', 'creator', 'comments.author'])])
+            ->with(['items' => fn ($q) => $q->visibleTo($user)->with(['assignees', 'creator', 'comments' => fn ($c) => $c->oldest('id')->with('author')])])
             ->orderBy('id')
             ->get();
     }
@@ -167,6 +172,48 @@ class Panel extends Component
 
         unset($this->commentBody[$itemId]);
         unset($this->resources);
+    }
+
+    public function updateItem(int $itemId): void
+    {
+        abort_unless($this->isAdmin(), 403);
+        $item = $this->projectItem($itemId);
+
+        $rules = ["editLabel.$itemId" => 'required|string|max:255'];
+        if ($item->type === 'text') {
+            $rules["editValue.$itemId"] = 'required|string|max:10000';
+        }
+        $this->validate($rules);
+
+        $item->label = trim($this->editLabel[$itemId]);
+        if ($item->type === 'text') {
+            $item->value = $this->editValue[$itemId];
+        }
+        $item->save();
+
+        unset($this->editLabel[$itemId], $this->editValue[$itemId]);
+        unset($this->resources);
+    }
+
+    public function deleteItem(int $itemId): void
+    {
+        abort_unless($this->isAdmin(), 403);
+        $this->projectItem($itemId)->delete();
+        unset($this->resources);
+    }
+
+    public function deleteResource(int $resourceId): void
+    {
+        abort_unless($this->isAdmin(), 403);
+        $this->project->resources()->findOrFail($resourceId)->delete();
+        unset($this->resources);
+    }
+
+    private function projectItem(int $itemId): ResourceItem
+    {
+        return ResourceItem::visibleTo(auth()->user())
+            ->whereHas('resource', fn ($r) => $r->where('project_id', $this->project->id))
+            ->findOrFail($itemId);
     }
 
     public function render()

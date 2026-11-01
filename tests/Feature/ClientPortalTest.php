@@ -301,7 +301,8 @@ it('client cannot approve a task that is NOT in Done column', function () {
 
     Livewire::actingAs($clientUser)
         ->test(ProjectView::class, ['project' => $project])
-        ->call('approveTask', $task->id);
+        ->call('approveTask', $task->id)
+        ->assertStatus(422);
 
     // Approval should remain null (not approved)
     expect($task->fresh()->client_approval)->toBeNull();
