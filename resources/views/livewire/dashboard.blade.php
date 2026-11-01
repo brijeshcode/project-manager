@@ -30,6 +30,18 @@
         <x-ui.stat label="Hours this week" icon="clock" :value="number_format($hoursWeek, 1)" />
     </div>
 
+    <div class="card mt-6">
+        <div class="mb-4">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Revenue</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Payments received, per currency ({{ $period == 365 ? 'by month, last 12 months' : ($period == 90 ? 'by week' : 'by day') }}).</p>
+        </div>
+        @forelse ($revenue as $currency => $points)
+            <x-ui.bar-chart :points="$points" :currency="$currency" class="{{ $loop->first ? '' : 'mt-6' }}" />
+        @empty
+            <x-ui.empty-state title="No payments in this period" message="Record a payment and it will show up here." name="credit-card" />
+        @endforelse
+    </div>
+
     <div class="mt-8 grid gap-6 lg:grid-cols-3">
         <div class="lg:col-span-2">
             <div class="mb-3 flex items-center justify-between">
