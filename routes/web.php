@@ -46,6 +46,9 @@ Route::get('billing/recurring', \App\Livewire\Billing\Recurring::class)
 Route::get('billing/bank-accounts', \App\Livewire\Billing\BankAccounts::class)
     ->middleware(['auth', 'can:manage-money'])->name('billing.bank-accounts');
 
+Route::get('payments', \App\Livewire\Payments\Index::class)
+    ->middleware(['auth', 'can:manage-money'])->name('payments.index');
+
 Route::middleware(['auth', 'can:manage-money'])->prefix('invoices')->name('invoices.')->group(function () {
     Route::get('/', \App\Livewire\Invoices\Index::class)->name('index');
     Route::get('create', \App\Livewire\Invoices\Create::class)->name('create');
