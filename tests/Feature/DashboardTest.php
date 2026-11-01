@@ -17,21 +17,40 @@ uses(RefreshDatabase::class);
 
 beforeEach(fn () => $this->seed(RoleSeeder::class));
 
+function dbPay(Client $c, int $cents, string $on, ?int $local, string $type = 'project'): void
+{
+    Payment::create(['client_id' => $c->id, 'amount_cents' => $cents, 'paid_on' => $on, 'type' => PaymentType::Project,
+        'local_amount_cents' => $local, 'local_currency' => $local === null ? null : 'INR', 'exchange_rate' => $local === null ? null : '1']);
+}
+
 function dbUser(string $role): User
 {
     return User::factory()->create()->assignRole($role);
 }
 
-it('owner sees money cards with per-currency amounts', function () {
+it('owner sees single local-currency money cards, never a second currency line', function () {
     $usd = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
     $inr = Client::create(['name' => 'Bharat', 'currency' => 'INR', 'billing_mode' => 'fixed']);
-    Payment::create(['client_id' => $usd->id, 'amount_cents' => 123400, 'paid_on' => now()->toDateString(), 'type' => PaymentType::Project]);
-    Payment::create(['client_id' => $inr->id, 'amount_cents' => 556600, 'paid_on' => now()->toDateString(), 'type' => PaymentType::Project]);
+    dbPay($usd, 123400, now()->toDateString(), 10_000_000);
+    dbPay($inr, 556600, now()->toDateString(), 556600);
 
     $r = actingAs(dbUser('super_admin'))->get('/dashboard');
     $r->assertOk();
     $r->assertSee('Received')->assertSee('Outstanding')->assertSee('Active clients')->assertSee('This month');
-    $r->assertSee('$1,234.00', false)->assertSee('₹5,566.00', false);
+    $r->assertSee('₹105,566.00', false)->assertDontSee('$1,234.00', false)->assertDontSee('₹5,566.00', false);
+    $r->assertDontSee('exchange rate and are left out')->assertDontSee('without a rate');
+});
+
+it('dashboard shows notices only when payments or clients lack a rate', function () {
+    $usd = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    $eur = Client::create(['name' => 'Euro', 'currency' => 'EUR', 'billing_mode' => 'fixed']);
+    dbPay($usd, 1000, now()->toDateString(), null);
+    $l = \App\Models\BillableLine::create(['client_id' => $eur->id, 'description' => 'W', 'quantity' => 1, 'unit_price_cents' => 5000, 'amount_cents' => 5000]);
+    app(\App\Services\InvoiceService::class)->create($eur, [$l->id])->update(['status' => 'sent']);
+
+    actingAs(dbUser('super_admin'))->get('/dashboard')->assertOk()
+        ->assertSee('1 payments have no exchange rate')->assertSee(route('payments.index'), false)
+        ->assertSee('1 clients without a rate');
 });
 
 it('owner period falls back to 30 when invalid', function () {
@@ -69,23 +88,23 @@ it('client portal dashboard shows own balance and not other clients', function (
     $r->assertOk()->assertSee('Credit $250.00', false)->assertDontSee('Other Co');
 });
 
-it('owner sees a revenue chart per currency with tooltips', function () {
+it('owner sees one revenue chart in the local currency with tooltips', function () {
     $usd = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
     $inr = Client::create(['name' => 'Bharat', 'currency' => 'INR', 'billing_mode' => 'fixed']);
-    Payment::create(['client_id' => $usd->id, 'amount_cents' => 123400, 'paid_on' => now()->toDateString(), 'type' => PaymentType::Project]);
-    Payment::create(['client_id' => $inr->id, 'amount_cents' => 556600, 'paid_on' => now()->subDay()->toDateString(), 'type' => PaymentType::Project]);
+    dbPay($usd, 123400, now()->toDateString(), 10_000_000);
+    dbPay($inr, 556600, now()->subDay()->toDateString(), 556600);
 
     $r = actingAs(dbUser('super_admin'))->get('/dashboard');
-    $r->assertOk()->assertSee('Revenue')->assertSee('Payments received, per currency')
-        ->assertSee('aria-label="Revenue in USD"', false)->assertSee('aria-label="Revenue in INR"', false)
-        ->assertSee(now()->format('M j').': $1,234.00', false)
+    $r->assertOk()->assertSee('Revenue')->assertSee('Payments received, in INR')
+        ->assertSee('aria-label="Revenue in INR"', false)->assertDontSee('aria-label="Revenue in USD"', false)
+        ->assertSee(now()->format('M j').': ₹100,000.00', false)
         ->assertSee(now()->subDay()->format('M j').': ₹5,566.00', false)
         ->assertDontSee('No payments in this period');
 });
 
 it('chart shows an empty state when nothing was received in the period', function () {
     $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
-    Payment::create(['client_id' => $c->id, 'amount_cents' => 5000, 'paid_on' => now()->subDays(200)->toDateString(), 'type' => PaymentType::Project]);
+    dbPay($c, 5000, now()->subDays(200)->toDateString(), 400000);
 
     actingAs(dbUser('super_admin'))->get('/dashboard')->assertOk()
         ->assertSee('No payments in this period')->assertDontSee('aria-label="Revenue in', false);
@@ -93,11 +112,11 @@ it('chart shows an empty state when nothing was received in the period', functio
 
 it('chart period switches granularity: 90 days by week, 12 months by month', function () {
     $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
-    Payment::create(['client_id' => $c->id, 'amount_cents' => 5000, 'paid_on' => now()->toDateString(), 'type' => PaymentType::Project]);
+    dbPay($c, 5000, now()->toDateString(), 400000);
     actingAs(dbUser('super_admin'));
 
     Livewire::test('dashboard')->set('period', 90)->assertSee('by week');
-    Livewire::test('dashboard')->set('period', 365)->assertSee('by month, last 12 months')->assertSee(now()->format('M Y').': $50.00', false);
+    Livewire::test('dashboard')->set('period', 365)->assertSee('by month, last 12 months')->assertSee(now()->format('M Y').': ₹4,000.00', false);
 });
 
 it('developers and clients never see the revenue chart', function (string $role) {
@@ -110,5 +129,5 @@ it('developers and clients never see the revenue chart', function (string $role)
     }
 
     actingAs($u)->get($role === 'client' ? '/portal' : '/dashboard')->assertOk()
-        ->assertDontSee('Revenue')->assertDontSee('Payments received, per currency');
+        ->assertDontSee('Revenue')->assertDontSee('Payments received, in');
 })->with(['developer', 'client']);

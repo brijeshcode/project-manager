@@ -1,6 +1,5 @@
 @php
-    $lines = fn (array $byCur) => collect($byCur)->map(fn ($c, $cur) => ['label' => $cur, 'value' => \App\Support\Money::format($c, $cur)])->values()->all()
-        ?: [['label' => '', 'value' => '0']];
+    $loc = fn (int $c) => \App\Support\Money::format($c, $money['currency']);
     $user = auth()->user();
     $first = explode(' ', trim($user->name))[0] ?? $user->name;
 @endphp
@@ -17,11 +16,18 @@
         </x-slot>
     </x-ui.page-header>
 
+    @if ($money['payments_missing_rate'] > 0)
+        <p class="mb-4 text-sm text-amber-700 dark:text-amber-400">{{ $money['payments_missing_rate'] }} payments have no exchange rate and are left out. <a href="{{ route('payments.index') }}" wire:navigate class="link">Set rates</a></p>
+    @endif
+    @if ($money['outstanding_missing_rate'] > 0)
+        <p class="mb-4 text-sm text-amber-700 dark:text-amber-400">{{ $money['outstanding_missing_rate'] }} clients without a rate are left out of Outstanding.</p>
+    @endif
+
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <x-ui.stat label="Received" icon="currency" color="green" :lines="$lines($money['received'])" :hint="$period == 365 ? 'last 12 months' : 'last '.$period.' days'" />
-        <x-ui.stat label="Outstanding" icon="credit-card" color="yellow" :lines="$lines($money['outstanding'])" :hint="$owing.' clients owe'" />
+        <x-ui.stat label="Received" icon="currency" color="green" :value="$loc($money['received'])" :hint="$period == 365 ? 'last 12 months' : 'last '.$period.' days'" />
+        <x-ui.stat label="Outstanding" icon="credit-card" color="yellow" :value="$loc($money['outstanding'])" :hint="$owing.' clients owe'" />
         <x-ui.stat label="Active clients" icon="users" color="blue" :value="$activeClients" :hint="$clientCount.' total'" />
-        <x-ui.stat label="This month" icon="document" color="purple" :lines="$lines($money['this_month'])" />
+        <x-ui.stat label="This month" icon="document" color="purple" :value="$loc($money['this_month'])" />
     </div>
 
     <div class="mt-4 grid gap-4 sm:grid-cols-3">
@@ -33,13 +39,13 @@
     <div class="card mt-6">
         <div class="mb-4">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Revenue</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Payments received, per currency ({{ $period == 365 ? 'by month, last 12 months' : ($period == 90 ? 'by week' : 'by day') }}).</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Payments received, in {{ $money['currency'] }} ({{ $period == 365 ? 'by month, last 12 months' : ($period == 90 ? 'by week' : 'by day') }}).</p>
         </div>
-        @forelse ($revenue as $currency => $points)
-            <x-ui.bar-chart :points="$points" :currency="$currency" class="{{ $loop->first ? '' : 'mt-6' }}" />
-        @empty
+        @if ($revenue)
+            <x-ui.bar-chart :points="$revenue" :currency="$money['currency']" />
+        @else
             <x-ui.empty-state title="No payments in this period" message="Record a payment and it will show up here." name="credit-card" />
-        @endforelse
+        @endif
     </div>
 
     <div class="mt-8 grid gap-6 lg:grid-cols-3">

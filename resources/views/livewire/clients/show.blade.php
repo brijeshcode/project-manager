@@ -44,8 +44,8 @@
 
     {{-- Financial summary --}}
     <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <x-ui.stat label="Total Billed" :value="$fmt($billed)" icon="currency" color="green" />
-        <x-ui.stat label="Total Received" :value="$fmt($received)" icon="credit-card" color="blue" />
+        <x-ui.stat label="Total Billed" :value="$fmt($billed)" :hint="$billedLocal !== null ? \App\Support\Money::format($billedLocal, $localCode) : null" icon="currency" color="green" />
+        <x-ui.stat label="Total Received" :value="$fmt($received)" :hint="$receivedLocal !== null ? \App\Support\Money::format($receivedLocal, $localCode) : null" icon="credit-card" color="blue" />
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 @if ($balance < 0)
@@ -151,7 +151,11 @@
                             @foreach ($payments as $payment)
                                 <tr wire:key="payment-{{ $payment->id }}">
                                     <td class="table-td">{{ $payment->paid_on?->format('M j, Y') }}</td>
-                                    <td class="table-td tabular-nums font-medium">{{ \App\Support\Money::format($payment->amount_cents, $client->currency) }}</td>
+                                    <td class="table-td tabular-nums font-medium">{{ \App\Support\Money::format($payment->amount_cents, $client->currency) }}
+                                        @if ($payment->hasLocal() && strtoupper($client->currency) !== $payment->local_currency)
+                                            <div class="text-xs font-normal text-gray-500 dark:text-gray-400">{{ \App\Support\Money::format($payment->local_amount_cents, $payment->local_currency) }} @ {{ rtrim(rtrim($payment->exchange_rate, '0'), '.') }}</div>
+                                        @endif
+                                    </td>
                                     <td class="table-td">{{ str_replace('_', ' ', ucfirst($payment->type->value)) }}</td>
                                     <td class="table-td">{{ $payment->project?->name ?? '—' }}</td>
                                     <td class="table-td">

@@ -5,53 +5,68 @@ namespace App\Support;
 use App\Models\Client;
 use App\Models\Payment;
 use App\Services\ClientAccount;
+use App\Services\LocalCurrency;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 class DashboardMoney
 {
-    /** Per-client-currency totals in cents; currencies are never mixed. */
-    public static function forPeriod(CarbonInterface $from, CarbonInterface $to): array
+    /**
+     * Local-currency totals in cents, integer math only. Received / this month sum the stored local amounts
+     * of payments recorded in the current local currency; NULL-local payments are excluded and counted.
+     * Outstanding converts each owing client's balance at the active rate; clients without one are skipped and counted.
+     */
+    public static function forPeriodLocal(CarbonInterface $from, CarbonInterface $to): array
     {
-        $received = fn (CarbonInterface $a, CarbonInterface $b) => Payment::query()
-            ->join('clients', 'clients.id', '=', 'payments.client_id')
-            ->whereBetween('payments.paid_on', [$a->toDateString(), $b->toDateString()])
-            ->groupBy('clients.currency')
-            ->selectRaw('clients.currency as cur, SUM(payments.amount_cents) as total')
-            ->pluck('total', 'cur')
-            ->map(fn ($v) => (int) $v)
-            ->all();
+        $local = LocalCurrency::code();
+        $received = fn (CarbonInterface $a, CarbonInterface $b) => (int) Payment::query()
+            ->whereDate('paid_on', '>=', $a->toDateString())->whereDate('paid_on', '<=', $b->toDateString())
+            ->where('local_currency', $local)
+            ->sum('local_amount_cents');
 
-        $outstanding = [];
-        $account = app(ClientAccount::class);
-        foreach (Client::all() as $client) {
-            $balance = $account->balanceCents($client);
-            if ($balance < 0) {
-                $outstanding[$client->currency] = ($outstanding[$client->currency] ?? 0) + abs($balance);
+        $outstanding = 0;
+        $missing = 0;
+        $clients = Client::query()->pluck('currency', 'id');
+        $rates = [];
+        foreach (app(ClientAccount::class)->totals($clients->keys()->all()) as $id => $t) {
+            $balance = $t['received'] - $t['billed'];
+            if ($balance >= 0) {
+                continue;
+            }
+            $cur = strtoupper($clients[$id]);
+            $rate = $rates[$cur] ??= LocalCurrency::rateFor($cur);
+            if ($rate === null) {
+                $missing++;
+            } else {
+                $outstanding += Money::convert(abs($balance), $rate);
             }
         }
 
         return [
+            'currency' => $local,
             'received' => $received($from, $to),
-            'outstanding' => $outstanding,
             'this_month' => $received(now()->startOfMonth(), now()->endOfMonth()),
+            'outstanding' => $outstanding,
+            'outstanding_missing_rate' => $missing,
+            'payments_missing_rate' => Payment::query()
+                ->whereDate('paid_on', '>=', $from->toDateString())->whereDate('paid_on', '<=', $to->toDateString())
+                ->whereNull('local_amount_cents')->count(),
         ];
     }
 
     /**
-     * Payments received per bucket, per client currency (never mixed), zero-filled.
-     * $granularity: 'day' | 'week' (Monday start) | 'month'.
-     * Returns [CUR => [['label' => 'Oct 5', 'cents' => 1500], ...]]; [] when nothing was received.
+     * Local-currency payments per bucket, zero-filled. $granularity: 'day' | 'week' (Monday start) | 'month'.
+     * Returns [['label' => 'Oct 5', 'cents' => 1500], ...]; [] when nothing was received.
      */
-    public static function revenueSeries(CarbonInterface $from, CarbonInterface $to, string $granularity = 'day'): array
+    public static function revenueSeriesLocal(CarbonInterface $from, CarbonInterface $to, string $granularity = 'day'): array
     {
         $rows = Payment::query()
-            ->join('clients', 'clients.id', '=', 'payments.client_id')
-            ->whereDate('payments.paid_on', '>=', $from->toDateString())
-            ->whereDate('payments.paid_on', '<=', $to->toDateString())
-            ->groupBy('clients.currency', DB::raw('DATE(payments.paid_on)'))
-            ->selectRaw('clients.currency as cur, DATE(payments.paid_on) as d, SUM(payments.amount_cents) as total')
+            ->whereDate('paid_on', '>=', $from->toDateString())
+            ->whereDate('paid_on', '<=', $to->toDateString())
+            ->where('local_currency', LocalCurrency::code())
+            ->groupBy(DB::raw('DATE(paid_on)'))
+            ->selectRaw('DATE(paid_on) as d, SUM(local_amount_cents) as total')
             ->get();
 
         if ($rows->isEmpty()) {
@@ -77,16 +92,15 @@ class DashboardMoney
             $buckets[$d->toDateString()] = $label($d);
         }
 
+        $sums = [];
+        foreach ($rows as $row) {
+            $k = $key(Carbon::parse($row->d));
+            $sums[$k] = ($sums[$k] ?? 0) + (int) $row->total;
+        }
+
         $series = [];
-        foreach ($rows->groupBy('cur') as $cur => $group) {
-            $sums = [];
-            foreach ($group as $row) {
-                $k = $key(Carbon::parse($row->d));
-                $sums[$k] = ($sums[$k] ?? 0) + (int) $row->total;
-            }
-            foreach ($buckets as $k => $text) {
-                $series[$cur][] = ['label' => $text, 'cents' => $sums[$k] ?? 0];
-            }
+        foreach ($buckets as $k => $text) {
+            $series[] = ['label' => $text, 'cents' => $sums[$k] ?? 0];
         }
 
         return $series;

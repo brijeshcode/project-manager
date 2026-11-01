@@ -37,7 +37,7 @@ class Dashboard extends Component
             default => [now()->subMonths(11)->startOfMonth(), 'month'],
         };
 
-        return DashboardMoney::revenueSeries($from, now(), $granularity);
+        return DashboardMoney::revenueSeriesLocal($from, now(), $granularity);
     }
 
     public function render()
@@ -46,7 +46,7 @@ class Dashboard extends Component
 
         return view('livewire.dashboard', [
             'revenue' => $this->revenueSeries(),
-            'money' => DashboardMoney::forPeriod(now()->subDays($this->period - 1)->startOfDay(), now()),
+            'money' => DashboardMoney::forPeriodLocal(now()->subDays($this->period - 1)->startOfDay(), now()),
             'owing' => DashboardMoney::owingClients(),
             'clientCount' => Client::count(),
             'activeClients' => Client::whereHas('projects', fn ($q) => $q->where('status', 'active'))->count(),
