@@ -22,14 +22,14 @@ class Show extends Component
     {
         $this->authorize('manage-money');
         $svc->void(Invoice::findOrFail($this->invoiceId));
-        session()->flash('status', 'Invoice voided.');
+        $this->dispatch('toast', type: 'success', message: 'Invoice voided.');
     }
 
     public function resend(InvoiceService $svc): void
     {
         $this->authorize('manage-money');
         $ok = $svc->resend(Invoice::with('client')->findOrFail($this->invoiceId));
-        session()->flash('status', $ok ? 'Invoice email queued.' : 'Could not email this invoice (void, no contact email, or mail error).');
+        $this->dispatch('toast', type: $ok ? 'success' : 'error', message: $ok ? 'Invoice email queued.' : 'Could not email this invoice (void, no contact email, or mail error).');
     }
 
     public function render()

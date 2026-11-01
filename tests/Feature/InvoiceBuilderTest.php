@@ -205,7 +205,7 @@ it('rejects INR rate 10000 and 51 custom lines', function () {
 it('voiding twice is a no-op and flashes status', function () {
     $c = ibClient();
     $inv = app(InvoiceService::class)->create($c, [ibLine($c, 1000)->id]);
-    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->call('void')->call('void')->assertHasNoErrors();
+    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])->call('void')->assertDispatched('toast', type: 'success', message: 'Invoice voided.')->call('void')->assertHasNoErrors();
     expect($inv->fresh()->status)->toBe('void');
 });
 
@@ -221,4 +221,17 @@ it('choose requires a valid client and non-owners cannot call builder actions', 
         $this->actingAs(User::factory()->create()->assignRole('developer'));
         $u->call(...$call)->assertForbidden();
     }
+});
+
+it('resend dispatches a success toast, and an error toast when it cannot send', function () {
+    Mail::fake();
+    $c = ibClient();
+    $inv = app(InvoiceService::class)->create($c, [ibLine($c, 1000)->id]);
+    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv])
+        ->call('resend')->assertDispatched('toast', type: 'success', message: 'Invoice email queued.');
+
+    $c2 = ibClient(['name' => 'NoMail', 'contact_email' => null]);
+    $inv2 = app(InvoiceService::class)->create($c2, [ibLine($c2, 1000)->id]);
+    Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv2])
+        ->call('resend')->assertDispatched('toast', type: 'error');
 });
