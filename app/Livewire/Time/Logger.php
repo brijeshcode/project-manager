@@ -62,8 +62,10 @@ class Logger extends Component
         return view('livewire.time.logger', [
             'entries' => TimeEntry::where('timeable_type', $this->timeableType)
                 ->where('timeable_id', $this->timeableId)
+                ->with('user:id,name')
                 ->orderByDesc('worked_on')
-                ->get(),
+                ->get()
+                ->groupBy('user_id'),
         ]);
     }
 }

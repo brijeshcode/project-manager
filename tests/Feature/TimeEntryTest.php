@@ -324,3 +324,21 @@ it('logger log() rejects tampering with a task from another project', function (
     // No time entry must have been created for project-A task
     expect(TimeEntry::where('timeable_id', $taskA->id)->count())->toBe(0);
 });
+
+it('Logger lists time per user with a subtotal each', function () {
+    $project = timeProject();
+    $module  = timeModule($project);
+    $devA    = timeMember($project, 'developer');
+    $devB    = timeMember($project, 'developer');
+    $task    = timeTask($module, $devA);
+    $task->assignees()->attach([$devA->id, $devB->id]);
+
+    foreach ([[$devA, 1.5], [$devA, 2.0], [$devB, 4.0]] as [$u, $h]) {
+        TimeEntry::create(['timeable_type' => Task::class, 'timeable_id' => $task->id, 'user_id' => $u->id, 'hours' => $h, 'worked_on' => '2026-10-01']);
+    }
+
+    Livewire::actingAs($devA)
+        ->test(Logger::class, ['timeable' => $task])
+        ->assertSee($devA->name)->assertSee($devB->name)
+        ->assertSee('3.5h')->assertSee('4h');
+});

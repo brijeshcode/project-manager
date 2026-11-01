@@ -103,12 +103,11 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
 
 ## Phase 1 and 2 leftovers
 
-Cleared on branch `cleanup-leftovers`: per-project section scope, `approveTask` now 422s on a non-Done task,
+Cleared on branch `cleanup-leftovers`: Time Logger now groups entries per user with subtotals, per-project section scope, `approveTask` now 422s on a non-Done task,
 resource edit/delete (files + comments cleaned up), item-type guard, download `nosniff` + `whereNumber`,
 shared `rpSetup()` moved to `tests/Pest.php`, comments oldest-first, null `client_id` guard.
 
 Still open by choice:
-- **Time Logger** lists every user's entries for a task, showing only date and hours (no names) — kept as the team's total.
 - **Flat-rate time cost** `derivedCost()` returns the flat amount per entry; `ProjectEconomics` de-dups once per project.
 - `client_approval` and task `section` stay raw strings (two values each; an enum adds nothing yet).
 - Cypress cannot run on this machine (Electron crash) — run specs on CI.

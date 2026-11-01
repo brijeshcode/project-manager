@@ -14,14 +14,20 @@
         <button type="submit" class="btn btn-primary h-8 px-3 py-1 text-xs whitespace-nowrap">Log time</button>
     </form>
 
-    @if($entries->isNotEmpty())
-        <ul class="mt-3 divide-y divide-slate-100">
-            @foreach($entries as $entry)
-                <li class="flex items-center justify-between py-1.5 text-xs text-slate-600">
-                    <span>{{ $entry->worked_on->format('M j') }}</span>
-                    <span class="font-semibold text-slate-800">{{ $entry->hours }}h</span>
-                </li>
-            @endforeach
-        </ul>
-    @endif
+    @foreach($entries as $userEntries)
+        <div class="mt-3" wire:key="logger-user-{{ $userEntries->first()->user_id }}">
+            <p class="flex justify-between text-xs font-semibold text-slate-800">
+                <span>{{ $userEntries->first()->user?->name ?? 'Unknown' }}</span>
+                <span>{{ $userEntries->sum('hours') }}h</span>
+            </p>
+            <ul class="divide-y divide-slate-100">
+                @foreach($userEntries as $entry)
+                    <li class="flex items-center justify-between py-1.5 text-xs text-slate-600">
+                        <span>{{ $entry->worked_on->format('M j') }}</span>
+                        <span>{{ $entry->hours }}h</span>
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    @endforeach
 </div>
