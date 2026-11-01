@@ -68,3 +68,47 @@ it('client portal dashboard shows own balance and not other clients', function (
     $r = actingAs($u)->get('/portal');
     $r->assertOk()->assertSee('Credit $250.00', false)->assertDontSee('Other Co');
 });
+
+it('owner sees a revenue chart per currency with tooltips', function () {
+    $usd = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    $inr = Client::create(['name' => 'Bharat', 'currency' => 'INR', 'billing_mode' => 'fixed']);
+    Payment::create(['client_id' => $usd->id, 'amount_cents' => 123400, 'paid_on' => now()->toDateString(), 'type' => PaymentType::Project]);
+    Payment::create(['client_id' => $inr->id, 'amount_cents' => 556600, 'paid_on' => now()->subDay()->toDateString(), 'type' => PaymentType::Project]);
+
+    $r = actingAs(dbUser('super_admin'))->get('/dashboard');
+    $r->assertOk()->assertSee('Revenue')->assertSee('Payments received, per currency')
+        ->assertSee('aria-label="Revenue in USD"', false)->assertSee('aria-label="Revenue in INR"', false)
+        ->assertSee(now()->format('M j').': $1,234.00', false)
+        ->assertSee(now()->subDay()->format('M j').': ₹5,566.00', false)
+        ->assertDontSee('No payments in this period');
+});
+
+it('chart shows an empty state when nothing was received in the period', function () {
+    $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    Payment::create(['client_id' => $c->id, 'amount_cents' => 5000, 'paid_on' => now()->subDays(200)->toDateString(), 'type' => PaymentType::Project]);
+
+    actingAs(dbUser('super_admin'))->get('/dashboard')->assertOk()
+        ->assertSee('No payments in this period')->assertDontSee('aria-label="Revenue in', false);
+});
+
+it('chart period switches granularity: 90 days by week, 12 months by month', function () {
+    $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    Payment::create(['client_id' => $c->id, 'amount_cents' => 5000, 'paid_on' => now()->toDateString(), 'type' => PaymentType::Project]);
+    actingAs(dbUser('super_admin'));
+
+    Livewire::test('dashboard')->set('period', 90)->assertSee('by week');
+    Livewire::test('dashboard')->set('period', 365)->assertSee('by month, last 12 months')->assertSee(now()->format('M Y').': $50.00', false);
+});
+
+it('developers and clients never see the revenue chart', function (string $role) {
+    $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    Payment::create(['client_id' => $c->id, 'amount_cents' => 5000, 'paid_on' => now()->toDateString(), 'type' => PaymentType::Project]);
+
+    $u = dbUser($role);
+    if ($role === 'client') {
+        $u->update(['client_id' => $c->id]);
+    }
+
+    actingAs($u)->get($role === 'client' ? '/portal' : '/dashboard')->assertOk()
+        ->assertDontSee('Revenue')->assertDontSee('Payments received, per currency');
+})->with(['developer', 'client']);

@@ -28,11 +28,24 @@ class Dashboard extends Component
         abort_unless(auth()->user()->can('manage-money'), 403);
     }
 
+    /** Chart range + bucket size for the selected period (12 whole calendar months for 365). */
+    private function revenueSeries(): array
+    {
+        [$from, $granularity] = match ($this->period) {
+            7, 30 => [now()->subDays($this->period - 1)->startOfDay(), 'day'],
+            90 => [now()->subDays(89)->startOfDay(), 'week'],
+            default => [now()->subMonths(11)->startOfMonth(), 'month'],
+        };
+
+        return DashboardMoney::revenueSeries($from, now(), $granularity);
+    }
+
     public function render()
     {
         abort_unless(auth()->user()->can('manage-money'), 403);
 
         return view('livewire.dashboard', [
+            'revenue' => $this->revenueSeries(),
             'money' => DashboardMoney::forPeriod(now()->subDays($this->period - 1)->startOfDay(), now()),
             'owing' => DashboardMoney::owingClients(),
             'clientCount' => Client::count(),
