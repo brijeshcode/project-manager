@@ -19,6 +19,38 @@ class Money
         return $m[1] === '-' ? -$cents : $cents;
     }
 
+    public static function isValidRate(string $rate): bool
+    {
+        return preg_match('/^\d{1,6}(\.\d{1,6})?$/', $rate) === 1 && (float) $rate > 0;
+    }
+
+    /**
+     * cents * rate, rounded half-up, in pure integer math (no float, no bcmath).
+     * Rate becomes micro-units R (< 1e12); cents = q*1e6 + r so r*R < 1e18 never overflows.
+     */
+    public static function convert(int $cents, string $rate): int
+    {
+        if (! self::isValidRate($rate)) {
+            throw new \InvalidArgumentException("Invalid exchange rate: {$rate}");
+        }
+        [$i, $f] = array_pad(explode('.', $rate), 2, '');
+        $R = (int) ($i.str_pad($f, 6, '0'));
+        $neg = $cents < 0;
+        if ($cents === PHP_INT_MIN) {
+            throw new \InvalidArgumentException('Amount too large to convert.');
+        }
+        $abs = abs($cents);
+        $q = intdiv($abs, 1_000_000);
+        $r = $abs % 1_000_000;
+        $high = $q === 0 ? 0 : ($R > intdiv(PHP_INT_MAX, $q) ? null : $q * $R);
+        $low = intdiv($r * $R + 500_000, 1_000_000);
+        if ($high === null || $high > PHP_INT_MAX - $low) {
+            throw new \InvalidArgumentException('Converted amount too large.');
+        }
+
+        return $neg ? -($high + $low) : $high + $low;
+    }
+
     public static function format(int $cents, string $currency): string
     {
         $currency = strtoupper($currency);
