@@ -44,7 +44,15 @@ class Dashboard extends Component
     {
         abort_unless(auth()->user()->can('manage-money'), 403);
 
+        $from = now()->subDays($this->period - 1)->startOfDay();
+
         return view('livewire.dashboard', [
+            'statusCounts' => DashboardMoney::invoiceStatusCounts($from, now()),
+            'overdue' => DashboardMoney::overdueCount(),
+            'sentThisMonth' => DashboardMoney::sentThisMonthCount(),
+            'recentInvoices' => DashboardMoney::recentInvoices(),
+            'upcoming' => DashboardMoney::upcomingDues(),
+            'topClients' => DashboardMoney::topClients($from, now()),
             'revenue' => $this->revenueSeries(),
             'money' => DashboardMoney::forPeriodLocal(now()->subDays($this->period - 1)->startOfDay(), now()),
             'owing' => DashboardMoney::owingClients(),

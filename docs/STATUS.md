@@ -205,3 +205,9 @@ Blue/slate look with light + dark mode across every screen.
 - New `clients` columns: `type` (company/individual), `client_code` (auto `CLI-0001`, unique, back-filled), `status` (active/inactive/archived), `website`, `city`, `state`, `postal_code`, `country`, `notes` (internal, never shown in the portal). Bank details are never shown on the Show page.
 - Delete is a hard delete, allowed only when the client has no projects, invoices, payments, billable lines, recurring charges or users; otherwise an error toast says what blocks it. To retire a client, set its status to archived in the edit form.
 - `projects/create?client=ID` preselects the client (used by the Add Project links).
+
+## Dashboard (reference design)
+- The owner dashboard follows the old panel: header (period + Refresh) -> Total Revenue / Outstanding Balance / Active Clients / This Month -> Revenue Trend | Payment Status -> Quick Actions -> Recent Invoices | Top Clients -> Upcoming Due Dates -> a "Work" section (projects, open tasks, hours, recent projects). Owner-only, all money in the local currency.
+- Charts are server-rendered SVG, no JS: `ui/line-chart` (smooth line, dot per point, grid both ways, "nice" integer-cent y scale; empty = 0.00-1.00) and `ui/doughnut` (stroke-dasharray segments, legend always shown).
+- Payment Status classifies invoices issued in the period: void; sent and paid (payments >= positive total) = Paid; sent, unpaid and `due_on` before today = Overdue; otherwise Pending (due today / no due date). Logic: `DashboardMoney::invoiceState` / `invoiceStatusCounts`.
+- Top Clients rank by local revenue in the period (clients with 0 still listed); Outstanding per client shows "—" when no rate exists.

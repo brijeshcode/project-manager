@@ -36,8 +36,8 @@ it('owner sees single local-currency money cards, never a second currency line',
 
     $r = actingAs(dbUser('super_admin'))->get('/dashboard');
     $r->assertOk();
-    $r->assertSee('Received')->assertSee('Outstanding')->assertSee('Active clients')->assertSee('This month');
-    $r->assertSee('₹105,566.00', false)->assertDontSee('$1,234.00', false)->assertDontSee('₹5,566.00', false);
+    $r->assertSee('Total Revenue')->assertSee('Outstanding Balance')->assertSee('Active Clients')->assertSee('This Month');
+    $r->assertSee('₹105,566.00', false)->assertDontSee('$1,234.00', false);
     $r->assertDontSee('no exchange rate')->assertDontSee('without a rate');
 });
 
@@ -73,7 +73,7 @@ it('developer sees no money cards but sees own work', function () {
 
     $r = actingAs($dev)->get('/dashboard');
     $r->assertOk();
-    $r->assertDontSee('Outstanding')->assertDontSee('Received');
+    $r->assertDontSee('Outstanding')->assertDontSee('Total Revenue');
     $r->assertSee('Your projects')->assertSee('Mine Proj')->assertDontSee('Hidden Proj');
 });
 
@@ -130,4 +130,53 @@ it('developers and clients never see the revenue chart', function (string $role)
 
     actingAs($u)->get($role === 'client' ? '/portal' : '/dashboard')->assertOk()
         ->assertDontSee('Revenue')->assertDontSee('Payments received, in');
+})->with(['developer', 'client']);
+
+it('owner dashboard shows every reference section in order with sub-lines and quick actions', function () {
+    $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    Client::create(['name' => 'Beta', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    $mk = fn ($o) => \App\Models\Invoice::create($o + ['client_id' => $c->id, 'status' => 'sent', 'issued_on' => now()->toDateString(), 'currency' => 'USD',
+        'subtotal_cents' => 10000, 'tax_percent' => 0, 'tax_cents' => 0, 'total_cents' => 10000]);
+    $mk(['number' => 'INV-OVER', 'due_on' => now()->subDays(2)->toDateString()]);
+    $mk(['number' => 'INV-SOON', 'due_on' => now()->addDays(3)->toDateString()]);
+    Project::create(['client_id' => $c->id, 'name' => 'Work Proj', 'status' => 'active']);
+
+    $r = actingAs(dbUser('super_admin'))->get('/dashboard');
+    $r->assertOk()
+        ->assertSeeInOrder(['Dashboard', "Welcome back! Here&#039;s your business overview.", 'Total Revenue', 'Outstanding Balance', 'Active Clients', 'This Month',
+            'Revenue Trend', 'Payment Status', 'Quick Actions', 'Recent Invoices', 'Top Clients', 'Upcoming Due Dates', 'Work', 'Recent projects', 'Work Proj'], false)
+        ->assertSee('1 overdue invoice')->assertSee('2 total clients')->assertSee('2 invoices sent')
+        ->assertSee('Projects')->assertSee('Open tasks')->assertSee('Hours this week')
+        ->assertSee('href="'.route('invoices.create').'"', false)->assertSee('href="'.route('payments.index').'"', false)
+        ->assertSee('href="'.route('clients.create').'"', false)->assertSee('href="'.route('projects.create').'"', false)
+        ->assertSee(route('invoices.index', ['status' => 'sent']), false)
+        ->assertSee('INV-SOON')->assertSee('Due '.now()->addDays(3)->format('M j, Y'))
+        ->assertSee('Outstanding: ')->assertSee('Paid')->assertSee('Overdue')->assertSee('Void')
+        ->assertDontSee('No upcoming due dates')->assertDontSee('No recent invoices');
+});
+
+it('owner dashboard shows reference empty states', function () {
+    actingAs(dbUser('super_admin'))->get('/dashboard')->assertOk()
+        ->assertSee('No recent invoices')->assertSee('No upcoming due dates')->assertSee('No invoices in this period');
+});
+
+it('period switching keeps the dashboard rendering for every period', function () {
+    actingAs(dbUser('super_admin'));
+    foreach ([7, 30, 90, 365] as $p) {
+        Livewire::test('dashboard')->set('period', $p)->assertSet('period', $p)->assertSee('Payment Status');
+    }
+});
+
+it('developers and clients get none of the new owner sections', function (string $role) {
+    $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    $u = dbUser($role);
+    if ($role === 'client') {
+        $u->update(['client_id' => $c->id]);
+    }
+
+    $r = actingAs($u)->get($role === 'client' ? '/portal' : '/dashboard');
+    $r->assertOk();
+    foreach (['Payment Status', 'Quick Actions', 'Top Clients', 'Upcoming Due Dates', 'Recent Invoices', 'Revenue Trend'] as $t) {
+        $r->assertDontSee($t);
+    }
 })->with(['developer', 'client']);
