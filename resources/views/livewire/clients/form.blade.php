@@ -7,7 +7,7 @@
 
         {{-- Base --}}
         <fieldset class="space-y-4">
-            <legend class="text-sm font-semibold text-gray-700 uppercase tracking-wide">General</legend>
+            <legend class="text-sm font-semibold text-slate-700 uppercase tracking-wide">General</legend>
             <div>
                 <label for="name" class="label">Name</label>
                 <input wire:model="name" id="name" type="text"
@@ -33,7 +33,7 @@
 
         {{-- Contact --}}
         <fieldset class="space-y-4">
-            <legend class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Contact</legend>
+            <legend class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Contact</legend>
             <div>
                 <label for="contact_name" class="label">Contact Name</label>
                 <input wire:model="contact_name" id="contact_name" type="text"
@@ -62,7 +62,7 @@
 
         {{-- Billing --}}
         <fieldset class="space-y-4">
-            <legend class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Billing</legend>
+            <legend class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Billing</legend>
             <div>
                 <label for="tax_number" class="label">Tax / VAT Number</label>
                 <input wire:model="tax_number" id="tax_number" type="text"
@@ -85,7 +85,7 @@
 
         {{-- Bank (sensitive) --}}
         <fieldset class="space-y-4">
-            <legend class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Bank Details</legend>
+            <legend class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Bank Details</legend>
             <div>
                 <label for="bank_name" class="label">Bank Name</label>
                 <input wire:model="bank_name" id="bank_name" type="text"

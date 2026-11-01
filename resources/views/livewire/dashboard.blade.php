@@ -18,7 +18,7 @@
     </x-ui.page-header>
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <x-ui.stat label="Received" icon="currency" color="green" :lines="$lines($money['received'])" :hint="'last '.$period.' days'" />
+        <x-ui.stat label="Received" icon="currency" color="green" :lines="$lines($money['received'])" :hint="$period == 365 ? 'last 12 months' : 'last '.$period.' days'" />
         <x-ui.stat label="Outstanding" icon="credit-card" color="yellow" :lines="$lines($money['outstanding'])" :hint="$owing.' clients owe'" />
         <x-ui.stat label="Active clients" icon="users" color="blue" :value="$activeClients" :hint="$clientCount.' total'" />
         <x-ui.stat label="This month" icon="document" color="purple" :lines="$lines($money['this_month'])" />

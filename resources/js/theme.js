@@ -8,3 +8,11 @@ document.addEventListener('alpine:init', () => {
         },
     });
 });
+
+// Livewire navigate swaps <html> attributes (dropping `dark`); reapply right after the swap, before paint.
+document.addEventListener('livewire:navigating', (e) => {
+    e.detail.onSwap(() => {
+        const store = window.Alpine && window.Alpine.store('theme');
+        if (store) document.documentElement.classList.toggle('dark', store.dark);
+    });
+});

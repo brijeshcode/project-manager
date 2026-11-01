@@ -70,7 +70,7 @@
         </div>
         @if ($balanceClient)
             <p class="self-center text-sm">{{ $balanceClient->name }} balance:
-                <strong class="{{ $balance < 0 ? 'text-rose-600' : 'text-emerald-700' }}">{{ \App\Support\Money::format($balance, $balanceClient->currency) }}</strong>
+                <strong class="{{ $balance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400' }}">{{ \App\Support\Money::format($balance, $balanceClient->currency) }}</strong>
                 <span class="text-slate-500">({{ $balance < 0 ? 'owes' : 'credit' }})</span></p>
         @endif
     </x-ui.filter-card>

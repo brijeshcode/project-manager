@@ -9,7 +9,7 @@
             @if ($invoice->status !== 'void')
                 <button wire:click="void" wire:confirm="Void this invoice? Its lines return to pending." class="btn btn-ghost">Void</button>
             @else
-                <x-ui.badge color="red">void</x-ui.badge>
+                <x-ui.badge color="rose">void</x-ui.badge>
             @endif
         </x-slot:actions>
     </x-ui.page-header>
