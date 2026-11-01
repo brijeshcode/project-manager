@@ -25,8 +25,13 @@ class Form extends Component
             $this->authorize('create', Project::class);
         }
 
+        // ?client=ID preselects the client on a new project (linked from the client pages)
+        if (! ($project && $project->exists) && ($cid = (int) request()->query('client')) && Client::whereKey($cid)->exists()) {
+            $this->client_id = $cid;
+        }
+
         if ($project && $project->exists) {
-            $this->projectId      = $project->id;
+            $this->projectId     = $project->id;
             $this->client_id      = $project->client_id;
             $this->name           = $project->name;
             $this->description    = $project->description ?? '';

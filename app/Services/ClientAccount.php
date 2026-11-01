@@ -16,6 +16,15 @@ class ClientAccount
             - (int) Invoice::where('client_id', $client->id)->where('status', 'sent')->sum('total_cents');
     }
 
+    /** [client_id => ['billed','received'] cents] via two grouped queries; same semantics as balanceCents. */
+    public function totals(array $clientIds): array
+    {
+        $billed = Invoice::whereIn('client_id', $clientIds)->where('status', 'sent')->groupBy('client_id')->selectRaw('client_id, sum(total_cents) as s')->pluck('s', 'client_id');
+        $received = Payment::whereIn('client_id', $clientIds)->groupBy('client_id')->selectRaw('client_id, sum(amount_cents) as s')->pluck('s', 'client_id');
+
+        return collect($clientIds)->mapWithKeys(fn ($id) => [$id => ['billed' => (int) ($billed[$id] ?? 0), 'received' => (int) ($received[$id] ?? 0)]])->all();
+    }
+
     public function softBalanceCents(Project $project): int
     {
         // float sum then clamp: absurd stored budgets must not overflow into a float/TypeError

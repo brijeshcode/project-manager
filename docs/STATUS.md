@@ -168,3 +168,9 @@ Blue/slate look with light + dark mode across every screen.
 - **Known ceiling:** dark mode for raw utilities (`bg-white`, `text-slate-*`, `border-slate-*`...) is the "DARK OVERRIDES" block at the bottom of `app.css`, not per-view `dark:` classes. An element carrying `bg-white` cannot use `dark:bg-*` (the override wins); use an arbitrary colour or a component class instead. New code should prefer component classes.
 - `docs/desgin-example` is the old Vue reference only and is gitignored by the owner.
 - Sweep note: Playwright/Python are not available on this machine, so the dark sweep was a class audit (grep of used utilities vs overrides), not screenshots.
+
+## Client pages (ui-redesign)
+- Clients now follow the owner's reference: list (Client / Contact / Financial Summary / Status / Actions, status + per-page filters, search by name, code, contact, email), a new Show page (summary cards, Details / Projects / Invoices tabs) and card-style create/edit forms. Owner (super admin) only.
+- New `clients` columns: `type` (company/individual), `client_code` (auto `CLI-0001`, unique, back-filled), `status` (active/inactive/archived), `website`, `city`, `state`, `postal_code`, `country`, `notes` (internal, never shown in the portal). Bank details are never shown on the Show page.
+- Delete is a hard delete, allowed only when the client has no projects, invoices, payments, billable lines, recurring charges or users; otherwise an error toast says what blocks it. To retire a client, set its status to archived in the edit form.
+- `projects/create?client=ID` preselects the client (used by the Add Project links).

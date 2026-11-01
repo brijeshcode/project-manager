@@ -3,6 +3,7 @@
 use App\Livewire\Actions\Logout;
 use App\Livewire\Clients\Form as ClientForm;
 use App\Livewire\Clients\Index as ClientIndex;
+use App\Livewire\Clients\Show as ClientShow;
 use App\Livewire\Portal\Dashboard as PortalDashboard;
 use App\Livewire\Portal\ProjectView as PortalProjectView;
 use App\Livewire\Projects\Form as ProjectForm;
@@ -41,6 +42,7 @@ Route::middleware(['auth', 'role:super_admin'])->group(function () {
     Route::get('clients', ClientIndex::class)->name('clients.index');
     Route::get('clients/create', ClientForm::class)->name('clients.create');
     Route::get('clients/{client}/edit', ClientForm::class)->name('clients.edit');
+    Route::get('clients/{client}', ClientShow::class)->name('clients.show');
 });
 
 Route::get('billing/recurring', \App\Livewire\Billing\Recurring::class)
