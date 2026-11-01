@@ -100,18 +100,6 @@ it('mixes hourly and flat', function () {
     expect(ProjectEconomics::for($p)['cost_cents'])->toBe(12000 + 50000);
 });
 
-it('excludes other projects entries, invoices, payments and null-project lines', function () {
-    $p = ecoProject();
-    $o = ecoProject($p->client);
-    ecoLog(ecoTask($o), ecoDev(CostRateType::Hourly, 60), 5);
-    ecoInvoice($o, 7000);
-    ecoPay($o, 8000);
-    $l = BillableLine::create(['client_id' => $p->client_id, 'description' => 'N', 'quantity' => 1, 'unit_price_cents' => 900, 'amount_cents' => 900]);
-    app(InvoiceService::class)->create($p->client, [$l->id]);
-    $e = ProjectEconomics::for($p);
-    expect($e['hours'])->toBe(0.0)->and($e['cost_cents'])->toBe(0)->and($e['invoiced_cents'])->toBe(0)->and($e['received_cents'])->toBe(0);
-});
-
 it('excludes void invoices from invoiced', function () {
     $p = ecoProject();
     ecoInvoice($p, 100000);
@@ -184,3 +172,60 @@ it('forbids non-owners and hides the link and cost rates', function (string $rol
         $this->get(route('projects.show', $p))->assertDontSee('Economics')->assertDontSee('77.77');
     }
 })->with(['project_manager', 'developer', 'client']);
+
+it('excludes other projects entries, payments and unattributed or other-project invoice lines', function () {
+    $p = ecoProject();
+    $o = ecoProject($p->client);
+    ecoLog(ecoTask($o), ecoDev(CostRateType::Hourly, 60), 5);
+    ecoPay($o, 8000);
+    ecoInvoice($p, 1000);
+    ecoInvoice($o, 7000); // sent, other project
+    $l = BillableLine::create(['client_id' => $p->client_id, 'description' => 'N', 'quantity' => 1, 'unit_price_cents' => 900, 'amount_cents' => 900]);
+    $inv = app(InvoiceService::class)->create($p->client, [$l->id]);
+    expect($inv->status)->toBe('sent');
+    $e = ProjectEconomics::for($p);
+    expect($e['hours'])->toBe(0.0)->and($e['cost_cents'])->toBe(0)->and($e['received_cents'])->toBe(0)->and($e['invoiced_cents'])->toBe(1000);
+});
+
+it('excludes a void invoice line even for this project', function () {
+    $p = ecoProject();
+    ecoInvoice($p, 4000, null, 'void');
+    expect(ProjectEconomics::for($p)['invoiced_cents'])->toBe(0);
+});
+
+it('costs users with null rate type or null amount as zero', function () {
+    $p = ecoProject();
+    $t = ecoTask($p);
+    ecoLog($t, User::factory()->create(['cost_rate_type' => null, 'cost_rate_amount' => 50]), 3);
+    ecoLog($t, User::factory()->create(['cost_rate_type' => CostRateType::Hourly, 'cost_rate_amount' => null]), 3);
+    expect(ProjectEconomics::for($p)['cost_cents'])->toBe(0);
+});
+
+it('rounds hourly cost half-up: 0.25h x 33.33 = 833 cents', function () {
+    $p = ecoProject();
+    ecoLog(ecoTask($p), ecoDev(CostRateType::Hourly, 33.33), 0.25);
+    expect(ProjectEconomics::for($p)['cost_cents'])->toBe(833);
+});
+
+it('counts entries on draft tasks like estimateVsActual', function () {
+    $p = ecoProject();
+    $t = ecoTask($p);
+    $t->update(['status' => 'draft']);
+    ecoLog($t, ecoDev(CostRateType::Hourly, 10), 2);
+    expect(ProjectEconomics::for($p)['cost_cents'])->toBe(2000)->and($p->estimateVsActual()['logged'])->toBe(2.0);
+});
+
+it('links to the economics href for the owner only, including clients', function () {
+    $p = ecoProject();
+    $href = 'projects/'.$p->id.'/economics';
+    $this->actingAs(ecoOwner());
+    $this->get(route('projects.show', $p))->assertSee($href, false);
+    foreach (['project_manager', 'client'] as $role) {
+        $u = User::factory()->create(['client_id' => $role === 'client' ? $p->client_id : null])->assignRole($role);
+        $this->actingAs($u);
+        $r = $this->get(route('projects.show', $p));
+        if ($r->status() === 200) {
+            $r->assertDontSee($href, false)->assertDontSee('Economics');
+        }
+    }
+});

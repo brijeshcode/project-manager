@@ -29,17 +29,17 @@ class ProjectEconomics
             }
         }
 
-        // Integer hundredths of an hour per user: no float summation.
-        $hundredths = [];
-        foreach ($entries as $e) {
-            $hundredths[$e->user_id] = ($hundredths[$e->user_id] ?? 0) + (int) round($e->hours * 100);
-        }
+        // ponytail: loads a project's entries into memory; move to SQL SUM grouped by user at ~100k entries.
+        // Rulings: each entry's hours are rounded to 0.01 h before summing (integer hundredths, no float
+        // sums); entries on draft tasks count, same as Project::estimateVsActual().
+        $byUser = $entries->groupBy('user_id');
+        $hundredths = $byUser->map(fn ($g) => $g->sum(fn ($e) => (int) round($e->hours * 100)))->all();
 
         // Cost rates are assumed to be in the client's currency (single-currency ceiling; no conversion).
         $cost = 0;
         foreach ($hundredths as $userId => $h100) {
-            $user = $entries->firstWhere('user_id', $userId)->user;
-            if ($user === null || $user->cost_rate_type === null) {
+            $user = $byUser[$userId]->first()->user; // time_entries.user_id cascades on delete: never null
+            if ($user->cost_rate_type === null || $user->cost_rate_amount === null) {
                 continue;
             }
             $rateCents = Money::toCents(number_format((float) $user->cost_rate_amount, 2, '.', ''));

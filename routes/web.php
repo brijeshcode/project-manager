@@ -51,7 +51,7 @@ Route::get('billing/bank-accounts', \App\Livewire\Billing\BankAccounts::class)
 Route::get('projects/{project}/economics', \App\Livewire\Projects\Economics::class)
     ->middleware(['auth', 'can:manage-money'])->name('projects.economics');
 
-Route::get('payments',\App\Livewire\Payments\Index::class)
+Route::get('payments', \App\Livewire\Payments\Index::class)
     ->middleware(['auth', 'can:manage-money'])->name('payments.index');
 
 Route::middleware(['auth', 'can:manage-money'])->prefix('invoices')->name('invoices.')->group(function () {
