@@ -9,6 +9,7 @@ Clients are billed and pay in their own currency, but the owner runs the busines
 
 ### Local currency setting
 - A **Settings** page (owner only, under the existing "Settings" group in the sidebar) with a **local currency** select (ISO-4217 3-letter code). One value for the whole system.
+- **Default: INR.** If no local currency has been stored, the system uses INR (owner's decision). Existing payments of INR-currency clients are back-filled with rate 1.
 - **(my call)** The local currency can be changed only while no payment or invoice carries a local value; once money has been recorded in it, the setting is locked with a short explanation. Mixing two local currencies in the same totals would make every dashboard number wrong.
 - If a client's currency equals the local currency, the rate is 1 and the UI shows a single number (no duplicate "₹100 / ₹100").
 

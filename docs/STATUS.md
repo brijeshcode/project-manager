@@ -97,6 +97,13 @@ Auth pages (login/register/forgot) restyled to match palette. Profile page uses 
 ### Later phases (from the spec)
 - **Phase 4 — Chat (next)**: in-app chat per project + chat-to-task.
 - Deferred by design: the owner's separate business-expenses feature (AI, marketing, employee costs).
+- **First-run setup wizard (future, after the local-currency work and the normal process are complete)** — owner's note 2026-11-02: when the system is installed for another client/business there must be an essential-settings setup, in this order:
+  1. **Currencies** — add at least one currency (and its exchange rate to the local currency once a second one exists).
+  2. **Local currency** — select the system's local currency (default today: INR).
+  3. **Time zone** — select the system time zone (not a setting yet; dates currently use the app default).
+  4. **Users** — add the first user(s) (the owner/super admin, then team).
+  5. **Account** — the business/bank account used on invoices (company details and at least one bank account; today these come from `BILLING_*` env keys and the Bank accounts page).
+  The wizard should block normal use until these are done, and is the natural onboarding step for each tenant in Phase 5. Not designed or built yet.
 - **Phase 5 — Multi-tenancy**: spatie multi-DB (one DB/tenant) + landlord DB + feature flags.
 
 ---
