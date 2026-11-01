@@ -162,17 +162,6 @@ it('lets the owner view the page and sees the project link', function () {
     $this->get(route('projects.show', $p))->assertSee('Economics');
 });
 
-it('forbids non-owners and hides the link and cost rates', function (string $role) {
-    $p = ecoProject();
-    ecoLog(ecoTask($p), ecoDev(CostRateType::Hourly, 77.77), 1);
-    $u = User::factory()->create(['client_id' => $role === 'client' ? $p->client_id : null])->assignRole($role);
-    $this->actingAs($u);
-    $this->get(route('projects.economics', $p))->assertForbidden();
-    if ($role !== 'client') {
-        $this->get(route('projects.show', $p))->assertDontSee('Economics')->assertDontSee('77.77');
-    }
-})->with(['project_manager', 'developer', 'client']);
-
 it('excludes other projects entries, payments and unattributed or other-project invoice lines', function () {
     $p = ecoProject();
     $o = ecoProject($p->client);
@@ -215,17 +204,30 @@ it('counts entries on draft tasks like estimateVsActual', function () {
     expect(ProjectEconomics::for($p)['cost_cents'])->toBe(2000)->and($p->estimateVsActual()['logged'])->toBe(2.0);
 });
 
-it('links to the economics href for the owner only, including clients', function () {
+
+it('gates economics: owner sees link and page; members and clients never do', function () {
     $p = ecoProject();
+    ecoLog(ecoTask($p), ecoDev(CostRateType::Hourly, 77.77), 1);
     $href = 'projects/'.$p->id.'/economics';
+
     $this->actingAs(ecoOwner());
-    $this->get(route('projects.show', $p))->assertSee($href, false);
-    foreach (['project_manager', 'client'] as $role) {
-        $u = User::factory()->create(['client_id' => $role === 'client' ? $p->client_id : null])->assignRole($role);
+    $this->get(route('projects.show', $p))->assertOk()->assertSee($href, false)->assertSee('Economics');
+    $this->get(route('projects.economics', $p))->assertOk()->assertSee('Cost of logged hours');
+
+    foreach (['project_manager', 'developer'] as $role) {
+        $u = User::factory()->create()->assignRole($role);
+        $p->members()->attach($u->id, ['role_on_project' => $role, 'access_scope' => 'all', 'active' => true]);
         $this->actingAs($u);
-        $r = $this->get(route('projects.show', $p));
-        if ($r->status() === 200) {
-            $r->assertDontSee($href, false)->assertDontSee('Economics');
-        }
+        $this->get(route('projects.show', $p))->assertOk()->assertSee('EcoProj')
+            ->assertDontSee($href, false)->assertDontSee('Economics')
+            ->assertDontSee('Cost of logged hours')->assertDontSee('77.77');
+        $this->get(route('projects.economics', $p))->assertForbidden();
     }
+
+    $client = User::factory()->create(['client_id' => $p->client_id])->assignRole('client');
+    $this->actingAs($client);
+    $this->get(route('projects.show', $p))->assertForbidden();
+    $this->get(route('projects.economics', $p))->assertForbidden();
+    $this->get(route('portal.project', $p))->assertOk()->assertSee('EcoProj')
+        ->assertDontSee($href, false)->assertDontSee('Economics')->assertDontSee('77.77');
 });
