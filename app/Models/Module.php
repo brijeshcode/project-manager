@@ -44,6 +44,44 @@ class Module extends Model
         return $this->hasMany(\App\Models\Task::class);
     }
 
+    /** Tasks that count toward status/progress: no ideas, drafts or out-of-scope work. */
+    private function countedTasks()
+    {
+        return $this->tasks()->with('column')->where('is_idea', false)->where('status', 'published')->where('scope', 'in')->get();
+    }
+
+    /** pending | working | in_review | completed, derived from the tasks' board-column stages. */
+    public function derivedStatus(): string
+    {
+        $stages = $this->countedTasks()->map(fn ($t) => $t->column?->stage);
+
+        if ($stages->isEmpty() || $stages->every(fn ($s) => $s === 'not_started')) {
+            return 'pending';
+        }
+        if ($stages->every(fn ($s) => $s === 'done')) {
+            return 'completed';
+        }
+        if ($stages->contains('active')) {
+            return 'working';
+        }
+
+        // ponytail: not_started + review (nothing active) falls through to working
+        return $stages->reject(fn ($s) => $s === 'done')->every(fn ($s) => $s === 'review') ? 'in_review' : 'working';
+    }
+
+    /** Done share of the module, 0..1: hours-weighted when tasks have estimates, else by task count. */
+    public function progress(): float
+    {
+        $tasks = $this->countedTasks();
+        if ($tasks->isEmpty()) {
+            return 0.0;
+        }
+        $done = $tasks->filter(fn ($t) => $t->column?->stage === 'done');
+        $hours = $tasks->sum(fn ($t) => $t->effectiveHours());
+
+        return $hours > 0 ? $done->sum(fn ($t) => $t->effectiveHours()) / $hours : $done->count() / $tasks->count();
+    }
+
     /** Hourly client: hours x rate; fixed client: the fixed amount. Null when not configured. */
     public function budgetAmount(): ?string
     {

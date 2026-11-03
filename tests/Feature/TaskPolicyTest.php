@@ -54,7 +54,6 @@ function policyTask(Module $module, User $creator, array $attrs = []): Task
         'priority'       => 1,
         'estimate_hours' => 8.0,
         'scope'          => TaskScope::In,
-        'board_column'   => 'Backlog',
         'position'       => 1,
     ], $attrs));
 }
@@ -318,7 +317,6 @@ it('developer creating a task has estimate_hours and price stripped', function (
         ->set('title', 'Dev Task')
         ->set('status', 'published')
         ->set('scope', 'in')
-        ->set('board_column', 'Backlog')
         ->set('estimate_hours', 99.0)
         ->set('price', 999.0)
         ->call('save')
@@ -341,7 +339,6 @@ it('project_manager creating a task CAN set estimate_hours and price', function 
         ->set('title', 'PM Task')
         ->set('status', 'published')
         ->set('scope', 'in')
-        ->set('board_column', 'Backlog')
         ->set('estimate_hours', 8.0)
         ->set('price', 200.0)
         ->call('save')
@@ -352,9 +349,9 @@ it('project_manager creating a task CAN set estimate_hours and price', function 
     expect((float) $task->price)->toBe(200.0);
 });
 
-// ── Finding 3: invalid board_column is rejected ────────────────────────────────
+// ── Finding 3: unknown board column is rejected ────────────────────────────────
 
-it('invalid board_column value is rejected with a validation error', function () {
+it('unknown board column is rejected with a validation error', function () {
     $project = policyProject();
     $module  = policyModule($project);
     $pm      = policyMember($project, 'project_manager');
@@ -365,7 +362,7 @@ it('invalid board_column value is rejected with a validation error', function ()
         ->set('title', 'Bad Column Task')
         ->set('status', 'published')
         ->set('scope', 'in')
-        ->set('board_column', 'InvalidColumn')
+        ->set('board_column_id', 999999)
         ->call('save')
-        ->assertHasErrors(['board_column']);
+        ->assertHasErrors(['board_column_id']);
 });

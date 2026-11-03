@@ -57,7 +57,6 @@ function timeTask(Module $module, User $creator): Task
         'priority'       => 1,
         'estimate_hours' => 4.0,
         'scope'          => TaskScope::In,
-        'board_column'   => 'Backlog',
         'position'       => 1,
     ]);
 }

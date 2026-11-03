@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::table('tasks', function (Blueprint $table) {
             // Nullable string: 'frontend'|'backend'|null (unsectioned = visible to all scopes).
             // Mirrors AccessScope values so access_scope filtering is a direct string match.
-            $table->string('section')->nullable()->after('board_column');
+            $table->string('section')->nullable()->after('position');
         });
     }
 

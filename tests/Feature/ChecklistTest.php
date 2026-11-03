@@ -54,7 +54,6 @@ function clTask(Module $module, User $creator, array $attrs = []): Task
         'priority'       => 1,
         'estimate_hours' => 8.0,
         'scope'          => TaskScope::In,
-        'board_column'   => 'Backlog',
         'position'       => 1,
     ], $attrs));
 }

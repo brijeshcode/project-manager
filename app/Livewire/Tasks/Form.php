@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Tasks;
 
-use App\Enums\BoardColumn;
 use App\Models\Label;
 use App\Models\Module;
 use App\Models\Task;
@@ -27,7 +26,7 @@ class Form extends Component
     public bool   $testing_enabled = false;
     public ?string $testing_add_type  = null;
     public ?float  $testing_add_value = null;
-    public string $board_column    = 'Backlog';
+    public ?int   $board_column_id = null;   // null = the project's first column
     public int    $position        = 0;
 
     public array  $labelIds        = [];
@@ -51,7 +50,7 @@ class Form extends Component
             $this->testing_enabled  = $task->testing_enabled;
             $this->testing_add_type  = $task->testing_add_type;
             $this->testing_add_value = $task->testing_add_value;
-            $this->board_column     = $task->board_column;
+            $this->board_column_id  = $task->board_column_id;
             $this->position         = $task->position;
             $this->labelIds         = $task->labels()->pluck('labels.id')->toArray();
             $this->assigneeIds      = $task->assignees()->pluck('users.id')->toArray();
@@ -74,7 +73,7 @@ class Form extends Component
             'testing_enabled'   => 'boolean',
             'testing_add_type'  => 'nullable|in:percent,fixed',
             'testing_add_value' => 'nullable|numeric|min:0',
-            'board_column'      => ['required', Rule::enum(BoardColumn::class)],
+            'board_column_id'   => ['nullable', Rule::exists('board_columns', 'id')->where('project_id', Module::find($this->module_id)?->project_id)],
             'position'          => 'integer|min:0',
         ]);
 
@@ -84,6 +83,7 @@ class Form extends Component
             if (! auth()->user()->can('updateCostTime', $task)) {
                 unset($data['estimate_hours'], $data['price']);
             }
+            $data['board_column_id'] ??= $task->board_column_id;
             $task->update($data);
             $task->labels()->sync($this->labelIds);
             $task->assignees()->sync($this->assigneeIds);
@@ -108,6 +108,7 @@ class Form extends Component
 
         return view('livewire.tasks.form', [
             'task'      => $task,
+            'boardColumns' => Module::find($this->module_id)?->project?->columns ?? collect(),
             'allLabels' => Label::orderBy('name')->get(),
             'allUsers'  => User::orderBy('name')->get(),
         ]);

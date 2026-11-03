@@ -31,10 +31,10 @@
                     @endif
                 </div>
                 <div class="flex shrink-0 items-center gap-2">
-                    <x-ui.badge color="slate">{{ $task->board_column }}</x-ui.badge>
+                    <x-ui.badge color="slate">{{ $task->column?->name }}</x-ui.badge>
                     @if($task->client_approval === 'approved')
                         <x-ui.badge color="green">Approved</x-ui.badge>
-                    @elseif($task->board_column === 'Done')
+                    @elseif($task->column?->stage === 'done')
                         <button wire:click="approveTask({{ $task->id }})"
                                 class="btn btn-primary h-7 px-3 py-1 text-xs">
                             Approve

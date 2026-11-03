@@ -259,7 +259,7 @@
                                             <svg class="h-4 w-4 shrink-0 text-slate-400 transition" :class="open && 'rotate-90'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
                                             <span class="truncate text-sm font-medium text-slate-800">{{ $task->title }}</span>
                                         </button>
-                                        <x-ui.badge color="slate">{{ $task->board_column }}</x-ui.badge>
+                                        <x-ui.badge color="slate">{{ $task->column?->name }}</x-ui.badge>
                                         <span class="w-10 text-right text-xs font-semibold tabular-nums text-slate-500">{{ round($taskProgress) }}%</span>
                                         @if($canManage)
                                         <a href="{{ route('tasks.edit', $task) }}" wire:navigate class="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700">Edit</a>

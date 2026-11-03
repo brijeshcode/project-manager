@@ -177,7 +177,6 @@ class Show extends Component
             'title'        => $title,
             'status'       => TaskStatus::Published,
             'scope'        => TaskScope::In,
-            'board_column' => 'Backlog',
             'position'     => (int) Task::where('module_id', $module->id)->max('position') + 1,
         ]);
 

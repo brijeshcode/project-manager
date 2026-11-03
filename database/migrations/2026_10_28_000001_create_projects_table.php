@@ -24,7 +24,17 @@ return new class extends Migration
             $table->date('deadline')->nullable();     // manual deadline; changes are logged
             $table->date('completed_at')->nullable();
             $table->string('status')->default('draft');
+            $table->string('template')->default('software');   // board template copied at create (BoardTemplates)
             $table->timestamps();
+        });
+
+        Schema::create('board_columns', function (Blueprint $t) {
+            $t->id();
+            $t->foreignId('project_id')->constrained()->cascadeOnDelete();
+            $t->string('name');
+            $t->string('stage');                                // not_started|active|review|done
+            $t->unsignedInteger('position')->default(0);
+            $t->timestamps();
         });
 
         Schema::create('project_deadline_changes', function (Blueprint $t) {
@@ -41,6 +51,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('project_deadline_changes');
+        Schema::dropIfExists('board_columns');
         Schema::dropIfExists('projects');
     }
 };

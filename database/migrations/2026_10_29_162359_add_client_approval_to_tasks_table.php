@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('tasks', function (Blueprint $table) {
             // null = not yet submitted for approval; 'approved' = client approved
-            $table->string('client_approval')->nullable()->after('board_column');
+            $table->string('client_approval')->nullable()->after('position');
         });
     }
 

@@ -45,7 +45,7 @@ it('renders project cards with live progress (health meter) without error', func
         'status' => 'published',
         'estimate_hours' => 8,
         'scope' => 'in',
-        'board_column' => 'In Progress',
+        'board_column_id' => colId($module, 'In progress'),
         'position' => 1,
     ]);
     \App\Models\ChecklistItem::create(['checklistable_type' => \App\Models\Task::class, 'checklistable_id' => $task->id, 'title' => 'a', 'is_done' => true, 'position' => 1]);
@@ -75,7 +75,6 @@ it('project show page displays estimated and logged hours', function () {
         'status'         => 'published',
         'estimate_hours' => 16,
         'scope'          => 'in',
-        'board_column'   => 'Backlog',
         'position'       => 1,
     ]);
     \App\Models\TimeEntry::create([
@@ -105,7 +104,7 @@ it('project workspace embeds time logger for tasks', function () {
     \App\Models\Task::create([
         'module_id' => $module->id, 'creator_id' => $admin->id,
         'title' => 'Loggable Task', 'status' => 'published',
-        'scope' => 'in', 'board_column' => 'Backlog', 'position' => 1,
+        'scope' => 'in', 'position' => 1,
     ]);
 
     actingAs($admin)->get(route('projects.show', [$project, 'tab' => 'modules']))

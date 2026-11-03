@@ -41,11 +41,12 @@ class ProjectView extends Component
         return Task::whereIn('module_id', $moduleIds)
             ->where('status', TaskStatus::Published->value)
             ->where('client_visible', true)
-            ->orderBy('board_column')
+            ->with('column')
+            ->orderBy('board_column_id')
             ->orderBy('position')
             ->get([
                 'id', 'module_id', 'creator_id', 'title', 'description',
-                'status', 'priority', 'board_column', 'position',
+                'status', 'priority', 'board_column_id', 'position',
                 'client_visible', 'client_approval', 'scope', 'section',
                 // Deliberately omits: price, estimate_hours, testing_*, cost fields
             ]);
@@ -73,7 +74,6 @@ class ProjectView extends Component
             'client_visible' => true,
             'priority'       => 0,
             'estimate_hours' => 0.0,
-            'board_column'   => 'Backlog',
             'position'       => Task::whereIn('module_id', $this->project->modules()->pluck('id'))
                 ->max('position') + 1,
         ]);
@@ -127,7 +127,7 @@ class ProjectView extends Component
     {
         $task = $this->guardTask($taskId);
 
-        abort_unless($task->board_column === 'Done', 422, 'Only completed tasks can be approved.');
+        abort_unless($task->column?->stage === 'done', 422, 'Only completed tasks can be approved.');
 
         $task->update(['client_approval' => 'approved']);
         unset($this->tasks);

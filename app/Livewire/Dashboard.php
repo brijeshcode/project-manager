@@ -59,7 +59,7 @@ class Dashboard extends Component
             'clientCount' => Client::count(),
             'activeClients' => Client::whereHas('projects', fn ($q) => $q->where('status', 'active'))->count(),
             'projectCount' => Project::count(),
-            'openTasks' => Task::where('board_column', '!=', 'Done')->count(),
+            'openTasks' => Task::whereDoesntHave('column', fn ($q) => $q->where('stage', 'done'))->count(),
             'hoursWeek' => (float) TimeEntry::whereBetween('worked_on', [now()->startOfWeek(), now()->endOfWeek()])->sum('hours'),
             'recent' => Project::with('client')->latest()->take(5)->get(),
         ]);

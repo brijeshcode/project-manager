@@ -26,7 +26,7 @@ return new class extends Migration
             $table->boolean('testing_enabled')->default(false);
             $table->string('testing_add_type')->nullable();      // 'percent'|'fixed'
             $table->decimal('testing_add_value', 12, 2)->nullable();
-            $table->string('board_column')->default('Backlog');
+            $table->foreignId('board_column_id')->nullable()->constrained('board_columns')->nullOnDelete();
             $table->unsignedInteger('position')->default(0);
             $table->timestamps();
         });

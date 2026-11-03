@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\EstimateService;
+use App\Support\BoardTemplates;
 use Carbon\CarbonInterface;
 use App\Models\Concerns\FreezesLocalAmounts;
 use App\Models\Concerns\HasCurrency;
@@ -31,6 +32,7 @@ class Project extends Model
         'buffer_percent',
         'start_date',
         'status',
+        'template',
         'completed_at',
     ];
 
@@ -39,6 +41,13 @@ class Project extends Model
         // a project starts in its client's currency; the owner can change it
         static::creating(function (self $p) {
             $p->currency_id ??= Client::whereKey($p->client_id)->value('currency_id');
+        });
+
+        // the chosen board template (default software) becomes this project's own, editable columns
+        static::created(function (self $p) {
+            foreach (BoardTemplates::columns($p->template) as $i => [$name, $stage]) {
+                $p->columns()->create(['name' => $name, 'stage' => $stage, 'position' => $i + 1]);
+            }
         });
 
         // completed_at: stamped when the project becomes completed, cleared when it leaves
@@ -91,6 +100,11 @@ class Project extends Model
     public function resources(): HasMany
     {
         return $this->hasMany(Resource::class);
+    }
+
+    public function columns(): HasMany
+    {
+        return $this->hasMany(BoardColumn::class)->orderBy('position')->orderBy('id');
     }
 
     public function modules(): HasMany

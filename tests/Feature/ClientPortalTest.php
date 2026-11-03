@@ -61,7 +61,6 @@ function portalTask(Module $module, User $creator, array $attrs = []): Task
         'priority'       => 1,
         'estimate_hours' => 4.0,
         'scope'          => TaskScope::In,
-        'board_column'   => 'Backlog',
         'position'       => 1,
         'client_visible' => true,
     ], $attrs));
@@ -278,7 +277,7 @@ it('client can approve a Done task (client_approval becomes approved)', function
 
     $task = portalTask($module, $internal, [
         'client_visible' => true,
-        'board_column'   => 'Done',
+        'board_column_id' => colId($module, 'Done'),
     ]);
 
     Livewire::actingAs($clientUser)
@@ -296,7 +295,6 @@ it('client cannot approve a task that is NOT in Done column', function () {
 
     $task = portalTask($module, $internal, [
         'client_visible' => true,
-        'board_column'   => 'Backlog',
     ]);
 
     Livewire::actingAs($clientUser)
@@ -318,7 +316,7 @@ it('client cannot approve a task from another client', function () {
 
     $taskB = portalTask($moduleB, $internal, [
         'client_visible' => true,
-        'board_column'   => 'Done',
+        'board_column_id' => colId($moduleB, 'Done'),
     ]);
 
     // userA mounts their own project (they have none here, use projectA)

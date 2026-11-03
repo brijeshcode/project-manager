@@ -5,6 +5,7 @@ namespace App\Livewire\Projects;
 use App\Models\Client;
 use App\Models\Currency;
 use App\Services\LocalCurrency;
+use App\Support\BoardTemplates;
 use App\Support\Money;
 use Illuminate\Validation\Rule;
 use App\Models\Project;
@@ -24,6 +25,7 @@ class Form extends Component
     public ?string $aim           = null;
     public ?string $deadline      = null;
     public string $reason         = '';   // required when an existing deadline is changed
+    public string $template      = 'software';   // board columns copied at create; edited later on the Board tab
     public string $initial_budget = '0';
     public string $addons_amount  = '0';
 
@@ -95,6 +97,7 @@ class Form extends Component
             'deadline'       => array_filter(['nullable', 'date', $this->start_date ? 'after_or_equal:start_date' : null]),
             'reason'         => ['nullable', 'string', 'max:1000', Rule::requiredIf($this->changingDeadline())],
             'status'         => 'required|string|max:50',
+            'template'       => ['required', Rule::in(array_keys(BoardTemplates::ALL))],
         ]);
 
         $data['aim'] = trim((string) $data['aim']) ?: null;
@@ -105,6 +108,7 @@ class Form extends Component
         unset($data['deadline'], $data['reason']);
 
         if ($this->projectId) {
+            unset($data['template']);
             $project = Project::findOrFail($this->projectId);
             $this->authorize('update', $project);
             $project->update($data);
@@ -130,6 +134,7 @@ class Form extends Component
         return view('livewire.projects.form', [
             'clients' => Client::orderBy('name')->get(),
             'currencies' => $this->currencyOptions(),
+            'templates' => array_keys(BoardTemplates::ALL),
             'finalBudget' => $this->finalBudget(),
         ]);
     }

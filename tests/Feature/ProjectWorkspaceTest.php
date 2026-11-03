@@ -157,7 +157,6 @@ it('workspace hides draft tasks created by other users', function () {
         'title'        => 'Secret Draft',
         'status'       => 'draft',
         'scope'        => 'in',
-        'board_column' => 'Backlog',
         'position'     => 1,
     ]);
 

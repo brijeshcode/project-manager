@@ -8,7 +8,7 @@
             $projects = \App\Models\Project::with('client')->orderBy('name')
                 ->whereHas('members', fn ($q) => $q->where('users.id', $user->id)->where('project_members.active', true))
                 ->get();
-            $myOpenTasks = \App\Models\Task::where('board_column', '!=', 'Done')
+            $myOpenTasks = \App\Models\Task::whereDoesntHave('column', fn ($q) => $q->where('stage', 'done'))
                 ->whereHas('assignees', fn ($q) => $q->where('users.id', $user->id))->count();
         @endphp
         <x-ui.page-header title="{{ 'Welcome back, ' . $first }}" subtitle="Here's where things stand across your work." />

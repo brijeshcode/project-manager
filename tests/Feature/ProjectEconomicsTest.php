@@ -39,7 +39,7 @@ function ecoProject(?Client $c = null): Project
 function ecoTask(Project $p): Task
 {
     return Task::create(['module_id' => $p->modules()->first()->id, 'creator_id' => ecoOwner()->id, 'title' => 'T',
-        'status' => 'published', 'scope' => 'in', 'board_column' => 'Backlog', 'position' => 1]);
+        'status' => 'published', 'scope' => 'in', 'position' => 1]);
 }
 
 function ecoDev(CostRateType $type, float $amount): User

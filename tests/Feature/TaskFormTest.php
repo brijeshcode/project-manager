@@ -57,7 +57,6 @@ it('task form syncs labels and assignees when saving', function () {
         'title'        => 'Original title',
         'status'       => 'published',
         'scope'        => 'in',
-        'board_column' => 'Backlog',
         'position'     => 1,
     ]);
     $label    = Label::create(['name' => 'Bug', 'color' => '#ef4444']);
@@ -83,7 +82,6 @@ it('task form hides scope and pricing card from developers', function () {
         'title'        => 'Dev task',
         'status'       => 'published',
         'scope'        => 'in',
-        'board_column' => 'Backlog',
         'position'     => 1,
     ]);
 
@@ -102,7 +100,6 @@ it('task form returns 403 for a non-member', function () {
         'title'        => 'Restricted task',
         'status'       => 'published',
         'scope'        => 'in',
-        'board_column' => 'Backlog',
         'position'     => 1,
     ]);
     $outsider = User::factory()->create();
@@ -123,7 +120,6 @@ it('task form page is reachable via route for managers', function () {
         'title'        => 'Test task',
         'status'       => 'published',
         'scope'        => 'in',
-        'board_column' => 'Backlog',
         'position'     => 1,
     ]);
 

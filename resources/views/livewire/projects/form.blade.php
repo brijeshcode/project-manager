@@ -29,6 +29,17 @@
                 @error('currency') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
+            @unless ($projectId)
+                <div>
+                    <label class="label" for="template">Board template</label>
+                    <select id="template" wire:model="template" class="select">
+                        @foreach ($templates as $tpl)<option value="{{ $tpl }}">{{ ucfirst($tpl) }}</option>@endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500">The starting board columns. You can edit them later on the Board tab.</p>
+                    @error('template') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+            @endunless
+
             <div>
                 <label class="label" for="name">Project name</label>
                 <input id="name" type="text" wire:model="name" placeholder="e.g. Northwind Storefront" class="input">

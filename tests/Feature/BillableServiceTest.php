@@ -27,7 +27,7 @@ function bsTask(Module $m, array $o = []): Task
 {
     return Task::create($o + [
         'module_id' => $m->id, 'creator_id' => User::factory()->create()->id, 'title' => 'Build it',
-        'status' => TaskStatus::Published, 'board_column' => 'Done',
+        'status' => TaskStatus::Published, 'board_column_id' => colId($m, 'Done'),
     ]);
 }
 
@@ -81,8 +81,8 @@ it('removes an uninvoiced line when the task leaves Done but keeps invoiced ones
     $b = bsTask($m, ['price' => 100, 'title' => 'B']);
     bsSync($m);
     BillableLine::where('source_id', $b->id)->update(['invoice_id' => 7]);
-    $a->update(['board_column' => 'In Progress']);
-    $b->update(['board_column' => 'In Progress', 'price' => 999]);
+    $a->update(['board_column_id' => colId($m, 'In progress')]);
+    $b->update(['board_column_id' => colId($m, 'In progress'), 'price' => 999]);
     bsSync($m);
     expect(BillableLine::pluck('source_id')->all())->toBe([$b->id])
         ->and(BillableLine::first()->amount_cents)->toBe(10000);
@@ -156,7 +156,7 @@ it('never alters another client\'s lines', function () {
     $tb = bsTask($b, ['price' => 300]);
     bsSync($b);
     bsSync($a);
-    $tb->update(['board_column' => 'Backlog']);
+    $tb->update(['board_column_id' => colId($b, 'Backlog')]);
     bsSync($a);
     expect(BillableLine::where('client_id', $b->project->client_id)->pluck('amount_cents')->all())->toBe([30000])
         ->and(BillableLine::where('client_id', $a->project->client_id)->count())->toBe(1);

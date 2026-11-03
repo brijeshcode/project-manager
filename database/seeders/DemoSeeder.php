@@ -148,7 +148,7 @@ class DemoSeeder extends Seeder
 
         $specs = [
             ['Cart & line items', 'Done', 10, [true, true, true, true], 12],
-            ['Payment integration', 'In Progress', 16, [true, true, false, false], 20],
+            ['Payment integration', 'In progress', 16, [true, true, false, false], 20],
             ['Order confirmation email', 'Backlog', 6, [false, false], 0],
         ];
 
@@ -164,7 +164,7 @@ class DemoSeeder extends Seeder
                 'estimate_hours' => $estimate,
                 'scope' => 'in',
                 'client_visible' => true,
-                'board_column' => $column,
+                'board_column_id' => $storefront->columns()->where('name', $column)->value('id'),
                 'position' => $i + 1,
             ]);
 
@@ -194,7 +194,7 @@ class DemoSeeder extends Seeder
         // Project 2 — a quiet draft, to show mixed states.
         Project::create([
             'client_id' => $client->id,
-            'name' => 'Inventory API',
+            'name' => 'Inventory API', 'template' => 'blank',
             'initial_budget' => '4000', 'addons_amount' => '0',
             'buffer_percent' => 10,
             'start_date' => now()->startOfWeek(),
@@ -257,7 +257,6 @@ class DemoSeeder extends Seeder
             ]],
         ];
 
-        $columns = ['Backlog', 'In Progress', 'Testing', 'Done'];
         $n = 0;
 
         foreach ($data as [$name, $currency, $mode, $terms, $contact, $email, $projects]) {
@@ -273,6 +272,7 @@ class DemoSeeder extends Seeder
                     'client_id' => $client->id, 'name' => $projectName, 'buffer_percent' => 10 + $p * 5,
                     'initial_budget' => 5000 + $p * 2500, 'addons_amount' => $p * 400,
                     'start_date' => now()->subWeeks(6 - $p * 2)->startOfWeek(), 'status' => $status,
+                    'template' => ($n + $p) % 2 ? 'blank' : 'software',   // demo both board templates
                 ]);
                 $firstProject ??= $project;
                 // deadlines: the first project gets an extension history; completed ones finish early
@@ -300,14 +300,15 @@ class DemoSeeder extends Seeder
                     ]);
 
                     foreach ($tasks as $t => $title) {
-                        $col = $columns[($n + $mi + $t) % 4];
+                        $cols = $project->columns;
+                        $col = $cols[($n + $mi + $t) % $cols->count()];
                         $task = Task::create([
                             'module_id' => $module->id, 'creator_id' => $admin->id, 'title' => $title, 'description' => '',
                             'status' => 'published', 'is_idea' => false, 'priority' => 1 + ($t % 3),
                             'estimate_hours' => 4 + $t * 3, 'scope' => 'in', 'client_visible' => true,
-                            'board_column' => $col, 'position' => $t + 1,
+                            'board_column_id' => $col->id, 'position' => $t + 1,
                         ]);
-                        if ($col !== 'Backlog') {
+                        if ($col->stage !== 'not_started') {
                             TimeEntry::create([
                                 'timeable_type' => Task::class, 'timeable_id' => $task->id, 'user_id' => $admin->id,
                                 'hours' => 2 + $t * 2, 'worked_on' => now()->subDays($t + 1),

@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\AccessScope;
-use App\Enums\BoardColumn;
 use App\Enums\TaskScope;
 use App\Enums\TaskStatus;
 use App\Livewire\Tasks\Board;
@@ -58,7 +57,6 @@ function boardTask(Module $module, User $creator, array $attrs = []): Task
         'priority'       => 1,
         'estimate_hours' => 0.0,
         'scope'          => TaskScope::In,
-        'board_column'   => 'Backlog',
         'position'       => 1,
     ], $attrs));
 }
@@ -71,10 +69,10 @@ it('moveTo persists new column and position', function () {
     $user    = boardMember($project);
     $task    = boardTask($module, $user);
 
-    $task->moveTo('In Progress', 2);
+    $task->moveTo(colId($module, 'In progress'), 2);
 
     $fresh = $task->fresh();
-    expect($fresh->board_column)->toBe('In Progress')
+    expect($fresh->board_column_id)->toBe(colId($module, 'In progress'))
         ->and($fresh->position)->toBe(2);
 });
 
@@ -82,25 +80,26 @@ it('moveTo ignores invalid column', function () {
     $project = boardProject();
     $module  = boardModule($project);
     $user    = boardMember($project);
-    $task    = boardTask($module, $user, ['board_column' => 'Backlog', 'position' => 1]);
+    $task    = boardTask($module, $user, ['position' => 1]);
 
-    $task->moveTo('Nonexistent', 99);
+    $other = boardProject();
+    $task->moveTo(colId($other, 'Done'), 99);   // another project's column
 
     $fresh = $task->fresh();
-    expect($fresh->board_column)->toBe('Backlog')
+    expect($fresh->board_column_id)->toBe(colId($module, 'Backlog'))
         ->and($fresh->position)->toBe(1);
 });
 
 // ── Board Livewire component ──────────────────────────────────────────────────
 
-it('board renders all four column names', function () {
+it('board renders the template column names', function () {
     $project = boardProject();
     $user    = boardMember($project);
 
     Livewire::actingAs($user)
         ->test(Board::class, ['project' => $project])
         ->assertSee('Backlog')
-        ->assertSee('In Progress')
+        ->assertSee('In progress')
         ->assertSee('Testing')
         ->assertSee('Done');
 });
@@ -110,18 +109,21 @@ it('board shows tasks in their column', function () {
     $module  = boardModule($project);
     $user    = boardMember($project);
 
-    boardTask($module, $user, ['title' => 'Backlog Task',  'board_column' => 'Backlog']);
-    boardTask($module, $user, ['title' => 'InProg Task',   'board_column' => 'In Progress']);
+    boardTask($module, $user, ['title' => 'Backlog Task']);
+    boardTask($module, $user, ['title' => 'InProg Task', 'board_column_id' => colId($module, 'In progress')]);
 
     $component = Livewire::actingAs($user)
         ->test(Board::class, ['project' => $project]);
 
     $columns = $component->get('columns');
 
-    expect($columns['Backlog'])->toHaveCount(1)
-        ->and($columns['Backlog']->first()->title)->toBe('Backlog Task')
-        ->and($columns['In Progress'])->toHaveCount(1)
-        ->and($columns['In Progress']->first()->title)->toBe('InProg Task');
+    $b = colId($module, 'Backlog');
+    $p = colId($module, 'In progress');
+
+    expect($columns[$b])->toHaveCount(1)
+        ->and($columns[$b]->first()->title)->toBe('Backlog Task')
+        ->and($columns[$p])->toHaveCount(1)
+        ->and($columns[$p]->first()->title)->toBe('InProg Task');
 });
 
 it('board excludes drafts from other users', function () {
@@ -137,9 +139,7 @@ it('board excludes drafts from other users', function () {
 
     $columns = $component->get('columns');
 
-    foreach ($columns as $tasks) {
-        expect($tasks)->toHaveCount(0);
-    }
+    expect($columns->flatten())->toHaveCount(0);
 });
 
 it('board rejects a non-member', function () {
@@ -157,13 +157,13 @@ it('taskMoved event moves the task and re-renders', function () {
     $module  = boardModule($project);
     $user    = boardMember($project, 'project_manager');
 
-    $task = boardTask($module, $user, ['board_column' => 'Backlog', 'position' => 1]);
+    $task = boardTask($module, $user, ['position' => 1]);
 
     Livewire::actingAs($user)
         ->test(Board::class, ['project' => $project])
-        ->call('taskMoved', $task->id, 'Done', 1);
+        ->call('taskMoved', $task->id, colId($module, 'Done'), 1);
 
-    expect($task->fresh()->board_column)->toBe('Done');
+    expect($task->fresh()->board_column_id)->toBe(colId($module, 'Done'));
 });
 
 it('taskMoved is denied for a user without project access', function () {
@@ -171,7 +171,7 @@ it('taskMoved is denied for a user without project access', function () {
     $projectA = boardProject();
     $moduleA  = boardModule($projectA);
     $ownerA   = boardMember($projectA, 'project_manager');
-    $task     = boardTask($moduleA, $ownerA, ['board_column' => 'Backlog', 'position' => 1]);
+    $task     = boardTask($moduleA, $ownerA, ['position' => 1]);
 
     // Project B: memberB is a valid member here, so mount succeeds
     $projectB = boardProject();
@@ -180,11 +180,11 @@ it('taskMoved is denied for a user without project access', function () {
     // Mount Board for Project B (passes), then attempt to move a task from Project A
     Livewire::actingAs($memberB)
         ->test(Board::class, ['project' => $projectB])
-        ->call('taskMoved', $task->id, 'Done', 1);
+        ->call('taskMoved', $task->id, colId($projectB, 'Done'), 1);
 
     // taskMoved scopes via whereIn(project B's module IDs) → findOrFail rejects the foreign task
-    // board_column must remain unchanged
-    expect($task->fresh()->board_column)->toBe('Backlog');
+    // column must remain unchanged
+    expect($task->fresh()->board_column_id)->toBe(colId($moduleA, 'Backlog'));
 });
 
 it('board page is reachable via route for project members', function () {

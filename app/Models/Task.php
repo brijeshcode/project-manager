@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\AccessScope;
-use App\Enums\BoardColumn;
 use App\Enums\TaskScope;
 use App\Enums\TaskStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,7 +23,6 @@ class Task extends Model
         'testing_enabled' => false,
         'priority'       => 0,
         'estimate_hours' => 0.0,
-        'board_column'   => 'Backlog',
         'position'       => 0,
     ];
 
@@ -45,7 +43,7 @@ class Task extends Model
         'testing_enabled',
         'testing_add_type',
         'testing_add_value',
-        'board_column',
+        'board_column_id',
         'position',
         'section',
         'client_approval',
@@ -65,6 +63,14 @@ class Task extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        // a new task starts in its project's first column unless told otherwise
+        static::creating(function (self $t) {
+            $t->board_column_id ??= Module::find($t->module_id)?->project?->columns()->value('id');
+        });
+    }
+
     protected function localAmounts(): array
     {
         return ['price' => ['local_price', 'major']];
@@ -78,6 +84,11 @@ class Task extends Model
     public function module(): BelongsTo
     {
         return $this->belongsTo(Module::class);
+    }
+
+    public function column(): BelongsTo
+    {
+        return $this->belongsTo(BoardColumn::class, 'board_column_id');
     }
 
     public function creator(): BelongsTo
@@ -139,16 +150,16 @@ class Task extends Model
     }
 
     /**
-     * Move this task to a different board column at the given position.
-     * Silently ignores unknown column values (ponytail: no exception thrown, just a no-op guard).
+     * Move this task to another column of its own project at the given position.
+     * Silently ignores a column from another project (no exception, just a no-op guard).
      */
-    public function moveTo(string $column, int $position): void
+    public function moveTo(int $columnId, int $position): void
     {
-        if (! BoardColumn::isValid($column)) {
+        if (! $this->module->project->columns()->whereKey($columnId)->exists()) {
             return;
         }
 
-        $this->update(['board_column' => $column, 'position' => $position]);
+        $this->update(['board_column_id' => $columnId, 'position' => $position]);
     }
 
     /**

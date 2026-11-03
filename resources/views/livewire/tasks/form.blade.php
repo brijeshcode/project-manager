@@ -42,13 +42,14 @@
                     @error('priority') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
                 <div>
-                    <label class="label" for="board_column">Board column</label>
-                    <select id="board_column" wire:model="board_column" class="select">
-                        @foreach(\App\Enums\BoardColumn::ordered() as $col)
-                            <option value="{{ $col->value }}">{{ $col->value }}</option>
+                    <label class="label" for="board_column_id">Board column</label>
+                    <select id="board_column_id" wire:model="board_column_id" class="select">
+                        <option value="">First column</option>
+                        @foreach($boardColumns as $col)
+                            <option value="{{ $col->id }}">{{ $col->name }}</option>
                         @endforeach
                     </select>
-                    @error('board_column') <p class="field-error">{{ $message }}</p> @enderror
+                    @error('board_column_id') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
             </div>
 

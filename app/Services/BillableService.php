@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\BillingMode;
-use App\Enums\BoardColumn;
 use App\Enums\TaskStatus;
 use App\Models\BillableLine;
 use App\Models\Client;
@@ -20,7 +19,7 @@ class BillableService
         $tasks = Task::query()
             ->whereHas('module.project', fn ($q) => $q->where('client_id', $client->id))
             ->where('status', TaskStatus::Published->value)
-            ->where('board_column', BoardColumn::Done->value)
+            ->whereHas('column', fn ($q) => $q->where('stage', 'done'))
             ->with(['module.project', 'subtasks'])
             ->get();
 

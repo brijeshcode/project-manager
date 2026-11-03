@@ -78,3 +78,11 @@ function rpSetup(): array
     return compact('client', 'project', 'resource', 'hidden', 'admin', 'staff', 'outsider', 'k', 'a', 'b', 'c');
 }
 
+
+/** Id of a project's board column by name (project, or a module/task's project). */
+function colId(\App\Models\Project|\App\Models\Module $on, string $name): int
+{
+    $project = $on instanceof \App\Models\Module ? $on->project : $on;
+
+    return $project->columns()->where('name', $name)->value('id');
+}
