@@ -156,7 +156,7 @@ Still open by choice:
 - Old invoices without a rate show no local total (not backfilled).
 - The `restrictOnDelete` client migration is still deferred.
 - Deleting a client cascades its payments' document rows but orphans the files on disk.
-- `database/seeders/DemoDataSeeder.php` (the owner's own uncommitted file) still writes the renamed `inr_rate` column; change it to `exchange_rate`.
+- `database/seeders/DemoSeeder.php` (the owner's own uncommitted file) still writes the renamed `inr_rate` column; change it to `exchange_rate`.
 
 ---
 
