@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('color', 7)->default('#6b7280');
+            $table->string('icon', 40)->nullable();   // a curated icon name or a pasted emoji
             $table->timestamps();
         });
     }

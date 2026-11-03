@@ -19,7 +19,7 @@
 <x-ui.side-section title="Labels" name="labels" :panel="$panel" :can="$canEdit">
     <div class="flex flex-wrap gap-1.5">
         @forelse ($labels as $l)
-            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ring-slate-200"><span class="h-2 w-2 rounded-full" style="background: {{ $l->color }}"></span>{{ $l->name }}</span>
+            <x-ui.label-chip :label="$l" />
         @empty
             <p class="text-slate-400">None yet</p>
         @endforelse
@@ -27,14 +27,11 @@
     <x-slot:editor>
         <div class="space-y-1">
             @foreach ($allLabels as $l)
-                <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" wire:model="labelIds" value="{{ $l->id }}" class="rounded border-slate-300 text-brand-600"> <span class="inline-block h-2.5 w-2.5 rounded-full" style="background: {{ $l->color }}"></span> {{ $l->name }}</label>
+                <label class="flex items-center gap-1.5 text-sm"><input type="checkbox" wire:model="labelIds" value="{{ $l->id }}" class="rounded border-slate-300 text-brand-600"> <x-ui.label-chip :label="$l" /></label>
             @endforeach
         </div>
-        <div class="mt-2 flex gap-1.5">
-            <input type="text" wire:model="newLabel" wire:keydown.enter.prevent="addLabel" placeholder="New label…" class="input h-8 min-w-0 flex-1 text-sm">
-            <input type="color" wire:model="newLabelColor" class="h-8 w-9 rounded border border-slate-300">
-            <button type="button" wire:click="addLabel" class="btn btn-secondary h-8 px-2 py-1 text-xs">Add</button>
-        </div>
-        @error('newLabel') <p class="field-error">{{ $message }}</p> @enderror
+        @can('manage-taxonomy')
+            <a href="{{ route('settings.labels') }}" wire:navigate class="mt-2 inline-block text-xs text-brand-600 hover:underline" data-test="manage-labels">Manage labels</a>
+        @endcan
     </x-slot:editor>
 </x-ui.side-section>

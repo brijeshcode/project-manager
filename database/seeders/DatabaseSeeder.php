@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
     {
         // Ensure the six roles exist.
         $this->call(RoleSeeder::class);
+        $this->call(TaxonomySeeder::class);
 
         // Idempotent super-admin login for local testing.
         $admin = User::firstOrCreate(

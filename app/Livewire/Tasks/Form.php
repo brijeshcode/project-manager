@@ -5,6 +5,7 @@ namespace App\Livewire\Tasks;
 use App\Models\Label;
 use App\Models\Module;
 use App\Models\Task;
+use App\Models\TaskType;
 use App\Models\User;
 use Illuminate\Validation\Rule;
 use App\Livewire\Concerns\HandlesMarkdownUploads;
@@ -24,6 +25,7 @@ class Form extends Component
     public string $status          = 'draft';
     public bool   $is_idea         = false;
     public int    $priority        = 0;
+    public ?int   $task_type_id    = null;
     public float  $estimate_hours  = 0.0;
     public string $scope           = 'in';
     public ?float $price           = null;
@@ -55,6 +57,7 @@ class Form extends Component
             $this->status           = $task->status->value;
             $this->is_idea          = $task->is_idea;
             $this->priority         = $task->priority;
+            $this->task_type_id     = $task->task_type_id;
             $this->estimate_hours   = $task->estimate_hours;
             $this->scope            = $task->scope->value;
             $this->price            = $task->price;
@@ -72,6 +75,7 @@ class Form extends Component
         }
 
         // creating: ?module= preselects the module, ?copy= prefills from another task
+        $this->task_type_id = TaskType::default()?->id;
         $this->module_id = (int) request()->query('module', $this->moduleOptions()->flatten(1)->first()?->id ?? 0);
         if ($id = request()->query('copy')) {
             $src = Task::visibleTo(auth()->user())->findOrFail($id);
@@ -83,6 +87,7 @@ class Form extends Component
             $this->status         = $src->status->value;
             $this->is_idea        = $src->is_idea;
             $this->priority       = $src->priority;
+            $this->task_type_id   = $src->task_type_id;
             $this->estimate_hours = $src->estimate_hours;
             $this->scope          = $src->scope->value;
             $this->price          = $src->price;
@@ -127,6 +132,7 @@ class Form extends Component
             'status'            => 'required|in:draft,published',
             'is_idea'           => 'boolean',
             'priority'          => 'integer|min:0',
+            'task_type_id'      => ['nullable', Rule::exists('task_types', 'id')],
             'estimate_hours'    => 'numeric|min:0',
             'scope'             => 'required|in:in,out',
             'price'             => 'nullable|numeric|min:0',
@@ -139,6 +145,7 @@ class Form extends Component
             'deadline'          => 'nullable|date',
         ]);
         $data['deadline'] = $data['deadline'] ?: null;
+        $data['task_type_id'] ??= TaskType::default()?->id;
 
         if ($this->taskId) {
             $task = Task::findOrFail($this->taskId);
@@ -178,6 +185,7 @@ class Form extends Component
             'copyCount' => $this->copyFrom ? Task::find($this->copyFrom)?->subtasks()->count() : 0,
             'boardColumns' => Module::find($this->module_id)?->project?->columns ?? collect(),
             'allLabels' => Label::orderBy('name')->get(),
+            'types'     => TaskType::orderBy('position')->get(),
             'allUsers'  => User::orderBy('name')->get(),
         ]);
     }

@@ -30,6 +30,8 @@
                 ['Recurring',     'billing.recurring',     'billing.recurring',                    'refresh',     $money],
                 ['Bank accounts', 'billing.bank-accounts', 'billing.bank-accounts',                'bank',        $money],
                 ['Currencies',    'currencies.index',      'currencies.*',                         'credit-card', $money],
+                ['Task types',    'settings.task-types',   'settings.task-types',                  'cog',         $u && $u->can('manage-taxonomy')],
+                ['Labels',        'settings.labels',       'settings.labels',                      'tag',         $u && $u->can('manage-taxonomy')],
             ])->filter(fn ($i) => $i[4]);
 
             $initials = $u ? collect(explode(' ', trim($u->name)))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') : '?';

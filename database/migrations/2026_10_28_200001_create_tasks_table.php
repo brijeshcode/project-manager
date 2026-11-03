@@ -8,10 +8,21 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::create('task_types', function (Blueprint $table) {
+            $table->id();
+            $table->string('name')->unique();
+            $table->string('color', 7)->default('#6b7280');
+            $table->string('icon', 40)->nullable();   // a curated icon name or a pasted emoji
+            $table->unsignedInteger('position')->default(0);
+            $table->boolean('is_system')->default(false);
+            $table->timestamps();
+        });
+
         Schema::create('tasks', function (Blueprint $table) {
             $table->id();
             $table->foreignId('module_id')->constrained()->cascadeOnDelete();
             $table->foreignId('creator_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('task_type_id')->nullable()->constrained('task_types')->nullOnDelete();
             $table->string('title');
             $table->text('description')->nullable();
             $table->string('status')->default('draft');          // TaskStatus enum
@@ -38,5 +49,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('tasks');
+        Schema::dropIfExists('task_types');
     }
 };

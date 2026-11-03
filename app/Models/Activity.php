@@ -25,7 +25,7 @@ class Activity extends Model
     /** One human sentence without the actor, e.g. "changed deadline from 2026-01-01 to 2026-02-01". */
     public function summary(): string
     {
-        $field = $this->field === 'board_column_id' ? 'column' : str_replace('_', ' ', $this->field ?? '');
+        $field = match ($this->field) { 'board_column_id' => 'column', 'task_type_id' => 'type', default => null } ?? str_replace('_', ' ', $this->field ?? '');
 
         return match ($this->event) {
             'assigned' => "assigned {$this->new}",

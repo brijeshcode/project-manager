@@ -24,7 +24,7 @@ class Task extends Model
     use LogsActivity { activityValue as protected baseActivityValue; }
 
     /** Changes to these are written to the activity log. */
-    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'board_column_id', 'client_visible', 'estimate_hours', 'started_at', 'completed_at'];
+    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'task_type_id', 'board_column_id', 'client_visible', 'estimate_hours', 'started_at', 'completed_at'];
 
     protected $attributes = [
         'is_idea'        => false,
@@ -39,6 +39,7 @@ class Task extends Model
     protected $fillable = [
         'module_id',
         'creator_id',
+        'task_type_id',
         'title',
         'description',
         'status',
@@ -83,6 +84,7 @@ class Task extends Model
     {
         // a new task starts in its project's first column unless told otherwise
         static::creating(function (self $t) {
+            $t->task_type_id ??= TaskType::default()?->id;
             $t->board_column_id ??= Module::find($t->module_id)?->project?->columns()->value('id');
             // one order per module: a new task goes to the bottom
             if (! $t->position) {
@@ -143,13 +145,14 @@ class Task extends Model
         return match (true) {
             $v === null || $v === '' => null,
             $field === 'board_column_id' => BoardColumn::find($v)?->name ?? (string) $v,
+            $field === 'task_type_id' => TaskType::find($v)?->name ?? (string) $v,
             $field === 'priority' => ['Low', 'Medium', 'High'][(int) $v] ?? (string) $v,
             default => $this->baseActivityValue($v, $field),
         };
     }
 
     /** Fields a copy carries over (never comments, attachments, activity, column or position). */
-    public const COPY_FIELDS = ['description', 'status', 'is_idea', 'priority', 'estimate_hours', 'scope', 'price', 'client_visible', 'testing_enabled', 'testing_add_type', 'testing_add_value', 'deadline', 'section'];
+    public const COPY_FIELDS = ['description', 'status', 'is_idea', 'priority', 'estimate_hours', 'scope', 'price', 'client_visible', 'testing_enabled', 'testing_add_type', 'testing_add_value', 'deadline', 'section', 'task_type_id'];
 
     /** Copy into a module: new task in its first column, with labels, assignees and optionally subtasks. */
     public function copyTo(int $moduleId, User $by, bool $withSubtasks, ?string $title = null): static
@@ -179,6 +182,11 @@ class Task extends Model
     public function module(): BelongsTo
     {
         return $this->belongsTo(Module::class);
+    }
+
+    public function type(): BelongsTo
+    {
+        return $this->belongsTo(TaskType::class, 'task_type_id');
     }
 
     public function column(): BelongsTo

@@ -10,12 +10,28 @@
             @if ($canEdit)
                 <span class="ml-auto flex flex-wrap items-center gap-2">
                     <button wire:click="toggleDone" class="btn btn-secondary h-8 gap-1 px-3 py-1 text-xs" title="{{ $subtask->is_done ? 'Reopen' : 'Mark done' }}" data-test="toggle-done"><x-icon name="check" /> {{ $subtask->is_done ? 'Reopen' : 'Mark done' }}</button>
-                    <button wire:click="convertToTask" wire:confirm="Convert this subtask into a task of the module? Its comments and attachments move with it and this subtask is removed." class="btn btn-secondary h-8 gap-1 px-3 py-1 text-xs" title="Convert to task" data-test="convert"><x-icon name="arrow-up-right" /> Convert to task</button>
+                    <button wire:click="$toggle('confirmingConvert')" class="btn btn-secondary h-8 gap-1 px-3 py-1 text-xs" title="Convert to task" data-test="convert"><x-icon name="arrow-up-right" /> Convert to task</button>
                     <button wire:click="deleteSubtask" wire:confirm="Delete this subtask?" class="btn btn-ghost h-8 gap-1 px-3 py-1 text-xs" title="Delete subtask" data-test="delete"><x-icon name="trash-2" /> Delete</button>
                 </span>
             @endif
         </div>
     </div>
+
+    @if ($canEdit && $confirmingConvert)
+        <x-ui.card class="mt-4 text-sm" data-test="convert-panel">
+            <p>Convert this subtask into a task of the module? Its comments and attachments move with it and this subtask is removed.</p>
+            <div class="mt-3 flex flex-wrap items-end gap-3">
+                <div>
+                    <label for="convertType" class="label">Task type</label>
+                    <select id="convertType" wire:model="convertType" class="select h-9 text-sm" data-test="convert-type">
+                        @foreach ($types as $o) <option value="{{ $o->id }}">{{ $o->name }}@if ($o->id === $defaultType?->id) (default)@endif</option> @endforeach
+                    </select>
+                </div>
+                <button wire:click="convertToTask" class="btn btn-primary h-9 text-sm" data-test="convert-confirm">Convert</button>
+                <button wire:click="$set('confirmingConvert', false)" class="btn btn-ghost h-9 text-sm">Cancel</button>
+            </div>
+        </x-ui.card>
+    @endif
 
     <div class="mt-6 grid gap-6 lg:grid-cols-3">
         <div class="min-w-0 space-y-6 lg:col-span-2">

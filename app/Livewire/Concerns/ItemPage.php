@@ -42,10 +42,6 @@ trait ItemPage
 
     public array $labelIds = [];
 
-    public string $newLabel = '';
-
-    public string $newLabelColor = '#3b82f6';
-
     abstract protected function item(): Model;
 
     abstract protected function itemProject(): Project;
@@ -206,15 +202,6 @@ trait ItemPage
     {
         $this->panel = null;
         $this->resetErrorBag();
-    }
-
-    public function addLabel(): void
-    {
-        $this->authorizeEdit();
-        $this->validate(['newLabel' => 'required|string|max:50', 'newLabelColor' => ['required', 'regex:/^#[0-9a-fA-F]{6}$/']]);
-        $label = Label::firstOrCreate(['name' => trim($this->newLabel)], ['color' => $this->newLabelColor]);
-        $this->labelIds = array_values(array_unique([...$this->labelIds, $label->id]));
-        $this->reset('newLabel');
     }
 
     public function savePanel(): void

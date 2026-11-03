@@ -150,7 +150,7 @@ class Show extends Component
     public function render()
     {
         return view('livewire.modules.show', $this->panelData() + [
-            'tasks' => $this->module->tasks()->visibleTo(auth()->user())->with(['column', 'assignees', 'labels', 'checklistItems', 'subtasks'])->orderBy('position')->orderBy('id')->get(),
+            'tasks' => $this->module->tasks()->visibleTo(auth()->user())->with(['column', 'type', 'assignees', 'labels', 'checklistItems', 'subtasks'])->orderBy('position')->orderBy('id')->get(),
             'progressService' => app(ProgressService::class),
             'pct' => app(ProgressService::class)->forModule($this->module),
             'startedAt' => $this->module->startedAt(),

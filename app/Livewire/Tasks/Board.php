@@ -51,7 +51,7 @@ class Board extends Component
         return Task::visibleTo(auth()->user())
             ->whereIn('module_id', $this->project->modules()->pluck('id'))
             ->when($this->filterModule, fn ($q) => $q->where('module_id', $this->filterModule))
-            ->with(['module', 'subtasks.checklistItems'])
+            ->with(['module', 'type', 'labels', 'subtasks.checklistItems'])
             ->orderBy('position')
             ->orderBy('id')
             ->get()

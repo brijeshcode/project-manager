@@ -8,6 +8,7 @@ use App\Models\Subtask;
 use App\Models\Task;
 use App\Services\ProgressService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -41,6 +42,8 @@ class Show extends Component
     public string $estimate = '0';
 
     public string $price = '';
+
+    public ?int $typeId = null;
 
     public string $newSubtask = '';
 
@@ -81,6 +84,7 @@ class Show extends Component
         $this->deadline = $t->deadline?->toDateString() ?? '';
         $this->deadlineReason = '';
         $this->priority = $t->priority;
+        $this->typeId = $t->task_type_id;
         $this->clientVisible = $t->client_visible;
         $this->status = $t->status->value;
         $this->isIdea = $t->is_idea;
@@ -96,6 +100,7 @@ class Show extends Component
         $t = $this->task;
         match ($panel) {
             'deadline' => $this->saveDeadline($t),
+            'type' => $t->update(['task_type_id' => $this->validate(['typeId' => ['required', Rule::exists('task_types', 'id')]])['typeId']]),
             'priority' => $t->update($this->validate(['priority' => 'integer|in:0,1,2'])),
             'visibility' => $this->saveVisibility($t),
             'estimate' => $this->saveEstimate($t),
@@ -168,13 +173,14 @@ class Show extends Component
     public function render()
     {
         $project = $this->itemProject();
-        $this->task->unsetRelation('checklistItems')->unsetRelation('subtasks')->unsetRelation('column');
+        $this->task->unsetRelation('checklistItems')->unsetRelation('subtasks')->unsetRelation('column')->unsetRelation('type');
         $subtasks = $this->task->subtasks()->withCount('comments')->with('assignees')->get();
 
         return view('livewire.tasks.show', $this->panelData() + [
             'project' => $project,
             'module' => $this->task->module,
             'columns' => $project->columns,
+            'types' => $this->panel === 'type' ? \App\Models\TaskType::orderBy('position')->get() : collect(),
             'subtasks' => $subtasks,
             'attachments' => $this->task->attachments()->latest('id')->get(),
             'canCopy' => auth()->user()->can('update', $project),

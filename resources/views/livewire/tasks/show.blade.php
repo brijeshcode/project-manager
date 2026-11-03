@@ -12,6 +12,7 @@
         @include('livewire.items._title', ['heading' => $task->title, 'canEdit' => $canEdit])
         <div class="flex flex-wrap items-center gap-2 sm:pl-7">
             <x-ui.stage-badge :column="$task->column" data-test="column-badge" />
+            <x-ui.type-badge :type="$task->type" data-test="type-badge" />
             <x-ui.priority :value="$task->priority" data-test="priority-badge" />
             @if ($task->status->value === 'draft') <x-ui.badge color="amber">Draft</x-ui.badge> @endif
             @if ($task->client_visible) <x-ui.badge color="brand">Visible to client</x-ui.badge> @endif
@@ -109,6 +110,16 @@
                         <input type="date" wire:model="deadline" class="input h-8 text-sm">
                         @error('deadline') <p class="field-error">{{ $message }}</p> @enderror
                         <input type="text" wire:model="deadlineReason" placeholder="Reason (optional)" class="input mt-1.5 h-8 text-sm">
+                    </x-slot:editor>
+                </x-ui.side-section>
+
+                <x-ui.side-section title="Type" name="type" :panel="$panel" :can="$canEdit">
+                    <x-ui.type-badge :type="$task->type" data-test="type-side" />
+                    <x-slot:editor>
+                        <select wire:model="typeId" class="select h-8 text-sm" data-test="type-select">
+                            @foreach ($types as $o) <option value="{{ $o->id }}">{{ $o->name }}</option> @endforeach
+                        </select>
+                        @error('typeId') <p class="field-error">{{ $message }}</p> @enderror
                     </x-slot:editor>
                 </x-ui.side-section>
 

@@ -212,7 +212,7 @@
                             </span>
                             <span class="flex flex-wrap gap-1">
                                 @foreach ($module->labels as $l)
-                                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ring-slate-200"><span class="h-2 w-2 rounded-full" style="background: {{ $l->color }}"></span>{{ $l->name }}</span>
+                                    <x-ui.label-chip :label="$l" />
                                 @endforeach
                             </span>
                             <x-ui.progress :pct="$mPct" class="w-40" data-test="module-progress" />
@@ -284,8 +284,9 @@
                                             @endforeach
                                         </span>
                                         @foreach ($task->labels as $l)
-                                            <span class="hidden items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ring-slate-200 sm:inline-flex"><span class="h-2 w-2 rounded-full" style="background: {{ $l->color }}"></span>{{ $l->name }}</span>
+                                            <x-ui.label-chip :label="$l" class="hidden sm:inline-flex" />
                                         @endforeach
+                                        <x-ui.type-badge :type="$task->type" />
                                         <x-ui.priority :value="$task->priority" />
                                         <x-ui.deadline :date="$task->deadline" :done="$task->column?->stage === 'done'" class="text-xs" />
                                         <x-ui.stage-badge :column="$task->column" />

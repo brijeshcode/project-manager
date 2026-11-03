@@ -57,14 +57,14 @@ class Subtask extends Model
      * Promote to a task of the same module (first board column, in scope). Assignees, labels, comments,
      * attachments (rows re-pointed, files untouched), checklist items and time entries move over.
      */
-    public function convertToTask(User $by): Task
+    public function convertToTask(User $by, ?int $typeId = null): Task
     {
-        return DB::transaction(function () use ($by) {
+        return DB::transaction(function () use ($by, $typeId) {
             $parent = $this->task;
             $task = Task::create([
                 'module_id' => $parent->module_id, 'creator_id' => $by->id, 'title' => $this->title,
                 'description' => $this->description, 'estimate_hours' => $this->estimate_hours,
-                'scope' => 'in', 'status' => 'published',
+                'scope' => 'in', 'status' => 'published', 'task_type_id' => $typeId, // null = the default type
             ]);
             $task->assignees()->sync($this->assignees()->pluck('users.id')->all());
             $task->labels()->sync($this->labels()->pluck('labels.id')->all());

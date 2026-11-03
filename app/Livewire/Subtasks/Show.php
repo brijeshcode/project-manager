@@ -21,6 +21,11 @@ class Show extends Component
 
     public string $estimate = '0';
 
+    /** Type chosen in the convert-to-task confirm box (empty = default). */
+    public ?int $convertType = null;
+
+    public bool $confirmingConvert = false;
+
     public function mount(Subtask $subtask): void
     {
         $user = auth()->user();
@@ -31,6 +36,7 @@ class Show extends Component
         $this->authorize('view', $task);
         $this->subtask = $subtask;
         $this->canEdit = $user->can('update', $task);
+        $this->convertType = \App\Models\TaskType::default()?->id;
     }
 
     protected function item(): Model
@@ -79,7 +85,8 @@ class Show extends Component
     public function convertToTask()
     {
         $this->authorizeEdit();
-        $task = $this->subtask->convertToTask(auth()->user());
+        $this->validate(['convertType' => ['nullable', \Illuminate\Validation\Rule::exists('task_types', 'id')]]);
+        $task = $this->subtask->convertToTask(auth()->user(), $this->convertType ?: null);
 
         return $this->redirect(route('tasks.show', $task), navigate: true);
     }
@@ -90,6 +97,8 @@ class Show extends Component
 
         return view('livewire.subtasks.show', $this->panelData() + [
             'task' => $task,
+            'types' => \App\Models\TaskType::orderBy('position')->get(),
+            'defaultType' => \App\Models\TaskType::default(),
             'project' => $this->itemProject(),
             'attachments' => $this->subtask->attachments()->latest('id')->get(),
         ]);

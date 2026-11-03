@@ -21,6 +21,8 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Super admin bypasses every gate; return null to let others fall through.
+        // task types and labels: super admin only (everyone else just assigns the existing ones)
+        Gate::define('manage-taxonomy', fn ($user) => $user->hasRole('super_admin'));
         Gate::define('manage-money', fn ($user) => $user->hasRole('super_admin'));
         Gate::before(fn ($user, $ability) => $user->hasRole('super_admin') ? true : null);
     }

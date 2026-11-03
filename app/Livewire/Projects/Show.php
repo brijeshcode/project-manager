@@ -248,6 +248,7 @@ class Show extends Component
                 'tasks.subtasks',
                 'tasks.assignees',
                 'tasks.labels',
+                'tasks.type',
                 'tasks.column',
                 'assignees',
                 'labels',

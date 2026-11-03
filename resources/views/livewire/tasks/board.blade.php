@@ -97,7 +97,11 @@
                                     @if($task->estimate_hours)
                                         <p class="mt-1 text-xs text-slate-400">{{ $task->estimate_hours }}h</p>
                                     @endif
+                                    @if($task->labels->isNotEmpty())
+                                        <div class="mt-2 flex flex-wrap gap-1">@foreach($task->labels as $l)<x-ui.label-chip :label="$l" />@endforeach</div>
+                                    @endif
                                     <div class="mt-2 flex flex-wrap items-center gap-2">
+                                        <x-ui.type-badge :type="$task->type" />
                                         <x-ui.priority :value="$task->priority" />
                                         <x-ui.deadline :date="$task->deadline" :done="$col->stage === 'done'" class="text-xs" />
                                         @if($task->client_visible)

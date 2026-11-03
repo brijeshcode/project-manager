@@ -45,6 +45,12 @@ Route::middleware(['auth', 'role:super_admin'])->group(function () {
     Route::get('clients/{client}', ClientShow::class)->name('clients.show');
 });
 
+// Task types and labels: super admin only (Gate manage-taxonomy)
+Route::middleware(['auth', 'can:manage-taxonomy'])->prefix('settings')->name('settings.')->group(function () {
+    Route::get('task-types', \App\Livewire\Settings\TaskTypes::class)->name('task-types');
+    Route::get('labels', \App\Livewire\Settings\Labels::class)->name('labels');
+});
+
 Route::get('billing/recurring', \App\Livewire\Billing\Recurring::class)
     ->middleware(['auth', 'can:manage-money'])->name('billing.recurring');
 Route::middleware(['auth', 'can:manage-money'])->prefix('currencies')->name('currencies.')->group(function () {

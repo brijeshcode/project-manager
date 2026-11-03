@@ -36,7 +36,14 @@
                 @error('description') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
-            <div class="grid gap-5 sm:grid-cols-3">
+            <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                    <label class="label" for="task_type_id">Type</label>
+                    <select id="task_type_id" wire:model="task_type_id" class="select" data-test="type-select">
+                        @foreach($types as $o) <option value="{{ $o->id }}">{{ $o->name }}</option> @endforeach
+                    </select>
+                    @error('task_type_id') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
                 <div>
                     <label class="label" for="status">Status</label>
                     <select id="status" wire:model="status" class="select">
@@ -146,10 +153,7 @@
                     <label class="inline-flex items-center gap-1.5 cursor-pointer">
                         <input type="checkbox" wire:model="labelIds" value="{{ $label->id }}"
                                class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700">
-                        <span class="text-sm font-medium text-slate-700">{{ $label->name }}</span>
-                        @if($label->color)
-                            <span class="inline-block w-3 h-3 rounded-full" style="background:{{ $label->color }}"></span>
-                        @endif
+                        <x-ui.label-chip :label="$label" class="text-sm" />
                     </label>
                 @endforeach
             </div>

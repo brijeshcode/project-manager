@@ -32,6 +32,7 @@ class DemoSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call(TaxonomySeeder::class); // types and labels exist even on a database seeded before they did
         if (! Client::where('name', 'Northwind Trading')->exists()) {
             $this->seedWorkspace();
         }
@@ -42,6 +43,20 @@ class DemoSeeder extends Seeder
         $this->seedBilling();
         $this->seedBulk();
         $this->seedLargeProject();
+        $this->seedTypes();
+    }
+
+    /** A mix of task types: tasks still on the default "Task" type are spread over the others (written straight to the table, no activity noise). */
+    private function seedTypes(): void
+    {
+        $default = \App\Models\TaskType::default();
+        $ids = \App\Models\TaskType::orderBy('position')->pluck('id')->all();
+        if (! $default || count($ids) < 2) {
+            return;
+        }
+        Task::where('task_type_id', $default->id)->orderBy('id')->pluck('id')->each(
+            fn ($id, $i) => \Illuminate\Support\Facades\DB::table('tasks')->where('id', $id)->update(['task_type_id' => $ids[$i % count($ids)]])
+        );
     }
 
     /** One project with 7 modules, 2–5 tasks each; only two of those tasks carry subtasks. Idempotent on the project name. */
@@ -106,8 +121,8 @@ class DemoSeeder extends Seeder
         $project->members()->syncWithoutDetaching([$dev->id => ['role_on_project' => 'developer', 'access_scope' => 'all', 'active' => true]]);
 
         auth()->setUser($admin); // so the activity log records who
-        $labels = collect([['Backend', '#6366f1'], ['Payments', '#10b981'], ['Urgent', '#ef4444']])
-            ->map(fn ($l) => \App\Models\Label::firstOrCreate(['name' => $l[0]], ['color' => $l[1]]));
+        $labels = collect([['Backend', '#6366f1', 'server'], ['Payments', '#10b981', 'tag'], ['Urgent', '#ef4444', 'zap']])
+            ->map(fn ($l) => \App\Models\Label::firstOrCreate(['name' => $l[0]], ['color' => $l[1], 'icon' => $l[2]]));
         $module->update(['description' => "Everything between the cart and the confirmation e-mail.
 
 - [x] Cart totals

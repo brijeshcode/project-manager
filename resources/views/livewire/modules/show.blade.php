@@ -54,6 +54,7 @@
                                 <span class="drag-handle cursor-grab text-slate-300 hover:text-slate-500" title="Drag to reorder" aria-label="Drag to reorder"><x-icon name="grip-vertical" /></span>
                             @endif
                             <a href="{{ route('tasks.show', $task) }}" wire:navigate class="min-w-0 flex-1 basis-40 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
+                            <x-ui.type-badge :type="$task->type" />
                             <x-ui.priority :value="$task->priority" />
                             <span class="flex -space-x-1">
                                 @foreach ($task->assignees as $u)
@@ -61,7 +62,7 @@
                                 @endforeach
                             </span>
                             @foreach ($task->labels as $l)
-                                <span class="hidden items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ring-slate-200 sm:inline-flex"><span class="h-2 w-2 rounded-full" style="background: {{ $l->color }}"></span>{{ $l->name }}</span>
+                                <x-ui.label-chip :label="$l" class="hidden sm:inline-flex" />
                             @endforeach
                             <x-ui.deadline :date="$task->deadline" :done="$done" class="text-xs" />
                             <x-ui.stage-badge :column="$task->column" />
