@@ -40,9 +40,9 @@ it('lets a project member add a module, task, subtask and checklist item', funct
     $project = wsProject();
     $user = wsManager($project);
 
-    Livewire::actingAs($user)->test(Show::class, ['project' => $project])
-        ->set('newModuleName', 'Checkout')
-        ->call('addModule');
+    Livewire::actingAs($user)->test(\App\Livewire\Modules\Create::class, ['project' => $project])
+        ->set('name', 'Checkout')
+        ->call('save');
 
     $module = $project->modules()->first();
     expect($module)->not->toBeNull()
@@ -93,10 +93,11 @@ it('saves descriptions for the project form, modules and tasks', function () {
     $project->members()->attach($admin->id, ['role_on_project' => 'project_manager', 'access_scope' => 'all', 'active' => true]);
 
     // Module description at create, then edit
-    $component = Livewire::actingAs($admin)->test(Show::class, ['project' => $project])
-        ->set('newModuleName', 'Checkout')
-        ->set('newModuleDescription', 'Handles payment')
-        ->call('addModule');
+    Livewire::actingAs($admin)->test(\App\Livewire\Modules\Create::class, ['project' => $project])
+        ->set('name', 'Checkout')
+        ->set('description', 'Handles payment')
+        ->call('save');
+    $component = Livewire::actingAs($admin)->test(Show::class, ['project' => $project]);
 
     $module = $project->modules()->first();
     expect($module->description)->toBe('Handles payment');

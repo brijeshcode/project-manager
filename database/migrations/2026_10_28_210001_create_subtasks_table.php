@@ -14,6 +14,7 @@ return new class extends Migration
             $table->string('title');
             $table->text('description')->nullable();
             $table->float('estimate_hours')->default(0.0);
+            $table->boolean('is_done')->default(false);
             $table->unsignedInteger('position')->default(0);
             $table->timestamps();
         });

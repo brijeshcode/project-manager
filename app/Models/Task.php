@@ -109,6 +109,29 @@ class Task extends Model
         };
     }
 
+    /** Fields a copy carries over (never comments, attachments, activity, column or position). */
+    public const COPY_FIELDS = ['description', 'status', 'is_idea', 'priority', 'estimate_hours', 'scope', 'price', 'client_visible', 'testing_enabled', 'testing_add_type', 'testing_add_value', 'deadline', 'section'];
+
+    /** Copy into a module: new task in its first column, with labels, assignees and optionally subtasks. */
+    public function copyTo(int $moduleId, User $by, bool $withSubtasks, ?string $title = null): static
+    {
+        $new = static::create(['module_id' => $moduleId, 'creator_id' => $by->id, 'title' => $title ?? $this->title] + $this->only(self::COPY_FIELDS));
+        $new->assignees()->sync($this->assignees()->pluck('users.id')->all());
+        $new->labels()->sync($this->labels()->pluck('labels.id')->all());
+        $withSubtasks && $this->copySubtasksTo($new);
+
+        return $new;
+    }
+
+    public function copySubtasksTo(self $new): void
+    {
+        foreach ($this->subtasks as $s) {
+            $c = Subtask::create(['task_id' => $new->id, 'title' => $s->title, 'description' => $s->description, 'estimate_hours' => $s->estimate_hours]);
+            $c->assignees()->sync($s->assignees()->pluck('users.id')->all());
+            $c->labels()->sync($s->labels()->pluck('labels.id')->all());
+        }
+    }
+
     public function accessProject(): Project
     {
         return $this->module->project;

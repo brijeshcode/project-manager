@@ -5,12 +5,25 @@
         </a>
     </div>
 
-    <x-ui.page-header :title="$taskId ? 'Edit task' : 'New task'" subtitle="Fill in the details for this task." />
+    <x-ui.page-header :title="$taskId ? 'Edit task' : ($copyFrom ? 'Copy task' : 'New task')" :subtitle="$copyFrom ? 'Nothing is saved until you click Create task.' : 'Fill in the details for this task.'" />
 
     <form wire:submit="save" class="max-w-3xl space-y-6">
 
         {{-- Core --}}
         <x-ui.card class="space-y-5">
+            @unless ($taskId)
+                <div>
+                    <label class="label" for="module_id">Module</label>
+                    <select id="module_id" wire:model.live="module_id" class="select">
+                        @foreach ($moduleOptions as $ms)
+                            <optgroup label="{{ $ms->first()->project->name }}">
+                                @foreach ($ms as $m) <option value="{{ $m->id }}">{{ $m->name }}</option> @endforeach
+                            </optgroup>
+                        @endforeach
+                    </select>
+                    @error('module_id') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+            @endunless
             <div>
                 <label class="label" for="title">Title</label>
                 <input id="title" type="text" wire:model="title" placeholder="What needs doing?" class="input">
@@ -72,7 +85,7 @@
         </x-ui.card>
 
         {{-- Scope & pricing --}}
-        @if($task && auth()->user()->can('updateCostTime', $task))
+        @if($task ? auth()->user()->can('updateCostTime', $task) : auth()->user()->hasAnyRole(['super_admin', 'project_manager']))
         <x-ui.card>
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-4">Scope &amp; pricing</p>
             <div class="grid gap-5 sm:grid-cols-3">
@@ -156,6 +169,13 @@
                 @endforeach
             </div>
         </x-ui.card>
+
+        @if ($copyFrom && $copyCount > 0)
+            <label class="inline-flex cursor-pointer items-center gap-2">
+                <input type="checkbox" wire:model="copySubtasks" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700" data-test="copy-subtasks">
+                <span class="text-sm font-medium text-slate-700">Also copy {{ $copyCount }} {{ Str::plural('subtask', $copyCount) }}</span>
+            </label>
+        @endif
 
         <div class="flex items-center gap-3">
             <button type="submit" class="btn btn-primary">{{ $taskId ? 'Save changes' : 'Create task' }}</button>

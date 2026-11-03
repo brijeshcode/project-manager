@@ -1,7 +1,7 @@
 <?php
 
 use App\Enums\AccessScope;
-use App\Livewire\Modules\Manager;
+use App\Livewire\Modules\Create as ModuleCreate;
 use App\Livewire\Portal\ProjectView;
 use App\Livewire\Projects\Form as ProjectForm;
 use App\Livewire\Projects\Show as ProjectShow;
@@ -80,7 +80,7 @@ it('logs every tracked task field, with the column as its name', function () {
     expect($rows['priority'])->old->toBe('Low')->new->toBe('High');
     expect($rows['deadline'])->old->toBeNull()->new->toBe('2030-01-01');
     expect($rows['client_visible'])->old->toBe('yes')->new->toBe('no');
-    expect($rows['board_column_id']->summary())->toContain('changed column from');
+    expect($rows['board_column_id']->summary())->toContain('changed the column from');
 
     $t->update(['title' => 'Build checkout form']); // unchanged
     expect($t->activities()->count())->toBe(7);
@@ -134,15 +134,19 @@ it('serves the task page to members and admins, not outsiders, clients or others
     $this->actingAs($s['member'])->get(route('tasks.show', $draft))->assertOk();
 });
 
-it('lets the whole task be edited from the page and logs it', function () {
+it('edits every task field from the sidebar panels and logs it', function () {
     $s = tpSetup();
     $label = Label::create(['name' => 'Bug', 'color' => '#f00']);
     $col = $s['project']->columns[3];
-    tpPage($s)->call('edit')
-        ->set('title', 'Renamed')->set('description', "- [ ] a\n- b")->set('deadline', '2030-03-03')->set('deadlineReason', 'Client asked')
-        ->set('priority', 2)->set('columnId', $col->id)->set('clientVisible', false)->set('estimate', '6')->set('scope', 'out')->set('price', '120.50')
-        ->set('assigneeIds', [$s['member']->id, $s['outsider']->id])->set('labelIds', [$label->id])
-        ->call('save')->assertHasNoErrors()->assertSet('editing', false);
+    tpPage($s)->call('editTitle')->set('title', 'Renamed')->call('saveTitle')->assertHasNoErrors()->assertSet('editingTitle', false)
+        ->call('editDescription')->set('description', "- [ ] a\n- b")->call('saveDescription')->assertSet('editingDesc', false)
+        ->call('openPanel', 'deadline')->set('deadline', '2030-03-03')->set('deadlineReason', 'Client asked')->call('savePanel')->assertSet('panel', null)
+        ->call('openPanel', 'priority')->set('priority', 2)->call('savePanel')
+        ->call('moveColumn', $col->id)
+        ->call('openPanel', 'visibility')->set('clientVisible', false)->call('savePanel')
+        ->call('openPanel', 'estimate')->set('estimate', '6')->set('scope', 'out')->set('price', '120.50')->call('savePanel')->assertHasNoErrors()
+        ->call('openPanel', 'assignees')->set('assigneeIds', [$s['member']->id, $s['outsider']->id])->call('savePanel')
+        ->call('openPanel', 'labels')->set('labelIds', [$label->id])->call('savePanel');
 
     $t = $s['task']->fresh();
     expect($t)->title->toBe('Renamed')->priority->toBe(2)->board_column_id->toBe($col->id)->client_visible->toBeFalse();
@@ -151,15 +155,18 @@ it('lets the whole task be edited from the page and logs it', function () {
     expect($t->assignees()->pluck('users.id')->all())->toBe([$s['member']->id]); // outsider is not on the project
     expect($t->activities()->where('field', 'deadline')->first())->reason->toBe('Client asked');
     expect($t->activities()->where('field', 'board_column_id')->first()->new)->toBe($col->name);
+    expect($t->activities()->where('field', 'title')->first())->old->toBe('Build form')->new->toBe('Renamed');
+    expect($t->activities()->where('field', 'description')->exists())->toBeTrue();
 
     tpPage($s)->assertSee('Mar 3, 2030')->assertSee('Renamed');
 });
 
-it('validates task money and dates on the page', function () {
+it('validates task money, dates and title on the page', function () {
     $s = tpSetup();
-    tpPage($s)->call('edit')->set('price', '-5')->set('estimate', '-1')->set('deadline', 'nope')->call('save')
-        ->assertHasErrors(['price', 'estimate', 'deadline']);
-    tpPage($s)->call('edit')->set('price', '99999999')->call('save')->assertHasErrors('price');
+    tpPage($s)->call('openPanel', 'estimate')->set('price', '-5')->set('estimate', '-1')->call('savePanel')->assertHasErrors(['price', 'estimate'])->assertSet('panel', 'estimate');
+    tpPage($s)->call('openPanel', 'deadline')->set('deadline', 'nope')->call('savePanel')->assertHasErrors('deadline');
+    tpPage($s)->call('openPanel', 'estimate')->set('scope', 'out')->set('price', '99999999')->call('savePanel')->assertHasErrors('price');
+    tpPage($s)->call('editTitle')->set('title', '')->call('saveTitle')->assertHasErrors('title');
 });
 
 it('changes the column from the sidebar and only inside the project', function () {
@@ -174,9 +181,9 @@ it('changes the column from the sidebar and only inside the project', function (
 
 it('forbids editing for members who are not assignees, allows assignees', function () {
     $s = tpSetup();
-    tpPage($s, $s['member'])->call('edit')->assertForbidden();
+    tpPage($s, $s['member'])->call('editTitle')->assertForbidden();
     $s['task']->assignees()->attach($s['member']->id);
-    tpPage($s, $s['member'])->call('edit')->set('title', 'By assignee')->call('save')->assertHasNoErrors();
+    tpPage($s, $s['member'])->call('editTitle')->set('title', 'By assignee')->call('saveTitle')->assertHasNoErrors();
     expect($s['task']->fresh()->title)->toBe('By assignee');
 });
 
@@ -195,62 +202,45 @@ it('renders task markdown through the sanitiser', function () {
 
 it('posts comments and threaded replies on the task timeline', function () {
     $s = tpSetup();
-    tpPage($s)->set('commentBody', 'Hello')->call('postComment', 'task')->assertSet('commentBody', '');
+    tpPage($s)->set('commentBody', 'Hello')->call('postComment')->assertSet('commentBody', '');
     $root = $s['task']->comments()->first();
-    tpPage($s, $s['member'])->call('startReply', 'task', $root->id)->set('replyBody', 'Hi back')->call('postReply');
+    tpPage($s, $s['member'])->call('startReply', $root->id)->set('replyBody', 'Hi back')->call('postReply');
     expect($s['task']->comments()->where('parent_id', $root->id)->first())->body->toBe('Hi back');
-    tpPage($s)->set('commentBody', '')->call('postComment', 'task')->assertHasErrors('commentBody');
+    tpPage($s)->set('commentBody', '')->call('postComment')->assertHasErrors('commentBody');
     tpPage($s)->assertSee('Hello')->assertSee('Hi back');
 });
 
 it('shows a deadline change in the timeline', function () {
     $s = tpSetup();
-    tpPage($s)->call('edit')->set('deadline', '2031-01-02')->call('save');
-    tpPage($s)->assertSee('changed deadline from none to 2031-01-02');
+    tpPage($s)->call('openPanel', 'deadline')->set('deadline', '2031-01-02')->call('savePanel');
+    tpPage($s)->assertSee('changed the deadline from none to 2031-01-02');
 });
 
-// ── subtask panel ────────────────────────────────────────────────────────────
+// ── subtask list ─────────────────────────────────────────────────────────────
 
-it('adds subtasks and opens the detail panel inside the task page', function () {
+it('adds subtasks inline, toggles done and links each to its own page', function () {
     $s = tpSetup();
-    $l = Label::create(['name' => 'Bug', 'color' => '#f00']);
     $c = tpPage($s)->set('newSubtask', 'Cart API')->call('addSubtask')->assertSet('newSubtask', '');
     $sub = $s['task']->subtasks()->first();
     expect($sub->title)->toBe('Cart API');
-
-    $c->call('openSubtask', $sub->id)->assertSee('data-test="subtask-panel"', false)->assertSee('No description yet.')
-        ->call('editSubtask')->set('subDescription', "**bold** text")->set('subAssigneeIds', [$s['member']->id])->set('subLabelIds', [$l->id])
-        ->call('saveSubtask')->assertHasNoErrors()->assertSet('subEditing', false)
-        ->assertSee('<strong>bold</strong>', false)->assertSee($s['member']->name)->assertSee('Bug');
-
-    $c->set('subCommentBody', 'Sub note')->call('postComment', 'subtask')->assertSee('Sub note');
-    $root = $sub->comments()->first();
-    $c->call('startReply', 'subtask', $root->id)->set('replyBody', 'Sub reply')->call('postReply')->assertSee('Sub reply');
-    expect($sub->fresh()->description)->toBe('**bold** text');
-    expect($sub->activities()->pluck('field')->filter()->unique()->sort()->values()->all())->toBe(['assignees', 'description', 'labels']);
-    // comments went to the subtask, not the task
-    expect($s['task']->comments()->count())->toBe(0);
-
-    $c->call('closeSubtask')->assertDontSee('data-test="subtask-panel"', false);
+    $c->assertSee('0/1 done')->assertSee(route('subtasks.show', $sub), false)->assertDontSee('subtask-panel');
+    $c->call('toggleSubtask', $sub->id)->assertSee('1/1 done');
+    expect($sub->fresh()->is_done)->toBeTrue();
+    tpPage($s)->set('newSubtask', '')->call('addSubtask')->assertHasErrors('newSubtask');
 });
 
-it('will not open or delete a subtask of another task', function () {
+it('will not toggle a subtask of another task', function () {
     $s = tpSetup();
     $other = Task::create(['module_id' => $s['module']->id, 'creator_id' => $s['admin']->id, 'title' => 'Other', 'status' => 'published']);
     $foreign = Subtask::create(['task_id' => $other->id, 'title' => 'Foreign']);
-    expect(fn () => tpPage($s)->call('openSubtask', $foreign->id))->toThrow(Illuminate\Database\Eloquent\ModelNotFoundException::class);
-    expect(fn () => tpPage($s)->call('deleteSubtask', $foreign->id))->toThrow(Illuminate\Database\Eloquent\ModelNotFoundException::class);
-    expect(Subtask::find($foreign->id))->not->toBeNull();
+    expect(fn () => tpPage($s)->call('toggleSubtask', $foreign->id))->toThrow(Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    expect($foreign->fresh()->is_done)->toBeFalse();
 });
 
-it('stores uploads for the task, or the subtask while its editor is open', function () {
+it('stores task uploads from the description editor', function () {
     $s = tpSetup();
-    $sub = Subtask::create(['task_id' => $s['task']->id, 'title' => 'S']);
-    $c = tpPage($s)->set('upload', UploadedFile::fake()->image('a.png'))->call('storeUpload');
-    expect($s['task']->attachments()->count())->toBe(1)->and($sub->attachments()->count())->toBe(0);
-
-    $c->call('openSubtask', $sub->id)->call('editSubtask')->set('upload', UploadedFile::fake()->image('b.png'))->call('storeUpload');
-    expect($sub->attachments()->count())->toBe(1);
+    tpPage($s)->set('upload', UploadedFile::fake()->image('a.png'))->call('storeUpload');
+    expect($s['task']->attachments()->count())->toBe(1);
 });
 
 // ── attachment route ─────────────────────────────────────────────────────────
@@ -362,8 +352,7 @@ it('uses the markdown editor on the project, task and module forms', function ()
     Livewire::actingAs($s['admin'])->test(ProjectForm::class)->assertSee('Write')->assertSee('Preview')->assertSee('wire:model="description"', false)->assertSee('wire:model="aim"', false);
     Livewire::actingAs($s['admin'])->test(TaskForm::class, ['task' => $s['task']])->assertSee('Preview')->assertSee('Attach');
     Livewire::actingAs($s['admin'])->test(TaskForm::class)->assertSee('Preview')->assertDontSee('Attach');
-    Livewire::actingAs($s['admin'])->test(Manager::class, ['project' => $s['project']])->assertSee('Preview');
-    Livewire::actingAs($s['admin'])->test(ProjectShow::class, ['project' => $s['project']])->set('tab', 'modules')->assertSee('newModuleDescription', false)->assertSee('Preview');
+    Livewire::actingAs($s['admin'])->test(ModuleCreate::class, ['project' => $s['project']])->assertSee('Preview')->assertDontSee('Attach');
 });
 
 it('saves a project form description as markdown and renders it on the project page', function () {
@@ -380,10 +369,10 @@ it('does not allow uploads from the project form or the portal', function () {
     tpPortal($s, $s['c1'])->set('upload', UploadedFile::fake()->image('a.png'))->call('storeUpload')->assertForbidden();
 });
 
-it('creates a module with a description from the manager', function () {
+it('creates a module with a description from the add-module page', function () {
     $s = tpSetup();
-    Livewire::actingAs($s['admin'])->test(Manager::class, ['project' => $s['project']])
-        ->set('newName', 'Reports')->set('newDescription', '**x**')->call('createModule')->assertSet('newDescription', '');
+    Livewire::actingAs($s['admin'])->test(ModuleCreate::class, ['project' => $s['project']])
+        ->set('name', 'Reports')->set('description', '**x**')->call('save')->assertHasNoErrors();
     expect(Module::where('name', 'Reports')->first()->description)->toBe('**x**');
 });
 

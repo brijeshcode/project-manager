@@ -187,18 +187,10 @@
             <div>
                 <div class="mb-3 flex items-center justify-between">
                     <h2 class="font-display text-lg font-semibold text-slate-900">Modules & tasks</h2>
+                    @if ($canManage)
+                        <a href="{{ route('modules.create', $project) }}" wire:navigate class="btn btn-primary" data-test="add-module">+ Add module</a>
+                    @endif
                 </div>
-
-                @if ($canManage)
-                    <form wire:submit.prevent="addModule" class="card mb-4 space-y-2 p-4">
-                        <div class="flex gap-2">
-                            <input type="text" wire:model="newModuleName" placeholder="New module name…" class="input flex-1">
-                            <button type="submit" class="btn btn-primary whitespace-nowrap">+ Module</button>
-                        </div>
-                        <x-ui.markdown-editor model="newModuleDescription" :rows="3" :uploads="false" placeholder="Module description (optional, Markdown)…" />
-                        @error('newModuleName') <p class="field-error">{{ $message }}</p> @enderror
-                    </form>
-                @endif
 
                 @forelse ($modules as $module)
                     @php
@@ -299,13 +291,13 @@
                                             <span @class(['text-xs', 'font-medium text-rose-600' => $task->deadline->isPast() && $task->column?->stage !== 'done', 'text-slate-500' => ! ($task->deadline->isPast() && $task->column?->stage !== 'done')])>{{ $task->deadline->format('M j') }}</span>
                                         @endif
                                         <x-ui.badge color="slate">{{ $task->column?->name }}@if ($task->column) <span class="text-slate-400">&middot; {{ str_replace('_', ' ', $task->column->stage) }}</span>@endif</x-ui.badge>
-                                        <span class="w-10 text-right text-xs font-semibold tabular-nums text-slate-500">{{ round($taskProgress) }}%</span>
+                                        <div class="flex w-40 items-center gap-2" title="{{ round($taskProgress) }}% done" data-test="task-progress-bar">
+                                            <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-500" style="width: {{ round($taskProgress) }}%"></div></div>
+                                            <span class="w-9 text-right text-xs font-semibold tabular-nums text-slate-600" data-test="task-progress">{{ round($taskProgress) }}%</span>
+                                        </div>
                                         @if($canManage)
                                         <a href="{{ route('tasks.show', $task) }}" wire:navigate class="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700">Edit</a>
                                         @endif
-                                    </div>
-                                    <div class="mt-2 h-1 w-full overflow-hidden rounded-full bg-slate-100">
-                                        <div class="h-full rounded-full bg-blue-500" style="width: {{ round($taskProgress) }}%"></div>
                                     </div>
 
                                     <div x-show="open" x-collapse style="display:none" class="mt-4 space-y-5 pl-7">

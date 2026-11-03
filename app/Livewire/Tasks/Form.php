@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Validation\Rule;
 use App\Livewire\Concerns\HandlesMarkdownUploads;
 use Illuminate\Database\Eloquent\Model;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class Form extends Component
@@ -37,6 +38,12 @@ class Form extends Component
     public array  $labelIds        = [];
     public array  $assigneeIds     = [];
 
+    /** Create-from-copy: the source task (re-validated on save) and whether its subtasks come along. */
+    #[Locked]
+    public ?int $copyFrom = null;
+
+    public bool $copySubtasks = true;
+
     public function mount(?Task $task = null): void
     {
         if ($task && $task->exists) {
@@ -60,7 +67,46 @@ class Form extends Component
             $this->deadline         = $task->deadline?->toDateString() ?? '';
             $this->labelIds         = $task->labels()->pluck('labels.id')->toArray();
             $this->assigneeIds      = $task->assignees()->pluck('users.id')->toArray();
+
+            return;
         }
+
+        // creating: ?module= preselects the module, ?copy= prefills from another task
+        $this->module_id = (int) request()->query('module', $this->moduleOptions()->flatten(1)->first()?->id ?? 0);
+        if ($id = request()->query('copy')) {
+            $src = Task::visibleTo(auth()->user())->findOrFail($id);
+            $this->authorize('update', $src->module->project);
+            $this->copyFrom       = $src->id;
+            $this->module_id      = $src->module_id;
+            $this->title          = 'Copy of '.$src->title;
+            $this->description    = $src->description ?? '';
+            $this->status         = $src->status->value;
+            $this->is_idea        = $src->is_idea;
+            $this->priority       = $src->priority;
+            $this->estimate_hours = $src->estimate_hours;
+            $this->scope          = $src->scope->value;
+            $this->price          = $src->price;
+            $this->client_visible = $src->client_visible;
+            $this->testing_enabled   = $src->testing_enabled;
+            $this->testing_add_type  = $src->testing_add_type;
+            $this->testing_add_value = $src->testing_add_value;
+            $this->deadline       = $src->deadline?->toDateString() ?? '';
+            $this->labelIds       = $src->labels()->pluck('labels.id')->toArray();
+            $this->assigneeIds    = $src->assignees()->pluck('users.id')->toArray();
+        }
+    }
+
+    public function updatedModuleId(): void
+    {
+        $this->board_column_id = null;
+    }
+
+    /** Modules the user may add tasks to, grouped by project. */
+    private function moduleOptions()
+    {
+        // ponytail: one policy check per project; fine for a handful of projects
+        return Module::with('project')->orderBy('project_id')->orderBy('position')->get()->groupBy('project_id')
+            ->filter(fn ($ms) => auth()->user()->can('update', $ms->first()->project));
     }
 
     protected function uploadTarget(): Model
@@ -114,6 +160,9 @@ class Form extends Component
             $task = Task::create($data);
             $task->labels()->sync($this->labelIds);
             $task->assignees()->sync($this->assigneeIds);
+            if ($this->copyFrom && $this->copySubtasks && ($src = Task::visibleTo(auth()->user())->find($this->copyFrom))) {
+                $src->copySubtasksTo($task);
+            }
         }
 
         $this->redirect(route('tasks.show', $task), navigate: true);
@@ -125,6 +174,8 @@ class Form extends Component
 
         return view('livewire.tasks.form', [
             'task'      => $task,
+            'moduleOptions' => $this->taskId ? collect() : $this->moduleOptions(),
+            'copyCount' => $this->copyFrom ? Task::find($this->copyFrom)?->subtasks()->count() : 0,
             'boardColumns' => Module::find($this->module_id)?->project?->columns ?? collect(),
             'allLabels' => Label::orderBy('name')->get(),
             'allUsers'  => User::orderBy('name')->get(),

@@ -35,10 +35,6 @@ class Show extends Component
     #[Url]
     public string $tab = 'details';
 
-    public string $newModuleName = '';
-
-    public string $newModuleDescription = '';
-
     /** Keyed by module id. */
     public array $newTaskTitle = [];
 
@@ -71,23 +67,6 @@ class Show extends Component
                 $this->taskDescriptions[$task->id] = $task->description ?? '';
             }
         }
-    }
-
-    public function addModule(): void
-    {
-        $this->authorize('update', $this->project);
-        $this->validate(['newModuleName' => 'required|string|max:255']);
-
-        $module = Module::create([
-            'project_id'  => $this->project->id,
-            'name'        => trim($this->newModuleName),
-            'description' => trim($this->newModuleDescription) ?: null,
-            'position'    => Module::nextPosition($this->project->id),
-        ]);
-
-        $this->moduleDescriptions[$module->id] = $module->description ?? '';
-        $this->newModuleName = '';
-        $this->newModuleDescription = '';
     }
 
     protected function fillBudget(Module $m): void

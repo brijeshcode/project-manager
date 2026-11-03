@@ -268,7 +268,7 @@ it('shows header, description, progress, tasks and sidebar', function () {
     Task::create(['module_id' => $s['module']->id, 'creator_id' => $s['admin']->id, 'title' => 'Build form', 'status' => 'published']);
 
     modPage($s)->assertSee('Checkout')->assertSee('Pending')->assertSee('<li>first</li>', false)
-        ->assertSee('Build form')->assertSee('May 5, 2030')->assertSee('Unassigned')->assertSee('Progress');
+        ->assertSee('Build form')->assertSee('May 5, 2030')->assertSee('No one assigned')->assertSee('Progress');
 });
 
 it('merges comments, activity and budget changes by time, with threaded replies', function () {
@@ -288,9 +288,9 @@ it('merges comments, activity and budget changes by time, with threaded replies'
 
     $c = modPage($s);
     $tl = $c->instance()->timeline();
-    expect($tl->pluck('kind')->all())->toBe(['budget', 'activity', 'comment']); // newest first; reply sits inside its thread
-    expect($tl->last()['m']->replies->pluck('body')->all())->toBe(['A reply']);
-    $c->assertSeeInOrder(['changed budget', 'changed name from Checkout to Payments', 'First', 'A reply']);
+    expect($tl->pluck('kind')->all())->toBe(['comment', 'activity', 'budget']); // oldest first; reply sits inside its thread
+    expect($tl->first()['m']->replies->pluck('body')->all())->toBe(['A reply']);
+    $c->assertSeeInOrder(['First', 'A reply', 'changed the name from Checkout to Payments', 'changed the budget']);
 });
 
 it('posts comments and threaded replies from the page', function () {
@@ -307,13 +307,15 @@ it('posts comments and threaded replies from the page', function () {
     expect(Comment::where('parent_id', $root->id)->count())->toBe(2);
 });
 
-it('edits the whole module and logs the changes, deadline reason optional', function () {
+it('edits every module field in place and logs the changes, deadline reason optional', function () {
     $s = modSetup();
     $label = Label::create(['name' => 'Bug', 'color' => '#f00']);
-    modPage($s)->call('edit')
-        ->set('name', 'Payments')->set('description', "- [ ] a\n- b")->set('deadline', '2030-01-01')
-        ->set('clientVisible', true)->set('assigneeIds', [$s['member']->id, $s['outsider']->id])->set('labelIds', [$label->id])
-        ->call('save')->assertHasNoErrors()->assertSet('editing', false);
+    modPage($s)->call('editTitle')->set('title', 'Payments')->call('saveTitle')->assertHasNoErrors()->assertSet('editingTitle', false)
+        ->call('editDescription')->set('description', "- [ ] a\n- b")->call('saveDescription')
+        ->call('openPanel', 'deadline')->set('deadline', '2030-01-01')->call('savePanel')->assertSet('panel', null)
+        ->call('openPanel', 'visibility')->set('clientVisible', true)->call('savePanel')
+        ->call('openPanel', 'assignees')->set('assigneeIds', [$s['member']->id, $s['outsider']->id])->call('savePanel')
+        ->call('openPanel', 'labels')->set('labelIds', [$label->id])->call('savePanel');
 
     $m = $s['module']->fresh();
     expect($m)->name->toBe('Payments')->client_visible->toBeTrue();
@@ -321,7 +323,7 @@ it('edits the whole module and logs the changes, deadline reason optional', func
     expect($m->labels()->count())->toBe(1);
     expect($m->activities()->pluck('field')->unique()->sort()->values()->all())->toBe(['assignees', 'client_visible', 'deadline', 'description', 'labels', 'name']);
 
-    modPage($s)->call('edit')->set('deadline', '2030-02-01')->set('deadlineReason', 'Scope grew')->call('save');
+    modPage($s)->call('openPanel', 'deadline')->set('deadline', '2030-02-01')->set('deadlineReason', 'Scope grew')->call('savePanel');
     expect($m->activities()->where('field', 'deadline')->first())->new->toBe('2030-02-01')->reason->toBe('Scope grew');
 });
 
@@ -330,17 +332,16 @@ it('keeps the required reason on budget changes and logs them once', function ()
     $s['client']->update(['billing_mode' => 'hourly']);
     $s['module']->updateBudget(['budget_hours' => '10', 'hourly_rate' => '50.00'], $s['admin'], '');
 
-    modPage($s)->call('edit')->set('hours', '20')->call('save')->assertHasErrors('budgetReason')->assertSet('editing', true);
+    modPage($s)->call('openPanel', 'budget')->set('hours', '20')->call('savePanel')->assertHasErrors('budgetReason')->assertSet('panel', 'budget');
     expect($s['module']->fresh()->budget_hours)->toBe('10.00');
 
-    modPage($s)->call('edit')->set('hours', '20')->set('budgetReason', 'Scope grew')->call('save')->assertHasNoErrors();
+    modPage($s)->call('openPanel', 'budget')->set('hours', '20')->set('budgetReason', 'Scope grew')->call('savePanel')->assertHasNoErrors()->assertSet('panel', null);
     expect($s['module']->fresh()->budget_hours)->toBe('20.00');
     expect($s['module']->budgetChanges()->where('reason', 'Scope grew')->count())->toBe(1);
 
     $s['module']->updateBudget(['deadline' => '2031-01-01'], $s['admin'], '');
     expect($s['module']->activities()->where('field', 'deadline')->count())->toBe(0); // the budget row covers it
 });
-
 it('forbids editing for users who cannot update the project', function () {
     $s = modSetup();
     modPage($s, $s['outsider'])->assertForbidden();

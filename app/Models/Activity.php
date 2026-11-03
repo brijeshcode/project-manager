@@ -32,9 +32,10 @@ class Activity extends Model
             'unassigned' => "unassigned {$this->old}",
             'label_added' => "added the label {$this->new}",
             'label_removed' => "removed the label {$this->old}",
+            'converted' => "converted this from a subtask of {$this->old}",
             default => $this->field === 'description'
                 ? 'updated the description'
-                : "changed {$field} from ".($this->old ?? 'none').' to '.($this->new ?? 'none'),
+                : "changed the {$field} from ".($this->old ?? 'none').' to '.($this->new ?? 'none'),
         };
     }
 }
