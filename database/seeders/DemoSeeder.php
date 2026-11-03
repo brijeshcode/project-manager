@@ -37,8 +37,90 @@ class DemoSeeder extends Seeder
         }
 
         $this->seedResource();
+        $this->seedModuleCollaboration();
+        $this->seedTaskCollaboration();
         $this->seedBilling();
         $this->seedBulk();
+    }
+
+    /** Assignees, labels, a client-visible module, comments with replies and activity on the Storefront's first module. */
+    private function seedModuleCollaboration(): void
+    {
+        $project = Project::where('name', 'Northwind Storefront')->first();
+        $admin = User::where('email', 'admin@example.com')->first();
+        $client = User::where('email', 'client@example.com')->first();
+        $module = $project?->modules()->orderBy('position')->first();
+        if (! $module || ! $admin || $module->comments()->exists()) {
+            return;
+        }
+
+        $dev = User::firstOrCreate(['email' => 'priya@example.com'], ['name' => 'Priya Nair', 'password' => Hash::make('password')]);
+        $dev->assignRole('developer');
+        $project->members()->syncWithoutDetaching([$dev->id => ['role_on_project' => 'developer', 'access_scope' => 'all', 'active' => true]]);
+
+        auth()->setUser($admin); // so the activity log records who
+        $labels = collect([['Backend', '#6366f1'], ['Payments', '#10b981'], ['Urgent', '#ef4444']])
+            ->map(fn ($l) => \App\Models\Label::firstOrCreate(['name' => $l[0]], ['color' => $l[1]]));
+        $module->update(['description' => "Everything between the cart and the confirmation e-mail.
+
+- [x] Cart totals
+- [ ] Payment gateway
+- [ ] Order confirmation
+
+See the [gateway docs](https://example.com/docs).", 'client_visible' => true]);
+        $module->syncAssignees([$admin->id, $dev->id]);
+        $module->syncLabels($labels->take(2)->pluck('id')->all());
+        $module->activityReason = 'Gateway sign-off delayed by the client.';
+        $module->update(['deadline' => now()->addWeeks(5)]);
+        $module->syncLabels($labels->pluck('id')->all());
+
+        $q = $module->addComment($client ?? $admin, 'Can we also accept bank transfers at checkout?');
+        $module->addComment($admin, 'Yes - we will add it behind the same gateway. Needs a day of work.', $q->id);
+        $module->addComment($client ?? $admin, 'Great, thanks!', $q->id);
+        $module->addComment($dev, 'Internal: gateway sandbox keys are in the Resources tab.');
+        auth()->forgetUser();
+    }
+
+    /** Deadlines, assignees, labels, subtasks with descriptions, comments with replies and activity on the Storefront's tasks. */
+    private function seedTaskCollaboration(): void
+    {
+        $project = Project::where('name', 'Northwind Storefront')->first();
+        $admin = User::where('email', 'admin@example.com')->first();
+        $client = User::where('email', 'client@example.com')->first();
+        $dev = User::where('email', 'priya@example.com')->first();
+        $tasks = $project?->modules()->orderBy('position')->first()?->tasks()->orderBy('position')->get();
+        if (! $tasks || $tasks->isEmpty() || ! $admin || ! $dev || $tasks->first()->comments()->exists()) {
+            return;
+        }
+
+        auth()->setUser($admin); // so the activity log records who
+        $labels = \App\Models\Label::whereIn('name', ['Backend', 'Payments', 'Urgent'])->get()->keyBy('name');
+        $inReview = $project->columns()->where('name', 'Review')->value('id');
+
+        foreach ($tasks as $i => $task) {
+            $task->update(['deadline' => now()->addDays(4 + $i * 6), 'description' => "Work item **{$task->title}**.\n\n- [ ] Spec agreed\n- [ ] Implemented\n- [ ] Verified"]);
+            $task->syncAssignees($i === 1 ? [$admin->id, $dev->id] : [$i === 0 ? $admin->id : $dev->id]);
+        }
+        $pay = $tasks[1] ?? $tasks->first();
+        $pay->syncLabels($labels->only(['Backend', 'Payments'])->pluck('id')->all());
+        $pay->syncLabels($labels->pluck('id')->all());
+        $pay->activityReason = 'Gateway sign-off delayed.';
+        $pay->update(['deadline' => now()->addDays(20)]);
+        $pay->update(['priority' => 2, 'board_column_id' => $inReview ?? $pay->board_column_id]);
+
+        foreach (['Gateway sandbox account' => 'Create keys at the provider and store them in **Resources**.', 'Webhook handler' => "Handle `payment.succeeded` and `payment.failed`.\n\n1. Verify signature\n2. Update the order\n3. E-mail the customer"] as $title => $body) {
+            $s = \App\Models\Subtask::create(['task_id' => $pay->id, 'title' => $title, 'description' => $body, 'estimate_hours' => 3]);
+            $s->syncAssignees([$dev->id]);
+            $s->syncLabels([$labels['Backend']->id]);
+            $s->update(['estimate_hours' => 4]);
+            $s->addComment($dev, 'Started on this today.');
+        }
+
+        $q = $pay->addComment($client ?? $admin, 'Will refunds be part of this task?');
+        $pay->addComment($admin, 'Not in this one, but we can add a follow-up.', $q->id);
+        $pay->addComment($client ?? $admin, 'Perfect.', $q->id);
+        $pay->addComment($dev, 'Internal: the provider rate-limits the sandbox.');
+        auth()->forgetUser();
     }
 
     private function seedResource(): void
@@ -307,6 +389,7 @@ class DemoSeeder extends Seeder
                             'status' => 'published', 'is_idea' => false, 'priority' => 1 + ($t % 3),
                             'estimate_hours' => 4 + $t * 3, 'scope' => 'in', 'client_visible' => true,
                             'board_column_id' => $col->id, 'position' => $t + 1,
+                            'deadline' => now()->addDays(3 + $t * 5 + $mi),
                         ]);
                         if ($col->stage !== 'not_started') {
                             TimeEntry::create([

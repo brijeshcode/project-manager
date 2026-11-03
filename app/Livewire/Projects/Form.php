@@ -9,10 +9,20 @@ use App\Support\BoardTemplates;
 use App\Support\Money;
 use Illuminate\Validation\Rule;
 use App\Models\Project;
+use App\Livewire\Concerns\HandlesMarkdownUploads;
+use Illuminate\Database\Eloquent\Model;
 use Livewire\Component;
 
 class Form extends Component
 {
+    use HandlesMarkdownUploads;
+
+    // ponytail: projects have no attachments table; the editor's Attach is off here (preview only)
+    protected function uploadTarget(): Model
+    {
+        abort(403);
+    }
+
     public ?int $projectId = null;
 
     public int    $client_id      = 0;

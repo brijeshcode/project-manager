@@ -13,10 +13,20 @@ use App\Models\Task;
 use App\Services\ProgressService;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
+use App\Livewire\Concerns\HandlesMarkdownUploads;
+use Illuminate\Database\Eloquent\Model;
 use Livewire\Component;
 
 class Show extends Component
 {
+    use HandlesMarkdownUploads;
+
+    // ponytail: inline editors here are text-only; attach files on the module/task page
+    protected function uploadTarget(): Model
+    {
+        abort(403);
+    }
+
     public Project $project;
 
     #[Locked]
@@ -250,6 +260,11 @@ class Show extends Component
             ->with([
                 'tasks' => fn ($q) => $q->visibleTo(auth()->user())->orderBy('position'),
                 'tasks.subtasks',
+                'tasks.assignees',
+                'tasks.labels',
+                'tasks.column',
+                'assignees',
+                'labels',
                 'tasks.checklistItems',
                 'project.client',
             ])

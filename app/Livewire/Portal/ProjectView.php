@@ -4,15 +4,24 @@ namespace App\Livewire\Portal;
 
 use App\Enums\TaskScope;
 use App\Enums\TaskStatus;
-use App\Models\Comment;
+use App\Models\Module;
 use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
+use App\Livewire\Concerns\HandlesMarkdownUploads;
+use Illuminate\Database\Eloquent\Model;
 use Livewire\Component;
 
 class ProjectView extends Component
 {
+    use HandlesMarkdownUploads; // only for the editor's Preview; clients cannot upload
+
+    protected function uploadTarget(): Model
+    {
+        abort(403);
+    }
+
     public Project $project;
 
     /** New task title (create form). */
@@ -20,6 +29,11 @@ class ProjectView extends Component
 
     /** Comment body for adding a comment. */
     public string $commentBody = '';
+
+    /** Keyed by module id / parent comment id. */
+    public array $moduleBody = [];
+
+    public array $replyBody = [];
 
     public function mount(Project $project): void
     {
@@ -47,7 +61,7 @@ class ProjectView extends Component
             ->get([
                 'id', 'module_id', 'creator_id', 'title', 'description',
                 'status', 'priority', 'board_column_id', 'position',
-                'client_visible', 'client_approval', 'scope', 'section',
+                'client_visible', 'client_approval', 'scope', 'section', 'deadline',
                 // Deliberately omits: price, estimate_hours, testing_*, cost fields
             ]);
     }
@@ -91,12 +105,36 @@ class ProjectView extends Component
 
         $task = $this->guardTask($taskId);
 
-        $task->comments()->create([
-            'author_id' => auth()->id(),
-            'body'      => $this->commentBody,
-        ]);
+        $task->addComment(auth()->user(), $this->commentBody);
 
         $this->commentBody = '';
+    }
+
+    /** Comment on a client-visible module of this project. */
+    public function addModuleComment(int $moduleId): void
+    {
+        $this->validate(['moduleBody.'.$moduleId => 'required|string|max:5000']);
+        $this->guardModule($moduleId)->addComment(auth()->user(), $this->moduleBody[$moduleId]);
+        unset($this->moduleBody[$moduleId]);
+    }
+
+    /** Reply inside a thread the client can see; $kind is 'task' or 'module'. */
+    public function reply(string $kind, int $subjectId, int $parentId): void
+    {
+        $this->validate(['replyBody.'.$parentId => 'required|string|max:5000']);
+        $subject = $kind === 'module' ? $this->guardModule($subjectId) : $this->guardTask($subjectId);
+        $subject->comments()->visibleToClient(auth()->user())->findOrFail($parentId);
+        $subject->addComment(auth()->user(), $this->replyBody[$parentId], $parentId);
+        unset($this->replyBody[$parentId]);
+    }
+
+    /** Module of this project that is shared with the client, or 403. */
+    private function guardModule(int $moduleId): Module
+    {
+        $module = $this->project->modules()->where('client_visible', true)->find($moduleId);
+        abort_unless($module, 403);
+
+        return $module;
     }
 
     /**
@@ -153,8 +191,12 @@ class ProjectView extends Component
 
     public function render()
     {
+        $client = auth()->user();
+
         return view('livewire.portal.project-view', [
             'tasks' => $this->tasks,
+            'modules' => $this->project->modules()->where('client_visible', true)->orderBy('position')->get(),
+            'threads' => fn ($subject) => $subject->commentThreads($client),
         ])->layout('layouts.app');
     }
 }

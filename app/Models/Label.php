@@ -3,14 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 
 class Label extends Model
 {
     protected $fillable = ['name', 'color'];
 
-    public function tasks(): BelongsToMany
+    public function tasks(): MorphToMany
     {
-        return $this->belongsToMany(Task::class, 'label_task');
+        return $this->morphedByMany(Task::class, 'labelable');
     }
 }

@@ -93,7 +93,7 @@
                                     class="group rounded-lg bg-[#ffffff] dark:bg-gray-700 p-3 shadow-sm ring-1 ring-slate-900/5 dark:ring-white/10 cursor-grab active:cursor-grabbing"
                                     data-task-id="{{ $task->id }}">
                                     <p class="text-xs font-medium text-brand-600">{{ $task->module->name }}</p>
-                                    <p class="text-sm font-medium text-slate-800">{{ $task->title }}</p>
+                                    <a href="{{ route('tasks.show', $task) }}" wire:navigate draggable="false" data-test="card-link" class="block text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
                                     @if($task->estimate_hours)
                                         <p class="mt-1 text-xs text-slate-400">{{ $task->estimate_hours }}h</p>
                                     @endif
@@ -104,9 +104,9 @@
                                         @if($subs->isNotEmpty())
                                             <span class="text-xs text-slate-500">{{ $subsDone }}/{{ $subs->count() }} done</span>
                                         @endif
-                                        <a href="{{ route('tasks.edit', $task) }}" wire:navigate
+                                        <a href="{{ route('tasks.show', $task) }}" wire:navigate draggable="false"
                                            class="ml-auto text-xs font-medium text-brand-600 opacity-0 group-hover:opacity-100">
-                                            Edit
+                                            Open
                                         </a>
                                     </div>
                                 </li>

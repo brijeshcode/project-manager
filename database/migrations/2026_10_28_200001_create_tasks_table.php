@@ -28,6 +28,7 @@ return new class extends Migration
             $table->decimal('testing_add_value', 12, 2)->nullable();
             $table->foreignId('board_column_id')->nullable()->constrained('board_columns')->nullOnDelete();
             $table->unsignedInteger('position')->default(0);
+            $table->date('deadline')->nullable();
             $table->timestamps();
         });
     }

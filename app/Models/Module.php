@@ -5,23 +5,39 @@ namespace App\Models;
 use App\Enums\BillingMode;
 use App\Support\Money;
 use App\Models\Concerns\FreezesLocalAmounts;
+use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasComments;
+use App\Models\Concerns\HasLabels;
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 
 class Module extends Model
 {
-    use FreezesLocalAmounts;
+    use FreezesLocalAmounts, HasAttachments, HasComments, HasLabels, LogsActivity;
 
-    protected $fillable = ['project_id', 'name', 'description', 'position', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
+    /** Changes to these are written to the activity log. */
+    public array $loggedFields = ['name', 'description', 'status_override', 'deadline', 'client_visible'];
+
+    protected $attributes = ['client_visible' => false];
+
+    public const OVERRIDES = ['on_hold', 'completed'];
+
+    public const STATUS_LABELS = ['pending' => 'Pending', 'working' => 'Working', 'in_review' => 'In review', 'completed' => 'Completed', 'on_hold' => 'On hold'];
+
+    public const STATUS_COLORS = ['pending' => 'slate', 'working' => 'brand', 'in_review' => 'amber', 'completed' => 'green', 'on_hold' => 'rose'];
+
+    protected $fillable = ['project_id', 'name', 'description', 'position', 'status_override', 'client_visible', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
 
     public const BUDGET_FIELDS = ['budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
 
     protected function casts(): array
     {
-        return ['budget_hours' => 'decimal:2', 'hourly_rate' => 'decimal:2', 'budget_amount' => 'decimal:2', 'hourly_rate_local' => 'decimal:2', 'budget_amount_local' => 'decimal:2', 'deadline' => 'date'];
+        return ['budget_hours' => 'decimal:2', 'hourly_rate' => 'decimal:2', 'budget_amount' => 'decimal:2', 'hourly_rate_local' => 'decimal:2', 'budget_amount_local' => 'decimal:2', 'deadline' => 'date', 'client_visible' => 'boolean'];
     }
 
     protected function localAmounts(): array
@@ -37,6 +53,30 @@ class Module extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function budgetChanges(): HasMany
+    {
+        return $this->hasMany(ModuleBudgetChange::class);
+    }
+
+    protected static function booted(): void
+    {
+        static::deleting(function (self $m) {
+            $m->comments()->delete();
+            $m->activities()->delete();
+            $m->attachments->each->delete(); // also removes the files
+        });
+    }
+
+    public function assignees(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'module_user');
+    }
+
+    public function accessProject(): Project
+    {
+        return $this->project;
     }
 
     public function tasks(): HasMany
@@ -67,6 +107,27 @@ class Module extends Model
 
         // ponytail: not_started + review (nothing active) falls through to working
         return $stages->reject(fn ($s) => $s === 'done')->every(fn ($s) => $s === 'review') ? 'in_review' : 'working';
+    }
+
+    /** What the badge shows: a manual on_hold/completed override wins, otherwise the derived status. */
+    public function status(): string
+    {
+        return $this->status_override ?? $this->derivedStatus();
+    }
+
+    /** Manual override: only on_hold or completed; null reopens (back to the derived status). */
+    public function setStatusOverride(?string $override): void
+    {
+        if ($override !== null && ! in_array($override, self::OVERRIDES, true)) {
+            throw new \InvalidArgumentException('Status can only be overridden to on_hold or completed.');
+        }
+        $this->update(['status_override' => $override]);
+    }
+
+    /** Tasks that would be left open by marking the module completed. */
+    public function openTaskCount(): int
+    {
+        return $this->countedTasks()->filter(fn ($t) => $t->column?->stage !== 'done')->count();
     }
 
     /** Done share of the module, 0..1: hours-weighted when tasks have estimates, else by task count. */
@@ -127,7 +188,9 @@ class Module extends Model
                 ModuleBudgetChange::create(['module_id' => $this->id, 'user_id' => $by->id, 'field' => $f, 'old' => $old, 'new' => $new, 'reason' => trim($reason) ?: null]);
                 $this->{$f} = $new;
             }
+            $this->activityMute = ['deadline']; // the budget-change row already records it
             $this->save();
+            $this->activityMute = [];
         });
     }
 

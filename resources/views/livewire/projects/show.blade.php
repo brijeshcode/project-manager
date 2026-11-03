@@ -28,10 +28,10 @@
     </div>
 
     @if ($project->description)
-        <p class="mt-4 max-w-2xl text-sm leading-relaxed text-slate-600">{{ $project->description }}</p>
+        <x-ui.markdown :text="$project->description" class="mt-4 max-w-2xl" />
     @endif
     @if ($project->aim)
-        <p class="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600"><span class="font-semibold text-slate-900">Aim:</span> {{ $project->aim }}</p>
+        <div class="mt-3 max-w-2xl"><p class="text-sm font-semibold text-slate-900">Aim</p><x-ui.markdown :text="$project->aim" /></div>
     @endif
 
     <div class="mt-6 flex gap-1 overflow-x-auto border-b border-slate-200">
@@ -195,32 +195,60 @@
                             <input type="text" wire:model="newModuleName" placeholder="New module name…" class="input flex-1">
                             <button type="submit" class="btn btn-primary whitespace-nowrap">+ Module</button>
                         </div>
-                        <textarea wire:model="newModuleDescription" rows="2" placeholder="Module description (optional)…" class="textarea text-sm"></textarea>
+                        <x-ui.markdown-editor model="newModuleDescription" :rows="3" :uploads="false" placeholder="Module description (optional, Markdown)…" />
                         @error('newModuleName') <p class="field-error">{{ $message }}</p> @enderror
                     </form>
                 @endif
 
                 @forelse ($modules as $module)
-                    <x-ui.card class="mb-4" padding="p-0">
-                        <div class="border-b border-slate-100 px-5 py-3.5" x-data="{ editingDesc: false }">
-                            <div class="flex items-center justify-between">
-                                <h3 class="font-display text-sm font-semibold text-slate-900">{{ $module->name }}</h3>
-                                <span class="text-xs text-slate-400">{{ $module->tasks->count() }} {{ Str::plural('task', $module->tasks->count()) }}</span>
+                    @php
+                        $mStatus = $module->status();
+                        $mPct = round($module->progress() * 100);
+                        $mOverdue = $module->deadline && $module->deadline->isPast() && $mStatus !== 'completed';
+                    @endphp
+                    <x-ui.card class="mb-4" padding="p-0" data-test="module-row" x-data="{ open: false }">
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
+                            <button type="button" @click="open = !open" class="shrink-0 text-slate-400 hover:text-slate-600" aria-label="Expand module" data-test="module-toggle">
+                                <svg class="h-4 w-4 transition" :class="open && 'rotate-90'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
+                            </button>
+                            <h3 class="min-w-0 flex-1 basis-40 truncate font-display text-sm font-semibold text-slate-900"><a href="{{ route('modules.show', [$project, $module]) }}" wire:navigate class="hover:text-brand-600">{{ $module->name }}</a></h3>
+                            <x-ui.badge :color="\App\Models\Module::STATUS_COLORS[$mStatus]" data-test="module-status">{{ \App\Models\Module::STATUS_LABELS[$mStatus] }}</x-ui.badge>
+                            <span @class(['w-24 text-xs', 'font-medium text-rose-600' => $mOverdue, 'text-slate-500' => ! $mOverdue]) data-test="module-deadline">{{ $module->deadline ? $module->deadline->format('M j, Y') : 'No deadline' }}</span>
+                            <span class="flex -space-x-1">
+                                @foreach ($module->assignees as $u)
+                                    <span title="{{ $u->name }}" class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700 ring-2 ring-white">{{ collect(explode(' ', $u->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') }}</span>
+                                @endforeach
+                            </span>
+                            <span class="flex flex-wrap gap-1">
+                                @foreach ($module->labels as $l)
+                                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ring-slate-200"><span class="h-2 w-2 rounded-full" style="background: {{ $l->color }}"></span>{{ $l->name }}</span>
+                                @endforeach
+                            </span>
+                            <div class="flex w-40 items-center gap-2" title="{{ $mPct }}% of the work done">
+                                <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-500" style="width: {{ $mPct }}%"></div></div>
+                                <span class="w-9 text-right text-xs font-semibold tabular-nums text-slate-600" data-test="module-progress">{{ $mPct }}%</span>
                             </div>
+                            <span class="w-14 text-right text-xs text-slate-400" data-test="module-task-count">{{ $module->tasks->count() }} {{ Str::plural('task', $module->tasks->count()) }}</span>
+                            @can('manage-money')
+                                <span class="text-xs text-slate-500">{{ $module->budgetAmount() === null ? 'No budget' : \App\Support\Money::format(\App\Support\Money::toCents($module->budgetAmount()), $project->currency) }}</span>
+                            @endcan
+                        </div>
+                        <div x-show="open" x-collapse style="display:none" class="border-t border-slate-100">
+                        <div class="border-b border-slate-100 px-5 py-3.5" x-data="{ editingDesc: false }">
                             @if ($canManage)
                                 <div x-show="!editingDesc" class="mt-1 flex items-start gap-2">
-                                    <p class="flex-1 text-xs text-slate-500">{{ $module->description ?: 'No description yet.' }}</p>
+                                    <div class="flex-1 text-xs text-slate-500">@if ($module->description)<x-ui.markdown :text="$module->description" />@else No description yet.@endif</div>
                                     <button @click="editingDesc = true" class="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700">Edit</button>
                                 </div>
                                 <form x-show="editingDesc" style="display:none" wire:submit.prevent="saveModuleDescription({{ $module->id }})" @submit="editingDesc = false" class="mt-2 space-y-1.5">
-                                    <textarea wire:model="moduleDescriptions.{{ $module->id }}" rows="2" class="textarea text-sm" placeholder="Module description…"></textarea>
+                                    <x-ui.markdown-editor model="moduleDescriptions.{{ $module->id }}" :rows="4" :uploads="false" placeholder="Module description…" />
                                     <div class="flex gap-2">
                                         <button type="submit" class="btn btn-secondary h-7 px-2.5 py-1 text-xs">Save</button>
                                         <button type="button" @click="editingDesc = false" class="btn btn-ghost h-7 px-2.5 py-1 text-xs">Cancel</button>
                                     </div>
                                 </form>
                             @elseif ($module->description)
-                                <p class="mt-1 text-xs text-slate-500">{{ $module->description }}</p>
+                                <x-ui.markdown :text="$module->description" class="mt-1" />
                             @endif
                             @can('manage-money')
                                 @php $hourly = $project->client->billing_mode === \App\Enums\BillingMode::Hourly; @endphp
@@ -255,14 +283,25 @@
                                 @php $taskProgress = $progress->forTask($task); @endphp
                                 <li x-data="{ open: false }" class="px-5 py-3">
                                     <div class="flex items-center gap-3">
-                                        <button @click="open = !open" class="flex min-w-0 flex-1 items-center gap-3 text-left">
+                                        <button @click="open = !open" class="flex shrink-0 items-center text-left">
                                             <svg class="h-4 w-4 shrink-0 text-slate-400 transition" :class="open && 'rotate-90'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
-                                            <span class="truncate text-sm font-medium text-slate-800">{{ $task->title }}</span>
                                         </button>
-                                        <x-ui.badge color="slate">{{ $task->column?->name }}</x-ui.badge>
+                                        <a href="{{ route('tasks.show', $task) }}" wire:navigate data-test="task-link" class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
+                                        <span class="flex -space-x-1">
+                                            @foreach ($task->assignees as $u)
+                                                <span title="{{ $u->name }}" class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700 ring-2 ring-white">{{ collect(explode(' ', $u->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') }}</span>
+                                            @endforeach
+                                        </span>
+                                        @foreach ($task->labels as $l)
+                                            <span class="hidden items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ring-slate-200 sm:inline-flex"><span class="h-2 w-2 rounded-full" style="background: {{ $l->color }}"></span>{{ $l->name }}</span>
+                                        @endforeach
+                                        @if ($task->deadline)
+                                            <span @class(['text-xs', 'font-medium text-rose-600' => $task->deadline->isPast() && $task->column?->stage !== 'done', 'text-slate-500' => ! ($task->deadline->isPast() && $task->column?->stage !== 'done')])>{{ $task->deadline->format('M j') }}</span>
+                                        @endif
+                                        <x-ui.badge color="slate">{{ $task->column?->name }}@if ($task->column) <span class="text-slate-400">&middot; {{ str_replace('_', ' ', $task->column->stage) }}</span>@endif</x-ui.badge>
                                         <span class="w-10 text-right text-xs font-semibold tabular-nums text-slate-500">{{ round($taskProgress) }}%</span>
                                         @if($canManage)
-                                        <a href="{{ route('tasks.edit', $task) }}" wire:navigate class="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700">Edit</a>
+                                        <a href="{{ route('tasks.show', $task) }}" wire:navigate class="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700">Edit</a>
                                         @endif
                                     </div>
                                     <div class="mt-2 h-1 w-full overflow-hidden rounded-full bg-slate-100">
@@ -274,10 +313,10 @@
                                       <div>
                                           <p class="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Description</p>
                                           @if ($canManage)
-                                              <textarea wire:model="taskDescriptions.{{ $task->id }}" rows="2" class="textarea text-sm" placeholder="Describe this task…"></textarea>
+                                              <x-ui.markdown-editor model="taskDescriptions.{{ $task->id }}" :rows="3" :uploads="false" placeholder="Describe this task…" />
                                               <button wire:click="saveTaskDescription({{ $task->id }})" class="btn btn-secondary mt-1.5 h-7 px-2.5 py-1 text-xs">Save description</button>
                                           @else
-                                              <p class="text-sm text-slate-600">{{ $task->description ?: '—' }}</p>
+                                              @if ($task->description)<x-ui.markdown :text="$task->description" />@else<p class="text-sm text-slate-600">—</p>@endif
                                           @endif
                                       </div>
 
@@ -350,6 +389,7 @@
                                 <button type="submit" class="btn btn-secondary h-9 whitespace-nowrap text-sm">+ Task</button>
                             </form>
                         @endif
+                        </div>
                     </x-ui.card>
                 @empty
                     <x-ui.empty-state title="No modules yet" message="Modules group related tasks — like “Checkout” or “Onboarding”. Add one to start building the plan.">

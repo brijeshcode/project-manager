@@ -7,10 +7,14 @@ use App\Models\Module;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Validation\Rule;
+use App\Livewire\Concerns\HandlesMarkdownUploads;
+use Illuminate\Database\Eloquent\Model;
 use Livewire\Component;
 
 class Form extends Component
 {
+    use HandlesMarkdownUploads;
+
     public ?int $taskId = null;
 
     public int    $module_id       = 0;
@@ -28,6 +32,7 @@ class Form extends Component
     public ?float  $testing_add_value = null;
     public ?int   $board_column_id = null;   // null = the project's first column
     public int    $position        = 0;
+    public string $deadline        = '';
 
     public array  $labelIds        = [];
     public array  $assigneeIds     = [];
@@ -52,9 +57,19 @@ class Form extends Component
             $this->testing_add_value = $task->testing_add_value;
             $this->board_column_id  = $task->board_column_id;
             $this->position         = $task->position;
+            $this->deadline         = $task->deadline?->toDateString() ?? '';
             $this->labelIds         = $task->labels()->pluck('labels.id')->toArray();
             $this->assigneeIds      = $task->assignees()->pluck('users.id')->toArray();
         }
+    }
+
+    protected function uploadTarget(): Model
+    {
+        // a task that does not exist yet has nowhere to attach files (the editor hides Attach there)
+        $task = Task::findOrFail($this->taskId);
+        $this->authorize('update', $task);
+
+        return $task;
     }
 
     public function save(): void
@@ -75,7 +90,9 @@ class Form extends Component
             'testing_add_value' => 'nullable|numeric|min:0',
             'board_column_id'   => ['nullable', Rule::exists('board_columns', 'id')->where('project_id', Module::find($this->module_id)?->project_id)],
             'position'          => 'integer|min:0',
+            'deadline'          => 'nullable|date',
         ]);
+        $data['deadline'] = $data['deadline'] ?: null;
 
         if ($this->taskId) {
             $task = Task::findOrFail($this->taskId);
@@ -85,8 +102,8 @@ class Form extends Component
             }
             $data['board_column_id'] ??= $task->board_column_id;
             $task->update($data);
-            $task->labels()->sync($this->labelIds);
-            $task->assignees()->sync($this->assigneeIds);
+            $task->syncLabels($this->labelIds);
+            $task->syncAssignees($this->assigneeIds);
         } else {
             $module = Module::findOrFail($this->module_id);
             $this->authorize('update', $module->project);
@@ -99,7 +116,7 @@ class Form extends Component
             $task->assignees()->sync($this->assigneeIds);
         }
 
-        $this->redirect(route('projects.show', $task->module->project_id), navigate: true);
+        $this->redirect(route('tasks.show', $task), navigate: true);
     }
 
     public function render()

@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('task_id')->constrained()->cascadeOnDelete();
             $table->string('title');
+            $table->text('description')->nullable();
             $table->float('estimate_hours')->default(0.0);
             $table->unsignedInteger('position')->default(0);
             $table->timestamps();

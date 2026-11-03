@@ -19,7 +19,7 @@
 
             <div>
                 <label class="label" for="description">Description <span class="font-normal text-slate-400">(optional)</span></label>
-                <textarea id="description" wire:model="description" rows="4" placeholder="Context, acceptance criteria, links…" class="textarea"></textarea>
+                <x-ui.markdown-editor model="description" :rows="6" :uploads="(bool) $taskId" placeholder="Context, acceptance criteria, links…" />
                 @error('description') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
@@ -51,6 +51,12 @@
                     </select>
                     @error('board_column_id') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
+            </div>
+
+            <div class="max-w-xs">
+                <label class="label" for="deadline">Deadline <span class="font-normal text-slate-400">(optional)</span></label>
+                <input id="deadline" type="date" wire:model="deadline" class="input">
+                @error('deadline') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
             <div class="flex items-center gap-6">

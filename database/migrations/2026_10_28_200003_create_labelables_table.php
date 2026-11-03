@@ -8,15 +8,16 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('label_task', function (Blueprint $table) {
+        // polymorphic: tasks (and modules, subtasks) share the labels table
+        Schema::create('labelables', function (Blueprint $table) {
             $table->foreignId('label_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('task_id')->constrained()->cascadeOnDelete();
-            $table->primary(['label_id', 'task_id']);
+            $table->morphs('labelable');
+            $table->primary(['label_id', 'labelable_type', 'labelable_id']);
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('label_task');
+        Schema::dropIfExists('labelables');
     }
 };

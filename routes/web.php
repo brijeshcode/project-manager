@@ -84,8 +84,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('projects/create', ProjectForm::class)->name('projects.create');
     Route::get('projects/{project}', ProjectShow::class)->name('projects.show');
     Route::get('projects/{project}/edit', ProjectForm::class)->name('projects.edit');
+    Route::get('projects/{project}/modules/{module}', \App\Livewire\Modules\Show::class)->scopeBindings()->name('modules.show');
+    Route::get('attachments/{attachment}/download', \App\Http\Controllers\AttachmentDownloadController::class)->whereNumber('attachment')->name('attachments.download');
     Route::get('projects/{project}/board', TaskBoard::class)->name('projects.board');
     Route::get('tasks/{task}/edit', TaskForm::class)->name('tasks.edit');
+    Route::get('tasks/{task}', \App\Livewire\Tasks\Show::class)->whereNumber('task')->name('tasks.show');
     Route::get('resource-items/{item}/download', \App\Http\Controllers\ResourceItemDownloadController::class)->whereNumber('item')->name('resource-items.download');
 });
 

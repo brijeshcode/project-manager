@@ -48,13 +48,13 @@
 
             <div>
                 <label class="label" for="description">Description <span class="font-normal text-slate-400">(optional)</span></label>
-                <textarea id="description" wire:model="description" rows="4" placeholder="What is this project about? Scope, goals, anything the team should know." class="textarea"></textarea>
+                <x-ui.markdown-editor model="description" :rows="5" :uploads="false" placeholder="What is this project about? Scope, goals, anything the team should know." />
                 @error('description') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
             <div>
                 <label class="label" for="aim">Aim of the project <span class="font-normal text-slate-400">(optional)</span></label>
-                <textarea id="aim" wire:model="aim" rows="3" placeholder="What problem are we solving?" class="textarea"></textarea>
+                <x-ui.markdown-editor model="aim" :rows="3" :uploads="false" placeholder="What problem are we solving?" />
                 @error('aim') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 

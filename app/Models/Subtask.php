@@ -2,6 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasComments;
+use App\Models\Concerns\HasLabels;
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -9,7 +13,16 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Subtask extends Model
 {
-    protected $fillable = ['task_id', 'title', 'estimate_hours', 'position'];
+    use HasAttachments, HasComments, HasLabels, LogsActivity;
+
+    public array $loggedFields = ['title', 'description', 'estimate_hours'];
+
+    protected $fillable = ['task_id', 'title', 'description', 'estimate_hours', 'position'];
+
+    public function accessProject(): Project
+    {
+        return $this->task->module->project;
+    }
 
     protected function casts(): array
     {
@@ -46,6 +59,12 @@ class Subtask extends Model
 
     protected static function booted(): void
     {
+        static::deleting(function (Subtask $s) {
+            $s->comments()->delete();
+            $s->activities()->delete();
+            $s->attachments->each->delete();
+        });
+
         static::creating(function (Subtask $subtask) {
             if (! isset($subtask->position) || $subtask->position === 0) {
                 $subtask->position = static::nextPosition($subtask->task_id);

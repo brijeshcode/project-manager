@@ -7,6 +7,10 @@ use App\Enums\TaskScope;
 use App\Enums\TaskStatus;
 use Illuminate\Database\Eloquent\Builder;
 use App\Models\Concerns\FreezesLocalAmounts;
+use App\Models\Concerns\HasAttachments;
+use App\Models\Concerns\HasComments;
+use App\Models\Concerns\HasLabels;
+use App\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -15,13 +19,18 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Task extends Model
 {
-    use FreezesLocalAmounts;
+    use FreezesLocalAmounts, HasAttachments, HasComments, HasLabels;
+    use LogsActivity { activityValue as protected baseActivityValue; }
+
+    /** Changes to these are written to the activity log. */
+    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'board_column_id', 'client_visible', 'estimate_hours'];
 
     protected $attributes = [
         'is_idea'        => false,
         'client_visible' => false,
         'testing_enabled' => false,
         'priority'       => 0,
+        'scope'          => 'in',
         'estimate_hours' => 0.0,
         'position'       => 0,
     ];
@@ -45,6 +54,7 @@ class Task extends Model
         'testing_add_value',
         'board_column_id',
         'position',
+        'deadline',
         'section',
         'client_approval',
     ];
@@ -55,6 +65,7 @@ class Task extends Model
             'status'           => TaskStatus::class,
             'scope'            => TaskScope::class,
             'is_idea'          => 'boolean',
+            'deadline'         => 'date',
             'client_visible'   => 'boolean',
             'testing_enabled'  => 'boolean',
             'estimate_hours'   => 'float',
@@ -69,6 +80,13 @@ class Task extends Model
         static::creating(function (self $t) {
             $t->board_column_id ??= Module::find($t->module_id)?->project?->columns()->value('id');
         });
+
+        static::deleting(function (self $t) {
+            $t->subtasks->each->delete();
+            $t->comments()->delete();
+            $t->activities()->delete();
+            $t->attachments->each->delete(); // also removes the files
+        });
     }
 
     protected function localAmounts(): array
@@ -79,6 +97,21 @@ class Task extends Model
     protected function moneyCurrency(): ?string
     {
         return $this->module?->project?->currency;
+    }
+
+    protected function activityValue(mixed $v, ?string $field = null): ?string
+    {
+        return match (true) {
+            $v === null || $v === '' => null,
+            $field === 'board_column_id' => BoardColumn::find($v)?->name ?? (string) $v,
+            $field === 'priority' => ['Low', 'Medium', 'High'][(int) $v] ?? (string) $v,
+            default => $this->baseActivityValue($v, $field),
+        };
+    }
+
+    public function accessProject(): Project
+    {
+        return $this->module->project;
     }
 
     public function module(): BelongsTo
@@ -101,19 +134,9 @@ class Task extends Model
         return $this->belongsToMany(User::class, 'task_user');
     }
 
-    public function labels(): BelongsToMany
-    {
-        return $this->belongsToMany(Label::class, 'label_task');
-    }
-
     public function subtasks(): HasMany
     {
         return $this->hasMany(Subtask::class)->orderBy('position');
-    }
-
-    public function comments(): MorphMany
-    {
-        return $this->morphMany(Comment::class, 'commentable');
     }
 
     public function checklistItems(): MorphMany
