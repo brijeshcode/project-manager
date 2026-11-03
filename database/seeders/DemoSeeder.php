@@ -41,6 +41,53 @@ class DemoSeeder extends Seeder
         $this->seedTaskCollaboration();
         $this->seedBilling();
         $this->seedBulk();
+        $this->seedLargeProject();
+    }
+
+    /** One project with 7 modules, 2–5 tasks each; only two of those tasks carry subtasks. Idempotent on the project name. */
+    private function seedLargeProject(): void
+    {
+        $client = Client::first();
+        $admin = User::where('email', 'admin@example.com')->first() ?? User::first();
+        if (! $client || ! $admin || Project::where('name', 'Customer Portal Revamp')->exists()) {
+            return;
+        }
+
+        $project = Project::create([
+            'client_id' => $client->id, 'name' => 'Customer Portal Revamp', 'buffer_percent' => 10,
+            'initial_budget' => 9000, 'addons_amount' => 0,
+            'start_date' => now()->subWeeks(1)->startOfWeek(), 'status' => 'active',
+        ]);
+        $project->setDeadline(now()->addWeeks(10)->toDateString(), $admin);
+        $project->members()->attach($admin->id, ['role_on_project' => 'project_manager', 'access_scope' => 'all', 'active' => true]);
+
+        $modules = [
+            'Authentication' => 3, 'Dashboard' => 2, 'Billing' => 5, 'Notifications' => 4,
+            'Reports' => 3, 'Admin Tools' => 2, 'Integrations' => 4,
+        ];
+        $withSubtasks = ['Authentication' => 0, 'Billing' => 1]; // module => index of the task that gets subtasks
+        $cols = $project->columns;
+
+        $mi = 0;
+        foreach ($modules as $moduleName => $taskCount) {
+            $module = Module::create(['project_id' => $project->id, 'name' => $moduleName, 'position' => ++$mi, 'deadline' => now()->addWeeks(2 + $mi)]);
+
+            for ($t = 0; $t < $taskCount; $t++) {
+                $task = Task::create([
+                    'module_id' => $module->id, 'creator_id' => $admin->id, 'title' => "$moduleName task ".($t + 1), 'description' => '',
+                    'status' => 'published', 'is_idea' => false, 'priority' => 1 + ($t % 3),
+                    'estimate_hours' => 4 + $t * 2, 'scope' => 'in', 'client_visible' => true,
+                    'board_column_id' => $cols[($mi + $t) % $cols->count()]->id, 'position' => $t + 1,
+                    'deadline' => now()->addDays(5 + $t * 4 + $mi),
+                ]);
+
+                if (($withSubtasks[$moduleName] ?? null) === $t) {
+                    foreach (['Design', 'Implement', 'Test'] as $s) {
+                        \App\Models\Subtask::create(['task_id' => $task->id, 'title' => "$s: {$task->title}", 'description' => '', 'estimate_hours' => 2]);
+                    }
+                }
+            }
+        }
     }
 
     /** Assignees, labels, a client-visible module, comments with replies and activity on the Storefront's first module. */
