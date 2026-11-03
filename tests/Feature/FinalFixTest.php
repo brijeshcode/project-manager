@@ -134,7 +134,7 @@ it('accepts budgets at the bounds and pages render', function () {
     Livewire::actingAs(ffOwner())->test(ProjectShow::class, ['project' => $m->project])
         ->set("budget.{$m->id}.hours", '99999.99')->set("budget.{$m->id}.rate", '9999999.99')
         ->call('saveBudget', $m->id)->assertHasNoErrors()->assertOk();
-    expect($m->fresh()->budgetCents())->not->toBeNull();
+    expect($m->fresh()->budgetAmount())->not->toBeNull();
     $this->actingAs(ffPortal($m->project->client))->get(route('portal.dashboard'))->assertOk();
 });
 
@@ -146,16 +146,16 @@ it('rejects budgets above the bounds', function (string $field, string $val) {
 
 it('does not 500 on absurd rows forced into the db', function () {
     $m = ffModule();
-    Module::whereKey($m->id)->update(['budget_hours' => 999999, 'hourly_rate_cents' => 99999999999]);
-    expect($m->fresh()->budgetCents())->toBeNull();
+    Module::whereKey($m->id)->update(['budget_hours' => 999999, 'hourly_rate' => '999999999.99']);
+    expect($m->fresh()->budgetAmount())->toBeNull();
     Livewire::actingAs(ffOwner())->test(ProjectShow::class, ['project' => $m->project])->assertOk();
     $this->actingAs(ffPortal($m->project->client))->get(route('portal.dashboard'))->assertOk();
 });
 
 it('softBalanceCents does not overflow when summing', function () {
     $m = ffModule('fixed');
-    Module::whereKey($m->id)->update(['budget_amount_cents' => PHP_INT_MAX]);
-    Module::create(['project_id' => $m->project_id, 'name' => 'M2', 'position' => 2, 'budget_amount_cents' => PHP_INT_MAX]);
+    Module::whereKey($m->id)->update(['budget_amount' => '999999999999.99']);
+    Module::create(['project_id' => $m->project_id, 'name' => 'M2', 'position' => 2, 'budget_amount' => '999999999999.99']);
     expect(app(ClientAccount::class)->softBalanceCents($m->project->fresh()))->toBeInt();
 });
 

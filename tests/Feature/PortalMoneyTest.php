@@ -89,7 +89,7 @@ it('dashboard balance: credit, owe, settled', function () {
 it('dashboard shows expected soft balance per project only when positive', function () {
     [$k, $ku] = pmClient('K');
     $p = Project::create(['client_id' => $k->id, 'name' => 'Site K', 'status' => 'active']);
-    Module::create(['project_id' => $p->id, 'name' => 'M', 'budget_amount_cents' => 100000]);
+    Module::create(['project_id' => $p->id, 'name' => 'M', 'budget_amount' => '1000.00']);
     pmPay($k, 30000, ['project_id' => $p->id]);
     $this->actingAs($ku)->get('/portal')->assertSee('Expected')->assertSee('$700.00');
     pmPay($k, 70000, ['project_id' => $p->id]);
@@ -135,7 +135,7 @@ it('soft balance ignores payments of another client linked to the project', func
     [$k, $ku] = pmClient('K');
     [$l] = pmClient('L');
     $p = Project::create(['client_id' => $k->id, 'name' => 'Site K', 'status' => 'active']);
-    Module::create(['project_id' => $p->id, 'name' => 'M', 'budget_amount_cents' => 100000]);
+    Module::create(['project_id' => $p->id, 'name' => 'M', 'budget_amount' => '1000.00']);
     pmPay($l, 30000, ['project_id' => $p->id]);
     $this->actingAs($ku)->get('/portal')->assertSee('$1,000.00');
 });
@@ -144,7 +144,7 @@ it('dashboard hides another clients data', function () {
     [$k, $ku] = pmClient('K');
     [$l] = pmClient('L');
     $lp = Project::create(['client_id' => $l->id, 'name' => 'L-Project-Zed', 'status' => 'active']);
-    Module::create(['project_id' => $lp->id, 'name' => 'M', 'budget_amount_cents' => 123400]);
+    Module::create(['project_id' => $lp->id, 'name' => 'M', 'budget_amount' => '1234.00']);
     pmInvoice($l, 98765);
     $this->actingAs($ku)->get('/portal')->assertOk()
         ->assertDontSee('L-Project-Zed')->assertDontSee('$987.65')->assertDontSee('$1,234.00');
@@ -189,7 +189,7 @@ it('dashboard query count does not scale with modules', function () {
     foreach (range(1, 3) as $i) {
         $p = Project::create(['client_id' => $k->id, 'name' => "P$i", 'status' => 'active']);
         foreach (range(1, 3) as $j) {
-            Module::create(['project_id' => $p->id, 'name' => "M$j", 'budget_amount_cents' => 1000]);
+            Module::create(['project_id' => $p->id, 'name' => "M$j", 'budget_amount' => '10.00']);
         }
     }
     $this->actingAs($ku);

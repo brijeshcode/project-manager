@@ -38,23 +38,23 @@ it('defaults client billing mode to fixed and casts to enum', function () {
     expect($c->fresh()->billing_mode)->toBe(BillingMode::Fixed);
 });
 
-it('computes budgetCents by billing mode', function () {
+it('computes budgetAmount by billing mode', function () {
     $m = bcModule('hourly');
-    expect($m->budgetCents())->toBeNull();
-    $m->update(['budget_hours' => 10, 'hourly_rate_cents' => 5000]);
-    expect($m->fresh()->budgetCents())->toBe(50000);
+    expect($m->budgetAmount())->toBeNull();
+    $m->update(['budget_hours' => 10, 'hourly_rate' => '50.00']);
+    expect($m->fresh()->budgetAmount())->toBe('500.00');
 
     $f = bcModule('fixed');
-    expect($f->budgetCents())->toBeNull();
-    $f->update(['budget_amount_cents' => 100000]);
-    expect($f->fresh()->budgetCents())->toBe(100000);
+    expect($f->budgetAmount())->toBeNull();
+    $f->update(['budget_amount' => '1000.00']);
+    expect($f->fresh()->budgetAmount())->toBe('1000.00');
 });
 
 it('logs one change row per changed field', function () {
     $m = bcModule('hourly');
     $u = bcUser('super_admin');
-    $m->updateBudget(['budget_hours' => 10, 'hourly_rate_cents' => 5000], $u, '');
-    $m->updateBudget(['budget_hours' => 15, 'hourly_rate_cents' => 5000], $u, 'Scope grew');
+    $m->updateBudget(['budget_hours' => 10, 'hourly_rate' => '50.00'], $u, '');
+    $m->updateBudget(['budget_hours' => 15, 'hourly_rate' => '50.00'], $u, 'Scope grew');
 
     $rows = ModuleBudgetChange::where('module_id', $m->id)->where('reason', 'Scope grew')->get();
     expect($rows)->toHaveCount(1)
@@ -88,7 +88,7 @@ it('forbids a developer from the budget action', function () {
         ->set("budget.{$m->id}.amount", '100')
         ->call('saveBudget', $m->id)
         ->assertForbidden();
-    expect($m->fresh()->budget_amount_cents)->toBeNull();
+    expect($m->fresh()->budget_amount)->toBeNull();
 });
 
 it('lets the owner save a budget in major units and hides fields from others', function () {
@@ -100,8 +100,8 @@ it('lets the owner save a budget in major units and hides fields from others', f
         ->set("budget.{$m->id}.deadline", '2026-12-01')
         ->call('saveBudget', $m->id)
         ->assertHasNoErrors()
-        ->assertSee('Budget');
-    expect($m->fresh()->budget_amount_cents)->toBe(100050)
+        ->set('tab', 'modules')->assertSee('Budget');
+    expect($m->fresh()->budget_amount)->toBe('1000.50')
         ->and($m->fresh()->deadline->toDateString())->toBe('2026-12-01');
 
     $pm = bcUser('project_manager', $m->project);
@@ -119,16 +119,16 @@ it('shows a billing mode select on the client form', function () {
 
 it('never renders budgets to non-owners, even when tampering', function () {
     $m = bcModule();
-    $m->update(['budget_amount_cents' => 123456]);
+    $m->update(['budget_amount' => '1234.56']);
     $owner = bcUser('super_admin');
 
     Livewire::actingAs($owner)->test(Show::class, ['project' => $m->project])
-        ->assertSee('Budget:')->assertSee('$1,234.56');
+        ->set('tab', 'modules')->assertSee('Budget:')->assertSee('$1,234.56');
 
     foreach (['project_manager', 'developer', 'client'] as $role) {
         $u = bcUser($role, $m->project);
         $c = Livewire::actingAs($u)->test(Show::class, ['project' => $m->project]);
-        $c->assertDontSee('Budget:')->assertDontSee('1,234.56')->assertDontSee('1234.56');
+        $c->set('tab', 'modules')->assertDontSee('Budget:')->assertDontSee('1,234.56')->assertDontSee('1234.56');
 
     }
 
@@ -144,10 +144,10 @@ it('rejects tampering with canManage', function () {
     expect(fn () => $c->set('canManage', true))->toThrow(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
 });
 
-it('computes budgetCents with integer math', function () {
+it('computes budgetAmount with integer math', function () {
     $m = bcModule('hourly');
-    $m->update(['budget_hours' => 0.33, 'hourly_rate_cents' => 1001]);
-    expect($m->fresh()->budgetCents())->toBe(330); // 0.33 * 1001 = 330.33 -> 330
-    $m->update(['budget_hours' => 0.5, 'hourly_rate_cents' => 1001]);
-    expect($m->fresh()->budgetCents())->toBe(501); // 500.5 -> 501 half-up
+    $m->update(['budget_hours' => 0.33, 'hourly_rate' => '10.01']);
+    expect($m->fresh()->budgetAmount())->toBe('3.30'); // 0.33 * 1001 = 330.33 -> 330
+    $m->update(['budget_hours' => 0.5, 'hourly_rate' => '10.01']);
+    expect($m->fresh()->budgetAmount())->toBe('5.01'); // 500.5 -> 501 half-up
 });

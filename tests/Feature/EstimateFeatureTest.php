@@ -104,7 +104,7 @@ it('Project::deadline returns correct working-day deadline', function () {
 
     estTask($module, $user, ['estimate_hours' => 8.0]);
 
-    expect($project->deadline()->toDateString())->toBe('2026-10-26');
+    expect($project->estimatedCompletion()->toDateString())->toBe('2026-10-26');
 });
 
 it('Project::deadline applies buffer after conversion', function () {
@@ -116,7 +116,7 @@ it('Project::deadline applies buffer after conversion', function () {
 
     estTask($module, $user, ['estimate_hours' => 40.0]);
 
-    expect($project->deadline()->toDateString())->toBe('2026-11-02');
+    expect($project->estimatedCompletion()->toDateString())->toBe('2026-11-02');
 });
 
 // ── Project::timeBar ──────────────────────────────────────────────────────────

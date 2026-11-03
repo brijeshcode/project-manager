@@ -14,11 +14,11 @@ return new class extends Migration
 
         Schema::table('modules', function (Blueprint $t) {
             $t->decimal('budget_hours', 8, 2)->nullable();
-            $t->bigInteger('hourly_rate_cents')->nullable();
-            $t->bigInteger('budget_amount_cents')->nullable();
+            $t->decimal('hourly_rate', 14, 2)->nullable();
+            $t->decimal('budget_amount', 14, 2)->nullable();
             $t->decimal('exchange_rate', 18, 6)->nullable();   // project currency -> local
-            $t->bigInteger('local_hourly_rate_cents')->nullable();
-            $t->bigInteger('local_budget_amount_cents')->nullable();
+            $t->decimal('hourly_rate_local', 14, 2)->nullable();
+            $t->decimal('budget_amount_local', 14, 2)->nullable();
             $t->date('deadline')->nullable();
         });
 
@@ -37,7 +37,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('module_budget_changes');
-        Schema::table('modules', fn (Blueprint $t) => $t->dropColumn(['budget_hours', 'hourly_rate_cents', 'budget_amount_cents', 'deadline']));
+        Schema::table('modules', fn (Blueprint $t) => $t->dropColumn(['budget_hours', 'hourly_rate', 'budget_amount', 'deadline']));
         Schema::table('clients', fn (Blueprint $t) => $t->dropColumn('billing_mode'));
     }
 };

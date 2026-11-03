@@ -55,8 +55,8 @@ it('rejects a project currency that is not in the system', function () {
 it('keeps rate and local amount on a module budget, a task price and a billable line, from the project currency', function () {
     $c = csClient('USD');
     $p = Project::create(['client_id' => $c->id, 'currency' => 'EUR', 'name' => 'P', 'status' => 'active', 'buffer_percent' => 0]);
-    $m = Module::create(['project_id' => $p->id, 'name' => 'M', 'position' => 1, 'budget_amount_cents' => 10000, 'hourly_rate_cents' => 2500]);
-    expect((string) $m->exchange_rate)->toBe('100.000000')->and($m->local_budget_amount_cents)->toBe(1000000)->and($m->local_hourly_rate_cents)->toBe(250000);
+    $m = Module::create(['project_id' => $p->id, 'name' => 'M', 'position' => 1, 'budget_amount' => '100.00', 'hourly_rate' => '25.00']);
+    expect((string) $m->exchange_rate)->toBe('100.000000')->and($m->budget_amount_local)->toBe('10000.00')->and($m->hourly_rate_local)->toBe('2500.00');
 
     $t = Task::create(['module_id' => $m->id, 'creator_id' => $this->owner->id, 'title' => 'T', 'price' => '10.00']);
     expect((string) $t->exchange_rate)->toBe('100.000000')->and((string) $t->local_price)->toBe('1000.00');

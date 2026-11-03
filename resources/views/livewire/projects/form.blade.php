@@ -41,11 +41,39 @@
                 @error('description') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
+            <div>
+                <label class="label" for="aim">Aim of the project <span class="font-normal text-slate-400">(optional)</span></label>
+                <textarea id="aim" wire:model="aim" rows="3" placeholder="What problem are we solving?" class="textarea"></textarea>
+                @error('aim') <p class="field-error">{{ $message }}</p> @enderror
+            </div>
+
+            <div class="grid gap-5 sm:grid-cols-3">
+                <div>
+                    <label class="label" for="initial_budget">Initial budget ({{ $currency }})</label>
+                    <input id="initial_budget" type="text" inputmode="decimal" wire:model.live.debounce.300ms="initial_budget" class="input">
+                    @error('initial_budget') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="label" for="addons_amount">Addons amount ({{ $currency }})</label>
+                    <input id="addons_amount" type="text" inputmode="decimal" wire:model.live.debounce.300ms="addons_amount" class="input">
+                    @error('addons_amount') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="label" for="final_budget">Final budget ({{ $currency }})</label>
+                    <input id="final_budget" type="text" value="{{ $finalBudget }}" readonly class="input bg-slate-50">
+                </div>
+            </div>
+
             <div class="grid gap-5 sm:grid-cols-3">
                 <div>
                     <label class="label" for="start_date">Start date</label>
                     <input id="start_date" type="date" wire:model="start_date" class="input">
                     @error('start_date') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label class="label" for="deadline">Deadline</label>
+                    <input id="deadline" type="date" wire:model.live="deadline" class="input">
+                    @error('deadline') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="label" for="buffer_percent">Buffer %</label>
@@ -63,6 +91,14 @@
                     @error('status') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
             </div>
+
+            @if ($this->changingDeadline())
+                <div>
+                    <label class="label" for="reason">Reason for deadline change</label>
+                    <textarea id="reason" rows="2" wire:model="reason" class="textarea"></textarea>
+                    @error('reason') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+            @endif
         </x-ui.card>
 
         <div class="flex items-center gap-3">

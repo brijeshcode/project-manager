@@ -20,7 +20,7 @@ function bsModule(string $mode = 'fixed', ?int $rate = null): Module
     $client = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => $mode]);
     $p = Project::create(['client_id' => $client->id, 'name' => 'Site', 'buffer_percent' => 0, 'start_date' => now(), 'status' => 'active']);
 
-    return Module::create(['project_id' => $p->id, 'name' => 'M', 'position' => 1, 'hourly_rate_cents' => $rate]);
+    return Module::create(['project_id' => $p->id, 'name' => 'M', 'position' => 1, 'hourly_rate' => $rate === null ? null : number_format($rate / 100, 2, '.', '')]);
 }
 
 function bsTask(Module $m, array $o = []): Task

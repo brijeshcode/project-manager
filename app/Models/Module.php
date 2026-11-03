@@ -15,18 +15,18 @@ class Module extends Model
 {
     use FreezesLocalAmounts;
 
-    protected $fillable = ['project_id', 'name', 'description', 'position', 'budget_hours', 'hourly_rate_cents', 'budget_amount_cents', 'deadline', 'exchange_rate', 'local_hourly_rate_cents', 'local_budget_amount_cents'];
+    protected $fillable = ['project_id', 'name', 'description', 'position', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
 
-    public const BUDGET_FIELDS = ['budget_hours', 'hourly_rate_cents', 'budget_amount_cents', 'deadline', 'exchange_rate', 'local_hourly_rate_cents', 'local_budget_amount_cents'];
+    public const BUDGET_FIELDS = ['budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
 
     protected function casts(): array
     {
-        return ['budget_hours' => 'decimal:2', 'deadline' => 'date'];
+        return ['budget_hours' => 'decimal:2', 'hourly_rate' => 'decimal:2', 'budget_amount' => 'decimal:2', 'hourly_rate_local' => 'decimal:2', 'budget_amount_local' => 'decimal:2', 'deadline' => 'date'];
     }
 
     protected function localAmounts(): array
     {
-        return ['hourly_rate_cents' => ['local_hourly_rate_cents', 'cents'], 'budget_amount_cents' => ['local_budget_amount_cents', 'cents']];
+        return ['hourly_rate' => ['hourly_rate_local', 'major'], 'budget_amount' => ['budget_amount_local', 'major']];
     }
 
     protected function moneyCurrency(): ?string
@@ -45,22 +45,23 @@ class Module extends Model
     }
 
     /** Hourly client: hours x rate; fixed client: the fixed amount. Null when not configured. */
-    public function budgetCents(): ?int
+    public function budgetAmount(): ?string
     {
         if ($this->project->client->billing_mode === BillingMode::Hourly) {
-            if ($this->budget_hours === null || $this->hourly_rate_cents === null) {
+            if ($this->budget_hours === null || $this->hourly_rate === null) {
                 return null;
             }
             $h = Money::toCents((string) $this->budget_hours);
+            $rate = Money::toCents($this->hourly_rate);
             // absurd rows must not overflow int math (saveBudget bounds make this unreachable)
-            if ((float) $h * $this->hourly_rate_cents > PHP_INT_MAX / 2) {
+            if ((float) $h * $rate > PHP_INT_MAX / 2) {
                 return null;
             }
 
-            return intdiv($h * $this->hourly_rate_cents + 50, 100); // hours x100, integer half-up
+            return Money::toInput(intdiv($h * $rate + 50, 100)); // hours x100, integer half-up
         }
 
-        return $this->budget_amount_cents;
+        return $this->budget_amount;
     }
 
     /** Applies budget attrs; logs one row per changed field. Reason required when overwriting an existing value. */
@@ -68,7 +69,7 @@ class Module extends Model
     {
         $norm = fn ($f, $v) => $v === null || $v === '' ? null
             : ($f === 'deadline' ? \Illuminate\Support\Carbon::parse($v)->toDateString()
-            : ($f === 'budget_hours' ? number_format((float) $v, 2, '.', '') : (string) (int) $v));
+            : (in_array($f, ['budget_hours', 'hourly_rate', 'budget_amount', 'hourly_rate_local', 'budget_amount_local']) ? number_format((float) $v, 2, '.', '') : number_format((float) $v, 2, '.', '')));
 
         $changes = [];
         foreach (array_intersect_key($attrs, array_flip(self::BUDGET_FIELDS)) as $f => $new) {

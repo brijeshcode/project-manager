@@ -2,7 +2,7 @@
     @php
         $checklist       = app(\App\Services\ProgressService::class)->forProject($project);
         $timeUsed        = $project->timeBar() * 100;
-        $deadline        = $project->start_date ? $project->deadline() : null;
+        $estimate        = $project->start_date ? $project->estimatedCompletion() : null;
         $estimateVsActual = $project->estimateVsActual();
     @endphp
 
@@ -21,10 +21,6 @@
             <p class="mt-1 text-sm text-slate-500">{{ $project->client->name }} &middot; {{ $project->currency }}</p>
         </div>
         <div class="flex items-center gap-2">
-            <a href="{{ route('projects.board', $project) }}" wire:navigate class="btn btn-secondary">Board</a>
-            @can('manage-money')
-                <a href="{{ route('projects.economics', $project) }}" wire:navigate class="btn btn-secondary">Economics</a>
-            @endcan
             @unless (auth()->user()->hasRole('client'))
                 <a href="{{ route('projects.edit', $project) }}" wire:navigate class="btn btn-secondary">Edit project</a>
             @endunless
@@ -34,15 +30,160 @@
     @if ($project->description)
         <p class="mt-4 max-w-2xl text-sm leading-relaxed text-slate-600">{{ $project->description }}</p>
     @endif
+    @if ($project->aim)
+        <p class="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600"><span class="font-semibold text-slate-900">Aim:</span> {{ $project->aim }}</p>
+    @endif
 
+    <div class="mt-6 flex gap-1 overflow-x-auto border-b border-slate-200">
+        @foreach ($tabs as $key => $label)
+            <button type="button" wire:click="$set('tab', '{{ $key }}')" @class(['whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium', 'border-brand-600 text-brand-700' => $active === $key, 'border-transparent text-slate-500 hover:text-slate-700' => $active !== $key])>{{ $label }}</button>
+        @endforeach
+    </div>
+
+@if ($active === 'details')
     <div class="mt-6 grid gap-6 lg:grid-cols-3">
         <div class="space-y-6 lg:col-span-2">
+            <div class="grid gap-4 sm:grid-cols-2">
+                <x-ui.card><div class="text-sm text-slate-500 dark:text-gray-400">Initial budget</div><x-ui.money-pair class="text-xl font-semibold" :cents="\App\Support\Money::toCents($project->initial_budget)" :currency="$project->currency" :local="$project->initial_budget_local === null ? null : \App\Support\Money::toCents($project->initial_budget_local)" /></x-ui.card>
+                <x-ui.card><div class="text-sm text-slate-500 dark:text-gray-400">Addons</div><x-ui.money-pair class="text-xl font-semibold" :cents="\App\Support\Money::toCents($project->addons_amount)" :currency="$project->currency" :local="$project->addons_amount_local === null ? null : \App\Support\Money::toCents($project->addons_amount_local)" /></x-ui.card>
+                <x-ui.card><div class="text-sm text-slate-500 dark:text-gray-400">Final budget</div><x-ui.money-pair class="text-xl font-semibold" :cents="\App\Support\Money::toCents($project->final_budget)" :currency="$project->currency" :local="$project->final_budget_local === null ? null : \App\Support\Money::toCents($project->final_budget_local)" /></x-ui.card>
+                <x-ui.card><div class="text-sm text-slate-500 dark:text-gray-400">Modules</div><div class="text-xl font-semibold">{{ $modules->count() }}</div></x-ui.card>
+            </div>
+
+            @php $dStatus = $project->deadlineStatus(); @endphp
+            <x-ui.card>
+                <div class="mb-3 flex items-center justify-between">
+                    <h2 class="text-sm font-semibold text-slate-900">Deadline</h2>
+                    @if ($dStatus) <x-ui.badge :color="$dStatus[1]">{{ $dStatus[0] }}</x-ui.badge> @endif
+                </div>
+                @if ($project->deadline)
+                    <dl class="grid gap-4 text-sm sm:grid-cols-3">
+                        <div>
+                            <dt class="text-slate-500">Deadline</dt>
+                            <dd class="text-xl font-semibold text-slate-900">{{ $project->deadline->format('M j, Y') }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">{{ $project->status === 'completed' ? 'Completed' : 'Days left' }}</dt>
+                            <dd class="text-xl font-semibold text-slate-900">
+                                @if ($project->status === 'completed') {{ $project->completed_at?->format('M j, Y') ?? '—' }}
+                                @else
+                                    @php $left = (int) today()->diffInDays($project->deadline, false); @endphp
+                                    {{ $left >= 0 ? $left : abs($left).' overdue' }}
+                                @endif
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-slate-500">Estimated completion</dt>
+                            <dd class="text-xl font-semibold text-slate-900">{{ $estimate?->format('M j, Y') ?? '—' }}</dd>
+                        </div>
+                    </dl>
+                @else
+                    <p class="text-sm text-slate-500">No deadline set.</p>
+                @endif
+
+                @if ($canManage)
+                    <form wire:submit="changeDeadline" class="mt-4 grid gap-2 border-t border-slate-100 pt-4 sm:grid-cols-[auto_1fr_auto]">
+                        <input type="date" wire:model="newDeadline" class="input" aria-label="New deadline">
+                        <input type="text" wire:model="deadlineReason" placeholder="{{ $project->deadline ? 'Reason (required)' : 'Reason (optional)' }}" class="input" aria-label="Reason">
+                        <button type="submit" class="btn btn-secondary">{{ $project->deadline ? 'Change deadline' : 'Set deadline' }}</button>
+                        @error('newDeadline') <p class="field-error sm:col-span-3">{{ $message }}</p> @enderror
+                        @error('deadlineReason') <p class="field-error sm:col-span-3">{{ $message }}</p> @enderror
+                    </form>
+                @endif
+
+                @php $changes = $project->deadlineChanges()->with('user')->get(); @endphp
+                @if ($changes->isNotEmpty())
+                    <p class="mt-4 text-sm font-medium text-slate-900">Extended {{ $project->extensionCount() }} {{ Str::plural('time', $project->extensionCount()) }}</p>
+                    <ul class="mt-2 divide-y divide-slate-100 text-sm">
+                        @foreach ($changes as $c)
+                            <li class="py-2">
+                                <div class="flex justify-between gap-3">
+                                    <span class="text-slate-700">
+                                        {{ $c->old_deadline ? $c->old_deadline->format('M j, Y').' → ' : 'Set to ' }}{{ $c->new_deadline->format('M j, Y') }}
+                                        @if ($c->old_deadline) @php $d = (int) $c->old_deadline->diffInDays($c->new_deadline, false); @endphp <span class="{{ $d > 0 ? 'text-rose-600' : 'text-green-600' }}">({{ $d > 0 ? '+' : '' }}{{ $d }}d)</span> @endif
+                                    </span>
+                                    <span class="text-slate-400">{{ $c->user->name }} &middot; {{ $c->created_at->format('M j, Y') }}</span>
+                                </div>
+                                @if ($c->reason) <p class="text-slate-500">{{ $c->reason }}</p> @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </x-ui.card>
+
             <x-ui.card>
                 <h2 class="mb-4 text-sm font-semibold text-slate-900">Project health</h2>
                 <x-ui.health-meter :checklist="$checklist" :time="$timeUsed" />
             </x-ui.card>
+        </div>
 
-            {{-- Workspace: modules → tasks → subtasks + checklist --}}
+        <div class="space-y-6">
+            <x-ui.card>
+                <h2 class="mb-3 text-sm font-semibold text-slate-900">Details</h2>
+                <dl class="space-y-3 text-sm">
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500">Start date</dt>
+                        <dd class="font-medium text-slate-900">{{ $project->start_date?->format('M j, Y') ?? '—' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500">Projected deadline</dt>
+                        <dd class="font-medium text-slate-900">{{ $estimate?->format('M j, Y') ?? '—' }}</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500">Buffer</dt>
+                        <dd class="font-medium text-slate-900">{{ rtrim(rtrim(number_format((float) $project->buffer_percent, 2), '0'), '.') }}%</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500">Estimated hours</dt>
+                        <dd class="font-medium text-slate-900">{{ number_format($estimateVsActual['estimated'], 1) }}h</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500">Logged hours</dt>
+                        <dd class="font-medium text-slate-900">{{ number_format($estimateVsActual['logged'], 1) }}h</dd>
+                    </div>
+                </dl>
+            </x-ui.card>
+
+            @can('manage-money')
+                @php $money = \App\Services\ProjectEconomics::money($project); $cur = $project->currency; @endphp
+                <x-ui.card>
+                    <div class="mb-3 flex items-center justify-between">
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Money</h2>
+                        <a href="{{ route('projects.economics', $project) }}" wire:navigate class="link text-xs font-medium">Economics</a>
+                    </div>
+                    <dl class="space-y-3 text-sm">
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-slate-500 dark:text-gray-400">Invoiced</dt>
+                            <dd class="text-right font-medium text-slate-900 dark:text-white"><x-ui.money-pair :cents="$money['invoiced_cents']" :currency="$cur" :local="$money['invoiced_local']" :missing="$money['invoiced_missing_rate']" /></dd>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-slate-500 dark:text-gray-400">Received</dt>
+                            <dd class="text-right font-medium text-slate-900 dark:text-white"><x-ui.money-pair :cents="$money['received_cents']" :currency="$cur" :local="$money['received_local']" :missing="$money['received_missing_rate']" /></dd>
+                        </div>
+                    </dl>
+                </x-ui.card>
+            @endcan
+
+            <x-ui.card>
+                <h2 class="mb-3 text-sm font-semibold text-slate-900">Team</h2>
+                @if ($project->members->isEmpty())
+                    <p class="text-sm text-slate-500">No members assigned yet.</p>
+                @else
+                    <ul class="space-y-2.5">
+                        @foreach ($project->members as $member)
+                            @php $mi = collect(explode(' ', trim($member->name)))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode(''); @endphp
+                            <li class="flex items-center gap-3">
+                                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">{{ $mi }}</span>
+                                <span class="text-sm font-medium text-slate-800">{{ $member->name }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </x-ui.card>
+        </div>
+    </div>
+@elseif ($active === 'modules')
+    <div class="mt-6">
             <div>
                 <div class="mb-3 flex items-center justify-between">
                     <h2 class="font-display text-lg font-semibold text-slate-900">Modules & tasks</h2>
@@ -85,7 +226,7 @@
                                 @php $hourly = $project->client->billing_mode === \App\Enums\BillingMode::Hourly; @endphp
                                 <div class="mt-2 text-xs text-slate-500" x-data="{ editingBudget: false }">
                                     <div x-show="!editingBudget" class="flex items-center gap-2">
-                                        <span>Budget: {{ $module->budgetCents() === null ? 'not set' : \App\Support\Money::format($module->budgetCents(), $project->currency) }}@if ($module->deadline) &middot; due {{ $module->deadline->toDateString() }}@endif</span>
+                                        <span>Budget: {{ $module->budgetAmount() === null ? 'not set' : \App\Support\Money::format(\App\Support\Money::toCents($module->budgetAmount()), $project->currency) }}@if ($module->deadline) &middot; due {{ $module->deadline->toDateString() }}@endif</span>
                                         <button @click="editingBudget = true" class="shrink-0 font-medium text-brand-600 hover:text-brand-700">Edit budget</button>
                                     </div>
                                     <form x-show="editingBudget" style="display:none" wire:submit.prevent="saveBudget({{ $module->id }})" @submit="editingBudget = false" class="space-y-1.5">
@@ -215,73 +356,12 @@
                     </x-ui.empty-state>
                 @endforelse
             </div>
-
-            <livewire:resources.panel :project="$project" />
-        </div>
-
-        <div class="space-y-6">
-            <x-ui.card>
-                <h2 class="mb-3 text-sm font-semibold text-slate-900">Details</h2>
-                <dl class="space-y-3 text-sm">
-                    <div class="flex justify-between">
-                        <dt class="text-slate-500">Start date</dt>
-                        <dd class="font-medium text-slate-900">{{ $project->start_date?->format('M j, Y') ?? '—' }}</dd>
-                    </div>
-                    <div class="flex justify-between">
-                        <dt class="text-slate-500">Projected deadline</dt>
-                        <dd class="font-medium text-slate-900">{{ $deadline?->format('M j, Y') ?? '—' }}</dd>
-                    </div>
-                    <div class="flex justify-between">
-                        <dt class="text-slate-500">Buffer</dt>
-                        <dd class="font-medium text-slate-900">{{ rtrim(rtrim(number_format((float) $project->buffer_percent, 2), '0'), '.') }}%</dd>
-                    </div>
-                    <div class="flex justify-between">
-                        <dt class="text-slate-500">Estimated hours</dt>
-                        <dd class="font-medium text-slate-900">{{ number_format($estimateVsActual['estimated'], 1) }}h</dd>
-                    </div>
-                    <div class="flex justify-between">
-                        <dt class="text-slate-500">Logged hours</dt>
-                        <dd class="font-medium text-slate-900">{{ number_format($estimateVsActual['logged'], 1) }}h</dd>
-                    </div>
-                </dl>
-            </x-ui.card>
-
-            @can('manage-money')
-                @php $money = \App\Services\ProjectEconomics::money($project); $cur = $project->currency; @endphp
-                <x-ui.card>
-                    <div class="mb-3 flex items-center justify-between">
-                        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Money</h2>
-                        <a href="{{ route('projects.economics', $project) }}" wire:navigate class="link text-xs font-medium">Economics</a>
-                    </div>
-                    <dl class="space-y-3 text-sm">
-                        <div class="flex justify-between gap-3">
-                            <dt class="text-slate-500 dark:text-gray-400">Invoiced</dt>
-                            <dd class="text-right font-medium text-slate-900 dark:text-white"><x-ui.money-pair :cents="$money['invoiced_cents']" :currency="$cur" :local="$money['invoiced_local']" :missing="$money['invoiced_missing_rate']" /></dd>
-                        </div>
-                        <div class="flex justify-between gap-3">
-                            <dt class="text-slate-500 dark:text-gray-400">Received</dt>
-                            <dd class="text-right font-medium text-slate-900 dark:text-white"><x-ui.money-pair :cents="$money['received_cents']" :currency="$cur" :local="$money['received_local']" :missing="$money['received_missing_rate']" /></dd>
-                        </div>
-                    </dl>
-                </x-ui.card>
-            @endcan
-
-            <x-ui.card>
-                <h2 class="mb-3 text-sm font-semibold text-slate-900">Team</h2>
-                @if ($project->members->isEmpty())
-                    <p class="text-sm text-slate-500">No members assigned yet.</p>
-                @else
-                    <ul class="space-y-2.5">
-                        @foreach ($project->members as $member)
-                            @php $mi = collect(explode(' ', trim($member->name)))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode(''); @endphp
-                            <li class="flex items-center gap-3">
-                                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">{{ $mi }}</span>
-                                <span class="text-sm font-medium text-slate-800">{{ $member->name }}</span>
-                            </li>
-                        @endforeach
-                    </ul>
-                @endif
-            </x-ui.card>
-        </div>
     </div>
+@elseif ($active === 'resources')
+    <div class="mt-6"><livewire:resources.panel :project="$project" /></div>
+@elseif ($active === 'board')
+    <div class="mt-6"><livewire:tasks.board :project="$project" :key="'board-'.$project->id" /></div>
+@elseif ($active === 'economics')
+    <div class="mt-6"><livewire:projects.economics :project="$project" :key="'econ-'.$project->id" /></div>
+@endif
 </div>

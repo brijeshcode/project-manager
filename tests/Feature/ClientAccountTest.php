@@ -19,7 +19,7 @@ function caProject(int $budget = 100000): Project
 {
     $client = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
     $p = Project::create(['client_id' => $client->id, 'name' => 'Site', 'buffer_percent' => 0, 'start_date' => now(), 'status' => 'active']);
-    Module::create(['project_id' => $p->id, 'name' => 'M1', 'position' => 1, 'budget_amount_cents' => $budget]);
+    Module::create(['project_id' => $p->id, 'name' => 'M1', 'position' => 1, 'budget_amount' => number_format($budget / 100, 2, '.', '')]);
     Module::create(['project_id' => $p->id, 'name' => 'M2 (no budget)', 'position' => 2]);
 
     return $p;

@@ -35,4 +35,4 @@ function initBoard() {
 document.addEventListener('livewire:initialized', initBoard);
 document.addEventListener('livewire:navigated', initBoard);
 // Re-init after each Livewire render to handle column re-renders
-Livewire.hook('morph.updated', () => initBoard());
+Livewire.hook('commit', ({ succeed }) => succeed(() => setTimeout(initBoard, 50)));

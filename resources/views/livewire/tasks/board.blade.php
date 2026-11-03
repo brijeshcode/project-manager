@@ -48,10 +48,4 @@
             </div>
         @endforeach
     </div>
-
-    @once
-        @push('scripts')
-            @vite(['resources/js/board-drag.js'])
-        @endpush
-    @endonce
 </div>

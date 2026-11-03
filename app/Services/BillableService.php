@@ -67,10 +67,11 @@ class BillableService
         if ($task->price !== null && $task->price > 0) {
             return Money::toCents((string) $task->price);
         }
-        $rate = $task->module->hourly_rate_cents;
+        $rate = $task->module->hourly_rate;
         if (! $hourly || $rate === null) {
             return null;
         }
+        $rate = Money::toCents($rate);
         $hours = $task->effectiveHours() + (float) $task->subtasks->sum('estimate_hours'); // subtasks eager-loaded, no N+1
         $hoursX100 = Money::toCents(number_format($hours, 2, '.', ''));
 

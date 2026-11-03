@@ -13,7 +13,7 @@ class Index extends Component
     public function render()
     {
         $user  = auth()->user();
-        $query = Project::with('client')->orderBy('name');
+        $query = Project::with('client')->withCount('modules')->orderBy('name');
 
         if (! $user->hasRole('super_admin')) {
             $query->whereHas('members', fn ($q) => $q

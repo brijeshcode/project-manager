@@ -12,6 +12,7 @@ use App\Models\Subtask;
 use App\Models\Task;
 use App\Services\ProgressService;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class Show extends Component
@@ -20,6 +21,9 @@ class Show extends Component
 
     #[Locked]
     public bool $canManage = false;
+
+    #[Url]
+    public string $tab = 'details';
 
     public string $newModuleName = '';
 
@@ -80,11 +84,30 @@ class Show extends Component
     {
         $this->budget[$m->id] = [
             'hours'    => $m->budget_hours === null ? '' : (string) $m->budget_hours,
-            'rate'     => Money::toInput($m->hourly_rate_cents),
-            'amount'   => Money::toInput($m->budget_amount_cents),
+            'rate'     => $m->hourly_rate ?? '',
+            'amount'   => $m->budget_amount ?? '',
             'deadline' => $m->deadline?->toDateString() ?? '',
             'reason'   => '',
         ];
+    }
+
+    public string $newDeadline = '';
+
+    public string $deadlineReason = '';
+
+    public function changeDeadline(): void
+    {
+        $this->authorize('update', $this->project);
+        $this->validate(['newDeadline' => 'required|date', 'deadlineReason' => 'nullable|string|max:1000']);
+
+        try {
+            $this->project->setDeadline($this->newDeadline, auth()->user(), $this->deadlineReason);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->addError('deadlineReason', $e->errors()['reason'][0]);
+
+            return;
+        }
+        $this->reset('newDeadline', 'deadlineReason');
     }
 
     public function saveBudget(int $moduleId): void
@@ -103,12 +126,12 @@ class Show extends Component
         ]);
 
         $b = $this->budget[$moduleId];
-        $cents = fn ($v) => ($v ?? '') === '' ? null : Money::toCents(str_replace(',', '', $v));
+        $amt = fn ($v) => ($v ?? '') === '' ? null : Money::toInput(Money::toCents(str_replace(',', '', $v)));
         try {
             $module->updateBudget([
                 'budget_hours'        => ($b['hours'] ?? '') === '' ? null : $b['hours'],
-                'hourly_rate_cents'   => $cents($b['rate'] ?? null),
-                'budget_amount_cents' => $cents($b['amount'] ?? null),
+                'hourly_rate'   => $amt($b['rate'] ?? null),
+                'budget_amount' => $amt($b['amount'] ?? null),
                 'deadline'            => ($b['deadline'] ?? '') ?: null,
             ], auth()->user(), (string) ($b['reason'] ?? ''));
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -233,7 +256,12 @@ class Show extends Component
             ])
             ->get();
 
+        $tabs = ['details' => 'Details', 'modules' => 'Modules', 'resources' => 'Resources', 'board' => 'Board']
+            + (auth()->user()->can('manage-money') ? ['economics' => 'Economics'] : []);
+
         return view('livewire.projects.show', [
+            'tabs'     => $tabs,
+            'active'   => isset($tabs[$this->tab]) ? $this->tab : 'details',
             'project'  => $this->project->load('client', 'members'),
             'modules'  => $modules,
             'progress' => app(ProgressService::class),

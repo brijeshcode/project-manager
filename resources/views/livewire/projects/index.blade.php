@@ -54,6 +54,17 @@
                         </div>
                         <x-ui.badge :color="$project->status === 'active' ? 'green' : 'slate'">{{ ucfirst(str_replace("_", " ", $project->status)) }}</x-ui.badge>
                     </div>
+                    <div class="mt-3 flex items-center justify-between text-sm text-slate-500">
+                        <span>{{ $project->modules_count }} {{ Str::plural('module', $project->modules_count) }}</span>
+                        <span class="font-medium text-slate-700">Final budget {{ \App\Support\Money::format(\App\Support\Money::toCents($project->final_budget), $project->currency) }}</span>
+                    </div>
+                    @if ($project->deadline)
+                        @php $ds = $project->deadlineStatus(); @endphp
+                        <div class="mt-2 flex items-center justify-between text-sm text-slate-500">
+                            <span>Due {{ $project->deadline->format('M j, Y') }}</span>
+                            @if ($ds[1] !== 'green') <x-ui.badge :color="$ds[1]">{{ Str::before($ds[0], ' —') }}</x-ui.badge> @endif
+                        </div>
+                    @endif
                     <div class="mt-5">
                         <x-ui.health-meter :checklist="$checklist" :time="$timeUsed" compact />
                     </div>

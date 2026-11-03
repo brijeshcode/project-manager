@@ -108,7 +108,7 @@ it('project workspace embeds time logger for tasks', function () {
         'scope' => 'in', 'board_column' => 'Backlog', 'position' => 1,
     ]);
 
-    actingAs($admin)->get(route('projects.show', $project))
+    actingAs($admin)->get(route('projects.show', [$project, 'tab' => 'modules']))
         ->assertOk()
         ->assertSee('Log time');
 });

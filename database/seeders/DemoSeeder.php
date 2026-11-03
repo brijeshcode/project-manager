@@ -81,8 +81,8 @@ class DemoSeeder extends Seeder
 
         // Never overwrite an owner-set budget.
         $module = $project->modules()->orderBy('position')->first();
-        if ($module && $module->hourly_rate_cents === null && $module->budget_hours === null) {
-            $module->update(['hourly_rate_cents' => 7500, 'budget_hours' => 40]);
+        if ($module && $module->hourly_rate === null && $module->budget_hours === null) {
+            $module->update(['hourly_rate' => '75.00', 'budget_hours' => 40]);
         }
 
         RecurringCharge::firstOrCreate(
@@ -133,11 +133,14 @@ class DemoSeeder extends Seeder
         $storefront = Project::create([
             'client_id' => $client->id,
             'name' => 'Northwind Storefront',
+            'aim' => 'Let Northwind sell online without phone orders.',
+            'initial_budget' => '12000', 'addons_amount' => '1500.50',
             'buffer_percent' => 15,
             'start_date' => now()->subWeeks(2)->startOfWeek(),
             'status' => 'active',
         ]);
         if ($admin) {
+            $storefront->setDeadline(now()->addWeeks(5)->toDateString(), $admin);
             $storefront->members()->attach($admin->id, ['role_on_project' => 'project_manager', 'access_scope' => 'all', 'active' => true]);
         }
 
@@ -192,6 +195,7 @@ class DemoSeeder extends Seeder
         Project::create([
             'client_id' => $client->id,
             'name' => 'Inventory API',
+            'initial_budget' => '4000', 'addons_amount' => '0',
             'buffer_percent' => 10,
             'start_date' => now()->startOfWeek(),
             'status' => 'draft',
@@ -267,16 +271,30 @@ class DemoSeeder extends Seeder
             foreach ($projects as $p => [$projectName, $status, $modules]) {
                 $project = Project::create([
                     'client_id' => $client->id, 'name' => $projectName, 'buffer_percent' => 10 + $p * 5,
+                    'initial_budget' => 5000 + $p * 2500, 'addons_amount' => $p * 400,
                     'start_date' => now()->subWeeks(6 - $p * 2)->startOfWeek(), 'status' => $status,
                 ]);
                 $firstProject ??= $project;
+                // deadlines: the first project gets an extension history; completed ones finish early
+                $start = $project->start_date;
+                if ($status === 'completed') {
+                    $project->update(['completed_at' => $start->copy()->addWeeks(3)]);
+                    $project->setDeadline($start->copy()->addWeeks(4), $admin);
+                } else {
+                    $project->setDeadline($start->copy()->addWeeks(7 + $p), $admin);
+                    if ($n === 0 && $p === 0) {
+                        $project->setDeadline($start->copy()->addWeeks(9), $admin, 'Client added the loyalty programme to scope.');
+                        $project->setDeadline($start->copy()->addWeeks(10), $admin, 'Payment gateway sign-off delayed by the client.');
+                        $project->setDeadline($start->copy()->addWeeks(9)->addDays(4), $admin, 'Gateway sign-off arrived early; pulled in.');
+                    }
+                }
                 $project->members()->attach($admin->id, ['role_on_project' => 'project_manager', 'access_scope' => 'all', 'active' => true]);
 
                 $mi = 0;
                 foreach ($modules as $moduleName => $tasks) {
                     $module = Module::create([
                         'project_id' => $project->id, 'name' => $moduleName, 'position' => ++$mi,
-                        'hourly_rate_cents' => $mode === 'hourly' ? 6000 + $n * 1500 : null,
+                        'hourly_rate' => $mode === 'hourly' ? number_format(60 + $n * 15, 2, '.', '') : null,
                         'budget_hours' => $mode === 'hourly' ? 30 + $mi * 10 : null,
                         'deadline' => now()->addWeeks(2 + $mi),
                     ]);
