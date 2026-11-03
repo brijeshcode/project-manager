@@ -7,6 +7,7 @@ use App\Enums\BoardColumn;
 use App\Enums\TaskScope;
 use App\Enums\TaskStatus;
 use Illuminate\Database\Eloquent\Builder;
+use App\Models\Concerns\FreezesLocalAmounts;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Task extends Model
 {
+    use FreezesLocalAmounts;
+
     protected $attributes = [
         'is_idea'        => false,
         'client_visible' => false,
@@ -36,6 +39,8 @@ class Task extends Model
         'estimate_hours',
         'scope',
         'price',
+        'exchange_rate',
+        'local_price',
         'client_visible',
         'testing_enabled',
         'testing_add_type',
@@ -58,6 +63,16 @@ class Task extends Model
             'price'            => 'float',
             'testing_add_value' => 'float',
         ];
+    }
+
+    protected function localAmounts(): array
+    {
+        return ['price' => ['local_price', 'major']];
+    }
+
+    protected function moneyCurrency(): ?string
+    {
+        return $this->module?->project?->currency;
     }
 
     public function module(): BelongsTo

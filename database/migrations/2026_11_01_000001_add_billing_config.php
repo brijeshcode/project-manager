@@ -16,6 +16,9 @@ return new class extends Migration
             $t->decimal('budget_hours', 8, 2)->nullable();
             $t->bigInteger('hourly_rate_cents')->nullable();
             $t->bigInteger('budget_amount_cents')->nullable();
+            $t->decimal('exchange_rate', 18, 6)->nullable();   // project currency -> local
+            $t->bigInteger('local_hourly_rate_cents')->nullable();
+            $t->bigInteger('local_budget_amount_cents')->nullable();
             $t->date('deadline')->nullable();
         });
 

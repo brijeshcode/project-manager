@@ -21,6 +21,15 @@
             </div>
 
             <div>
+                <label class="label" for="currency">Currency</label>
+                <select id="currency" wire:model="currency" class="select">
+                    @foreach ($currencies as $cur)<option value="{{ $cur }}">{{ $cur }}</option>@endforeach
+                </select>
+                <p class="mt-1 text-xs text-slate-500">Tasks and module budgets use this currency. Defaults to the client's.</p>
+                @error('currency') <p class="field-error">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
                 <label class="label" for="name">Project name</label>
                 <input id="name" type="text" wire:model="name" placeholder="e.g. Northwind Storefront" class="input">
                 @error('name') <p class="field-error">{{ $message }}</p> @enderror

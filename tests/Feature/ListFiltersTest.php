@@ -100,19 +100,17 @@ it('projects: developer search only sees member projects; paginates 12', functio
 });
 
 // ---- invoices
-it('invoices: search by number/client, status filters incl. paid/unpaid', function () {
+it('invoices: search by number/client and status filters', function () {
     $a = lfClient('Acme'); $b = lfClient('Bolt');
-    $paid = lfInvoice($a, 'INV-PAID', 'sent', 10000);
-    lfPayment($a, 10000, ['invoice_id' => $paid->id]);
+    lfInvoice($a, 'INV-DRAFT', 'draft', 10000);
     lfInvoice($a, 'INV-OPEN', 'sent', 10000);
     lfInvoice($b, 'INV-VOID', 'void', 10000);
-    Livewire::test(InvoicesIndex::class)->assertOk()->assertSee('INV-PAID')->assertSee('INV-OPEN')->assertSee('INV-VOID')
-        ->set('search', 'inv-open')->assertSee('INV-OPEN')->assertDontSee('INV-PAID')
+    Livewire::test(InvoicesIndex::class)->assertOk()->assertSee('INV-DRAFT')->assertSee('INV-OPEN')->assertSee('INV-VOID')
+        ->set('search', 'inv-open')->assertSee('INV-OPEN')->assertDontSee('INV-DRAFT')
         ->set('search', 'bolt')->assertSee('INV-VOID')->assertDontSee('INV-OPEN')
         ->set('search', '')->set('status', 'void')->assertSee('INV-VOID')->assertDontSee('INV-OPEN')
         ->set('status', 'sent')->assertSee('INV-OPEN')->assertDontSee('INV-VOID')
-        ->set('status', 'paid')->assertSee('INV-PAID')->assertDontSee('INV-OPEN')->assertDontSee('INV-VOID')
-        ->set('status', 'unpaid')->assertSee('INV-OPEN')->assertDontSee('INV-PAID')->assertDontSee('INV-VOID')
+        ->set('status', 'draft')->assertSee('INV-DRAFT')->assertDontSee('INV-OPEN')->assertDontSee('INV-VOID')
         ->set('status', '')->set('search', '%')->assertSee('No matches')->assertSee('Clear filters');
 });
 

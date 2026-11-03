@@ -29,20 +29,17 @@ class Index extends Component
         $this->authorize('manage-money');
 
         $like = $this->likeTerm();
-        // paid = sent with payments covering a positive total (same rule as the row badge)
-        $paidSql = '(select coalesce(sum(amount_cents), 0) from payments where payments.invoice_id = invoices.id) >= invoices.total_cents and invoices.total_cents > 0';
-
         return view('livewire.invoices.index', [
-            'invoices' => $this->fitPage(Invoice::with('client')->withSum('payments', 'amount_cents')
+            'invoices' => $this->fitPage(Invoice::with('client')
                 ->when($this->clientFilter !== '', fn ($q) => $q->where('client_id', (int) $this->clientFilter))
                 ->when($like, fn ($q) => $q->where(fn ($w) => $w
                     ->whereRaw("invoices.number LIKE ? ESCAPE '!'", [$like])
                     ->orWhereHas('client', fn ($c) => $c->whereRaw("name LIKE ? ESCAPE '!'", [$like]))))
-                ->when(in_array($this->status, ['sent', 'void']), fn ($q) => $q->where('invoices.status', $this->status))
-                ->when($this->status === 'paid', fn ($q) => $q->where('invoices.status', 'sent')->whereRaw($paidSql))
-                ->when($this->status === 'unpaid', fn ($q) => $q->where('invoices.status', 'sent')->whereRaw("not ($paidSql)"))
+                ->when(in_array($this->status, ['sent', 'draft', 'void']), fn ($q) => $q->where('invoices.status', $this->status))
                 ->orderByDesc('id'), 15),
             'local' => LocalCurrency::code(),
+            'owing' => \App\Support\DashboardMoney::owingClientIds(),
+            'stats' => \App\Support\MoneyStats::invoices(),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
         ]);
     }

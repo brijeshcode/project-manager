@@ -71,7 +71,7 @@
                 <a href="{{ route('invoices.index') }}" wire:navigate class="link text-sm font-medium">View all</a>
             </div>
             @forelse ($recentInvoices as $inv)
-                @php $state = \App\Support\DashboardMoney::invoiceState($inv); @endphp
+                @php $state = \App\Support\DashboardMoney::invoiceState($inv, $owing); @endphp
                 <div class="flex items-center justify-between gap-4 border-b border-gray-100 py-3 last:border-0 dark:border-gray-700">
                     <div class="min-w-0">
                         <a href="{{ route('invoices.show', $inv) }}" wire:navigate class="link text-sm font-semibold">{{ $inv->number }}</a>

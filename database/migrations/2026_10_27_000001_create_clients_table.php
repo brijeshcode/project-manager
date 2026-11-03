@@ -8,10 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // every money row points here by currency_id; rows are created on first use of a code
+        Schema::create('currencies', function (Blueprint $table) {
+            $table->id();
+            $table->char('code', 3)->unique();
+            $table->string('name');
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
         Schema::create('clients', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->char('currency', 3);
+            $table->foreignId('currency_id')->constrained('currencies');
             // Contact details (nullable)
             $table->string('contact_name')->nullable();
             $table->string('contact_email')->nullable();
@@ -42,5 +51,6 @@ return new class extends Migration
         });
 
         Schema::dropIfExists('clients');
+        Schema::dropIfExists('currencies');
     }
 };

@@ -133,31 +133,34 @@ function dmInv(Client $c, array $o = []): \App\Models\Invoice
         'due_on' => null, 'currency' => $c->currency, 'subtotal_cents' => 10000, 'tax_percent' => 0, 'tax_cents' => 0, 'total_cents' => 10000]);
 }
 
+/** Payments are per client, not per invoice: this settles (or part-settles) the invoice's client. */
 function dmPayInv(\App\Models\Invoice $i, int $cents): void
 {
-    Payment::create(['client_id' => $i->client_id, 'invoice_id' => $i->id, 'amount_cents' => $cents, 'paid_on' => now()->toDateString(), 'type' => PaymentType::Project]);
+    Payment::create(['client_id' => $i->client_id, 'amount_cents' => $cents, 'paid_on' => now()->toDateString(), 'type' => PaymentType::Project]);
 }
 
-it('classifies invoice states for the period (inclusive edges, due today / null due are pending)', function () {
+it('classifies invoice states by the client balance (settled = paid; owing + past due = overdue)', function () {
     $c = dmClient('USD');
+    $settled = Client::create(['name' => 'Settled', 'currency' => 'USD', 'billing_mode' => 'fixed']);
     $from = now()->subDays(9)->startOfDay();
     dmInv($c, ['status' => 'void']);
-    $paid = dmInv($c); dmPayInv($paid, 10000);
-    $part = dmInv($c, ['due_on' => now()->addDay()->toDateString()]); dmPayInv($part, 4000);
-    dmInv($c, ['due_on' => now()->subDay()->toDateString()]);                           // overdue
-    $partOver = dmInv($c, ['due_on' => now()->subDays(3)->toDateString()]); dmPayInv($partOver, 9999); // overdue
+    $paid = dmInv($settled); dmPayInv($paid, 10000);                                       // client owes nothing -> paid
+    dmInv($c, ['status' => 'draft']);                                                      // not sent: not counted
+    dmInv($c, ['due_on' => now()->addDay()->toDateString()]);                             // pending
+    dmInv($c, ['due_on' => now()->subDay()->toDateString()]);                             // overdue
     dmInv($c, ['due_on' => now()->toDateString()]);                                      // due today -> pending
     dmInv($c, ['issued_on' => $from->toDateString(), 'due_on' => now()->subDay()->toDateString()]); // edge in, overdue
     dmInv($c, ['issued_on' => $from->copy()->subDay()->toDateString()]);                // outside
     dmInv($c, ['issued_on' => now()->addDay()->toDateString()]);                         // outside
 
-    expect(DashboardMoney::invoiceStatusCounts($from, now()))->toBe(['paid' => 1, 'pending' => 2, 'overdue' => 3, 'void' => 1]);
+    expect(DashboardMoney::invoiceStatusCounts($from, now()))->toBe(['paid' => 1, 'pending' => 2, 'overdue' => 2, 'void' => 1]);
 });
 
 it('counts overdue all time and invoices issued this month', function () {
     $c = dmClient('USD');
+    $settled = Client::create(['name' => 'Settled', 'currency' => 'USD', 'billing_mode' => 'fixed']);
     dmInv($c, ['issued_on' => now()->subMonths(5)->toDateString(), 'due_on' => now()->subMonths(4)->toDateString()]); // overdue, old
-    $p = dmInv($c, ['due_on' => now()->subDay()->toDateString()]); dmPayInv($p, 10000);                              // paid -> not overdue
+    $p = dmInv($settled, ['due_on' => now()->subDay()->toDateString()]); dmPayInv($p, 10000);                      // client settled -> not overdue
     dmInv($c, ['status' => 'void', 'due_on' => now()->subDay()->toDateString()]);                                    // void
     dmInv($c, ['due_on' => now()->toDateString()]);
 
@@ -175,7 +178,8 @@ it('lists recent invoices latest first, limit 5, and upcoming dues soonest first
 
     expect(DashboardMoney::recentInvoices()->pluck('id')->all())->toBe([$sameDay->id, $ids[0], $ids[1], $ids[2], $ids[3]]);
 
-    $paid = dmInv($c, ['due_on' => now()->addDay()->toDateString()]); dmPayInv($paid, 10000);
+    $settled = Client::create(['name' => 'Settled', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    $paid = dmInv($settled, ['due_on' => now()->addDay()->toDateString()]); dmPayInv($paid, 10000); // settled client: not a due
     dmInv($c, ['status' => 'void', 'due_on' => now()->addDay()->toDateString()]);
     // due in 4,5,6,7,8,9,10 days; paid/void/overdue/null-due excluded; 5 soonest
     expect(DashboardMoney::upcomingDues()->pluck('id')->all())->toBe([$ids[6], $ids[5], $ids[4], $ids[3], $ids[2]]);

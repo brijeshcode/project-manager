@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('projects', function (Blueprint $table) {
             $table->id();
             $table->foreignId('client_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('currency_id')->constrained('currencies');
             $table->string('name');
             $table->decimal('buffer_percent', 5, 2)->default(0);
             $table->date('start_date')->nullable();

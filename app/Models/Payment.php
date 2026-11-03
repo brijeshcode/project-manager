@@ -3,13 +3,16 @@
 namespace App\Models;
 
 use App\Enums\PaymentType;
+use App\Models\Concerns\HasCurrency;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Payment extends Model
 {
-    protected $fillable = ['client_id', 'project_id', 'invoice_id', 'amount_cents', 'paid_on', 'type', 'method', 'notes', 'exchange_rate', 'local_amount_cents', 'local_currency'];
+    use HasCurrency;
+
+    protected $fillable = ['client_id', 'project_id', 'amount_cents', 'paid_on', 'type', 'method', 'notes', 'exchange_rate', 'local_amount_cents', 'local_currency', 'currency'];
 
     protected function casts(): array
     {
@@ -18,6 +21,9 @@ class Payment extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (self $p) {
+            $p->currency_id ??= Client::whereKey($p->client_id)->value('currency_id');
+        });
         // the DB cascade removes the rows but not the files; delete per model so files go too
         static::deleting(fn (self $p) => $p->documents->each->delete());
     }
@@ -35,11 +41,6 @@ class Payment extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
-    }
-
-    public function invoice(): BelongsTo
-    {
-        return $this->belongsTo(Invoice::class);
     }
 
     public function project(): BelongsTo

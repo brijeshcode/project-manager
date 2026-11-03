@@ -83,7 +83,7 @@ it('numbers sequentially, never reuses voided numbers, and survives a forced col
         $fired = true;
         DB::table('invoices')->insert([
             'number' => $inv->number, 'client_id' => $c->id, 'status' => 'sent', 'issued_on' => now()->toDateString(),
-            'currency' => 'USD', 'subtotal_cents' => 0, 'tax_percent' => 0, 'tax_cents' => 0, 'total_cents' => 0,
+            'currency_id' => \App\Models\Currency::forCode('USD')->id, 'subtotal_cents' => 0, 'tax_percent' => 0, 'tax_cents' => 0, 'total_cents' => 0,
             'created_at' => now(), 'updated_at' => now(),
         ]);
     });
@@ -200,19 +200,19 @@ it('balance follows create, payment and void', function () {
     $c = ivClient();
     $inv = ivSvc()->create($c, [ivLine($c, 20000)->id]);
     ivPay($c, 30000, $inv->id);
-    expect(ivBal($c))->toBe(10000)
-        ->and($inv->paidCents())->toBe(30000)
-        ->and($inv->isPaid())->toBeTrue();
+    expect(ivBal($c))->toBe(10000);
     ivSvc()->void($inv);
     expect(ivBal($c))->toBe(30000)
         ->and(Payment::count())->toBe(1);
 });
 
-it('isPaid is false when partially paid', function () {
+it('a draft invoice does not change the client balance until it is sent', function () {
     $c = ivClient();
-    $inv = ivSvc()->create($c, [ivLine($c, 20000)->id]);
-    ivPay($c, 5000, $inv->id);
-    expect($inv->isPaid())->toBeFalse();
+    $inv = ivSvc()->create($c, [ivLine($c, 20000)->id], [], 0.0, null, null, null, true);
+    expect($inv->status)->toBe('draft')->and($inv->emailed_at)->toBeNull()->and(ivBal($c))->toBe(0);
+    expect(ivSvc()->markSent($inv))->toBeTrue();
+    expect($inv->fresh()->status)->toBe('sent')->and(ivBal($c))->toBe(-20000);
+    expect(ivSvc()->markSent($inv->fresh()))->toBeFalse();
 });
 
 it('snapshots the bank account encrypted and keeps it after edit or delete', function () {

@@ -19,6 +19,8 @@ return new class extends Migration
             $t->decimal('quantity', 8, 2)->default(1);
             $t->integer('unit_price_cents');
             $t->integer('amount_cents');
+            $t->decimal('exchange_rate', 18, 6)->nullable();   // line currency (project or client) -> local
+            $t->bigInteger('local_amount_cents')->nullable();
             $t->unsignedBigInteger('invoice_id')->nullable();
             $t->timestamps();
             $t->unique(['recurring_charge_id', 'period']); // multiple NULL pairs allowed
@@ -28,7 +30,7 @@ return new class extends Migration
             $t->id();
             $t->foreignId('client_id')->constrained()->cascadeOnDelete();
             $t->foreignId('project_id')->nullable()->constrained()->nullOnDelete();
-            $t->unsignedBigInteger('invoice_id')->nullable();
+            $t->foreignId('currency_id')->constrained('currencies');
             $t->integer('amount_cents');
             $t->date('paid_on');
             $t->string('type');

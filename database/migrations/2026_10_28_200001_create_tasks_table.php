@@ -20,6 +20,8 @@ return new class extends Migration
             $table->float('estimate_hours')->default(0.0);
             $table->string('scope')->default('in');              // TaskScope enum
             $table->decimal('price', 12, 2)->nullable();
+            $table->decimal('exchange_rate', 18, 6)->nullable();   // project currency -> local
+            $table->decimal('local_price', 12, 2)->nullable();
             $table->boolean('client_visible')->default(false);
             $table->boolean('testing_enabled')->default(false);
             $table->string('testing_add_type')->nullable();      // 'percent'|'fixed'

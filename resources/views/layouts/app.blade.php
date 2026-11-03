@@ -29,6 +29,7 @@
                 ['Payments',      'portal.payments',       'portal.payments',                      'credit-card', $client],
                 ['Recurring',     'billing.recurring',     'billing.recurring',                    'refresh',     $money],
                 ['Bank accounts', 'billing.bank-accounts', 'billing.bank-accounts',                'bank',        $money],
+                ['Currencies',    'currencies.index',      'currencies.*',                         'credit-card', $money],
             ])->filter(fn ($i) => $i[4]);
 
             $initials = $u ? collect(explode(' ', trim($u->name)))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') : '?';

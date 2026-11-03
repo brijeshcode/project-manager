@@ -32,7 +32,7 @@ return new class extends Migration
         });
 
         // Default local currency is INR: existing INR-client payments convert at 1.
-        DB::statement("UPDATE payments SET exchange_rate = 1, local_amount_cents = amount_cents, local_currency = 'INR' WHERE client_id IN (SELECT id FROM clients WHERE currency = 'INR')");
+        DB::statement("UPDATE payments SET exchange_rate = 1, local_amount_cents = amount_cents, local_currency = 'INR' WHERE client_id IN (SELECT id FROM clients WHERE currency_id = (SELECT id FROM currencies WHERE code = 'INR'))");
     }
 
     public function down(): void

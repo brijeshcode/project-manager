@@ -22,7 +22,7 @@
                         <label class="flex flex-1 items-center gap-3">
                             <input type="checkbox" wire:model="selected" value="{{ $l->id }}" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700" />
                             <span class="flex-1">{{ $l->description }}</span>
-                            <span>{{ \App\Support\Money::format($l->amount_cents, $client->currency) }}</span>
+                            <span>{{ \App\Support\Money::format($l->amount_cents, $l->lineCurrency() ?? $client->currency) }}</span>
                         </label>
                         @unless ($l->source_type)
                             <button type="button" wire:click="discardLine({{ $l->id }})" wire:confirm="Discard this pending line permanently?" class="btn btn-ghost">Discard</button>
@@ -61,6 +61,13 @@
 
             <div class="card grid gap-4 sm:grid-cols-3">
                 <div>
+                    <label for="currency" class="label">Invoice currency</label>
+                    <select wire:model.live="currency" id="currency" class="select">
+                        @foreach ($currencies as $cur)<option value="{{ $cur }}">{{ $cur }}</option>@endforeach
+                    </select>
+                    @error('currency') <p class="mt-1 field-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
                     <label for="taxPercent" class="label">Tax %</label>
                     <input wire:model="taxPercent" id="taxPercent" type="text" inputmode="decimal" class="input" />
                     @error('taxPercent') <p class="mt-1 field-error">{{ $message }}</p> @enderror
@@ -82,7 +89,11 @@
                 @endunless
             </div>
 
-            <button type="submit" class="btn btn-primary">Create invoice</button>
+            <div class="flex flex-wrap gap-3">
+                <button type="submit" class="btn btn-primary">Create &amp; send</button>
+                <button type="button" wire:click="saveDraft" class="btn btn-secondary">Save as draft (not sent)</button>
+            </div>
+            <p class="text-xs text-slate-500">A draft does not change the client's balance. It shows on the client page as a future invoice until you send it.</p>
         </form>
     @endif
 </div>

@@ -3,14 +3,22 @@
         <x-slot:actions>
             <a href="{{ route('invoices.index') }}" class="btn btn-ghost">All invoices</a>
             <a href="{{ route('invoices.pdf', $invoice) }}" target="_blank" class="btn btn-ghost">Download PDF</a>
-            @if ($invoice->status !== 'void' && $invoice->client->contact_email)
+            @if ($invoice->status === 'sent' && $invoice->client->contact_email)
                 <button wire:click="resend" wire:loading.attr="disabled" wire:target="resend" class="btn btn-ghost">Resend email</button>
             @endif
-            @if ($invoice->status !== 'void')
-                <button wire:click="void" wire:confirm="Void this invoice? Its lines return to pending." class="btn btn-ghost">Void</button>
-            @else
-                <x-ui.badge color="rose">void</x-ui.badge>
+            @if ($invoice->status === 'draft')
+                <x-ui.badge color="amber">not sent</x-ui.badge>
+                <button wire:click="sendNow" wire:confirm="Send this invoice? It will count against the client's balance and be emailed." class="btn btn-primary">Send invoice</button>
             @endif
+            @if ($invoice->status !== 'void')
+                <a href="{{ route('invoices.edit', $invoice) }}" class="btn btn-ghost">Edit</a>
+            @endif
+            @if ($invoice->status === 'sent')
+                <button wire:click="void" wire:confirm="Cancel this invoice? It stops counting in totals and its lines return to pending." class="btn btn-ghost">Cancel invoice</button>
+            @elseif ($invoice->status === 'void')
+                <x-ui.badge color="rose">cancelled</x-ui.badge>
+            @endif
+            <button wire:click="delete" wire:confirm="Delete this invoice permanently? Its lines return to pending and the client balance changes." class="btn btn-ghost text-rose-600 dark:text-rose-400">Delete</button>
         </x-slot:actions>
     </x-ui.page-header>
     @unless ($invoice->client->contact_email)<div class="mb-4"><x-ui.badge color="amber">No contact email — invoice not emailed</x-ui.badge></div>@endunless

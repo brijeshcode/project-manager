@@ -6,12 +6,15 @@ use App\Enums\ClientStatus;
 use App\Enums\ClientType;
 use App\Models\Project;
 use App\Models\User;
+use App\Models\Concerns\HasCurrency;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\UniqueConstraintViolationException;
 
 class Client extends Model
 {
+    use HasCurrency;
+
     protected $fillable = [
         'name',
         'currency',

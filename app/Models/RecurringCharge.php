@@ -5,12 +5,15 @@ namespace App\Models;
 use App\Enums\RecurringFrequency;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use App\Models\Concerns\FreezesLocalAmounts;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class RecurringCharge extends Model
 {
-    protected $fillable = ['client_id', 'project_id', 'description', 'amount_cents', 'frequency', 'next_due_on', 'due_day', 'active'];
+    use FreezesLocalAmounts;
+
+    protected $fillable = ['client_id', 'project_id', 'description', 'amount_cents', 'exchange_rate', 'local_amount_cents', 'frequency', 'next_due_on', 'due_day', 'active'];
 
     protected function casts(): array
     {
@@ -22,6 +25,16 @@ class RecurringCharge extends Model
         static::creating(function (self $c) {
             $c->due_day ??= Carbon::parse($c->next_due_on)->day;
         });
+    }
+
+    protected function localAmounts(): array
+    {
+        return ['amount_cents' => ['local_amount_cents', 'cents']];
+    }
+
+    protected function moneyCurrency(): ?string
+    {
+        return $this->project?->currency ?? $this->client?->currency;
     }
 
     public function client(): BelongsTo

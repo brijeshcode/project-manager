@@ -51,6 +51,23 @@ class Money
         return $neg ? -($high + $low) : $high + $low;
     }
 
+    /** Inverse of convert: cents / rate, rounded half-up. Used to turn a local amount back into a client's currency. */
+    public static function unconvert(int $cents, string $rate): int
+    {
+        if (! self::isValidRate($rate)) {
+            throw new \InvalidArgumentException("Invalid exchange rate: {$rate}");
+        }
+        [$i, $f] = array_pad(explode('.', $rate), 2, '');
+        $R = (int) ($i.str_pad($f, 6, '0'));
+        if (abs($cents) > intdiv(PHP_INT_MAX, 1_000_000) - $R) {
+            throw new \InvalidArgumentException('Amount too large to convert.');
+        }
+        $n = abs($cents) * 1_000_000;
+        $q = intdiv($n + intdiv($R, 2), $R);
+
+        return $cents < 0 ? -$q : $q;
+    }
+
     public static function format(int $cents, string $currency): string
     {
         $currency = strtoupper($currency);

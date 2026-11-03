@@ -47,6 +47,9 @@ Route::middleware(['auth', 'role:super_admin'])->group(function () {
 
 Route::get('billing/recurring', \App\Livewire\Billing\Recurring::class)
     ->middleware(['auth', 'can:manage-money'])->name('billing.recurring');
+Route::get('currencies', \App\Livewire\Currencies\Index::class)
+    ->middleware(['auth', 'can:manage-money'])->name('currencies.index');
+
 Route::get('settings', \App\Livewire\Settings\Index::class)
     ->middleware(['auth', 'can:manage-money'])->name('settings.index');
 Route::get('billing/bank-accounts', \App\Livewire\Billing\BankAccounts::class)
@@ -57,6 +60,10 @@ Route::get('projects/{project}/economics', \App\Livewire\Projects\Economics::cla
 
 Route::get('payments', \App\Livewire\Payments\Index::class)
     ->middleware(['auth', 'can:manage-money'])->name('payments.index');
+Route::middleware(['auth', 'can:manage-money'])->prefix('payments')->name('payments.')->whereNumber('payment')->group(function () {
+    Route::get('{payment}', \App\Livewire\Payments\Show::class)->name('show');
+    Route::get('{payment}/edit', \App\Livewire\Payments\Edit::class)->name('edit');
+});
 
 Route::get('payment-documents/{document}/download', \App\Http\Controllers\PaymentDocumentDownloadController::class)
     ->whereNumber('document')->middleware(['auth', 'can:manage-money'])->name('payment-documents.download');
@@ -65,6 +72,7 @@ Route::middleware(['auth', 'can:manage-money'])->prefix('invoices')->name('invoi
     Route::get('/', \App\Livewire\Invoices\Index::class)->name('index');
     Route::get('create', \App\Livewire\Invoices\Create::class)->name('create');
     Route::get('{invoice}', \App\Livewire\Invoices\Show::class)->name('show');
+    Route::get('{invoice}/edit', \App\Livewire\Invoices\Edit::class)->name('edit');
 });
 
 Route::middleware(['auth'])->group(function () {

@@ -1,5 +1,14 @@
 <div>
-    <x-ui.page-header title="Payments" subtitle="Record money received from clients. Payments can be deleted but not edited. Local currency: {{ $local }}" />
+    <x-ui.page-header title="Payments" subtitle="Record money received from clients. Local currency: {{ $local }}" />
+
+    @php $fmt = fn ($c) => \App\Support\Money::format($c, $stats['currency']); @endphp
+    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <x-ui.stat label="Total received" :value="$fmt($stats['total'])" color="green"
+            :hint="'In '.$local.($stats['missing_rate'] ? ' · '.$stats['missing_rate'].' without a rate' : '')" />
+        <x-ui.stat label="Received this month" :value="$fmt($stats['this_month'])" color="blue" :hint="'In '.$local" />
+        <x-ui.stat label="Payments" :value="$stats['count']" color="purple" hint="All time" />
+        <x-ui.stat label="Average payment" :value="$fmt($stats['average'])" color="yellow" :hint="'In '.$local" />
+    </div>
 
     <form wire:submit="save" class="card mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
@@ -18,21 +27,22 @@
             </select>
             @error('project_id') <p class="mt-1 field-error">{{ $message }}</p> @enderror
         </div>
+        @if ($client_id)
+            <div>
+                <label for="currency" class="label">Currency</label>
+                <select wire:model.live="currency" id="currency" class="select">
+                    @foreach ($currencies as $cur)<option value="{{ $cur }}">{{ $cur }}</option>@endforeach
+                </select>
+                @error('currency') <p class="mt-1 field-error">{{ $message }}</p> @enderror
+            </div>
+        @endif
         <div>
-            <label for="invoice_id" class="label">Invoice (optional)</label>
-            <select wire:model="invoice_id" id="invoice_id" class="select">
-                <option value="">None</option>
-                @foreach ($invoices as $i)<option value="{{ $i->id }}">{{ $i->number }}</option>@endforeach
-            </select>
-            @error('invoice_id') <p class="mt-1 field-error">{{ $message }}</p> @enderror
-        </div>
-        <div>
-            <label for="amount" class="label">Amount</label>
+            <label for="amount" class="label">Amount{{ $formCurrency ? ' ('.$formCurrency.')' : '' }}</label>
             <input wire:model="amount" id="amount" type="text" inputmode="decimal" placeholder="0.00" class="input" />
             @error('amount') <p class="mt-1 field-error">{{ $message }}</p> @enderror
             @if ($preview)<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">≈ {{ $preview }}</p>@endif
         </div>
-        @if ($client_id && ! $sameCurrency)
+        @if ($client_id && $needsRate)
             <div>
                 <label for="exchange_rate" class="label">Rate to {{ $local }}</label>
                 <input wire:model.live.debounce.300ms="exchange_rate" id="exchange_rate" type="text" inputmode="decimal" autocomplete="off" class="input" />
@@ -73,7 +83,7 @@
     <x-ui.filter-card>
         <div class="sm:col-span-2">
             <label for="search" class="sr-only">Search payments</label>
-            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by client or invoice number..." class="input" />
+            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by client..." class="input" />
         </div>
         <div>
             <label for="clientFilter" class="sr-only">Client</label>
@@ -85,6 +95,9 @@
         @if ($balanceClient)
             <p class="self-center text-sm">{{ $balanceClient->name }} balance:
                 <strong class="{{ $balance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400' }}">{{ \App\Support\Money::format($balance, $balanceClient->currency) }}</strong>
+                @if ($balanceLocal !== null && strtoupper($balanceClient->currency) !== $local)
+                    <span class="text-slate-500">/ {{ \App\Support\Money::format($balanceLocal, $local) }}</span>
+                @endif
                 <span class="text-slate-500">({{ $balance < 0 ? 'owes' : 'credit' }})</span></p>
         @endif
     </x-ui.filter-card>
@@ -101,17 +114,17 @@
         <x-ui.table-card>
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
                 <thead>
-                    <tr><th class="table-th">Date</th><th class="table-th">Client</th><th class="table-th">Amount</th><th class="table-th">Type</th><th class="table-th">Applied to</th><th class="table-th">Notes</th><th class="table-th">Documents</th><th class="table-th"></th></tr>
+                    <tr><th class="table-th">Date</th><th class="table-th">Client</th><th class="table-th">Amount</th><th class="table-th">Type</th><th class="table-th">Project</th><th class="table-th">Notes</th><th class="table-th">Documents</th><th class="table-th"></th></tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
                     @foreach ($payments as $p)
                         <tr wire:key="pay-{{ $p->id }}">
                             <td class="table-td">{{ $p->paid_on->toFormattedDateString() }}</td>
                             <td class="table-td">{{ $p->client->name }}</td>
-                            <td class="table-td">{{ \App\Support\Money::format($p->amount_cents, $p->client->currency) }}
-                                @if ($p->hasLocal() && strtoupper($p->client->currency) !== $p->local_currency)
+                            <td class="table-td"><a href="{{ route('payments.show', $p) }}" class="link">{{ \App\Support\Money::format($p->amount_cents, $p->currency) }}</a>
+                                @if ($p->hasLocal() && strtoupper($p->currency) !== $p->local_currency)
                                     <div class="text-xs text-gray-500 dark:text-gray-400">{{ \App\Support\Money::format($p->local_amount_cents, $p->local_currency) }} @ {{ rtrim(rtrim($p->exchange_rate, '0'), '.') }}</div>
-                                @elseif (! $p->hasLocal() && strtoupper($p->client->currency) !== $local)
+                                @elseif (! $p->hasLocal() && strtoupper($p->currency) !== $local)
                                     <form wire:submit="setRate({{ $p->id }})" class="mt-1 flex items-center gap-1">
                                         <label for="rowRate-{{ $p->id }}" class="sr-only">Rate to {{ $local }}</label>
                                         <input wire:model="rowRate.{{ $p->id }}" id="rowRate-{{ $p->id }}" type="text" inputmode="decimal" placeholder="Rate" class="input w-24 py-1 text-xs" />
@@ -121,7 +134,7 @@
                                 @endif
                             </td>
                             <td class="table-td">{{ ucfirst(str_replace('_', ' ', $p->type->value)) }}@if ($p->method) <span class="text-slate-500">({{ $p->method }})</span>@endif</td>
-                            <td class="table-td">{{ $p->invoice?->number }}@if ($p->project) <span class="text-slate-500">{{ $p->project->name }}</span>@endif</td>
+                            <td class="table-td">{{ $p->project?->name }}</td>
                             <td class="table-td">{{ $p->notes }}</td>
                             <td class="table-td">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ $p->documents->count() }} {{ \Illuminate\Support\Str::plural('document', $p->documents->count()) }}</span>
@@ -141,7 +154,11 @@
                                 @error("rowDocs.{$p->id}") <p class="field-error">{{ $message }}</p> @enderror
                                 @error("rowDocs.{$p->id}.*") <p class="field-error">{{ $message }}</p> @enderror
                             </td>
-                            <td class="table-td text-right"><button type="button" wire:click="deletePayment({{ $p->id }})" wire:confirm="Delete this payment? The client balance will change." class="text-sm font-medium text-rose-600 hover:underline dark:text-rose-400">Delete</button></td>
+                            <td class="table-td whitespace-nowrap text-right">
+                                <a href="{{ route('payments.show', $p) }}" class="text-sm font-medium link">View</a>
+                                <a href="{{ route('payments.edit', $p) }}" class="ml-3 text-sm font-medium link">Edit</a>
+                                <button type="button" wire:click="deletePayment({{ $p->id }})" wire:confirm="Delete this payment? The client balance will change." class="ml-3 text-sm font-medium text-rose-600 hover:underline dark:text-rose-400">Delete</button>
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>

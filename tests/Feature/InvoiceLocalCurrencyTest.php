@@ -61,7 +61,7 @@ it('needs no rate for a client already in the local currency', function () {
     ilLine($c);
     ilCreate($c)->assertDontSee('Exchange rate to')->call('save')->assertHasNoErrors();
     $inv = Invoice::firstOrFail();
-    expect($inv->exchange_rate)->toBeNull();
+    expect($inv->exchange_rate)->toBe('1.000000')->and($inv->localTotalCents())->toBe($inv->total_cents);
     Livewire::actingAs($this->owner)->test(Index::class)->assertOk()->assertSee('₹1,000.00');
 });
 
@@ -116,7 +116,7 @@ it('keeps old inr_rate values when renaming to exchange_rate and reverses', func
 
     $c = ilClient();
     $id = DB::table('invoices')->insertGetId([
-        'number' => 'INV-OLD-01', 'client_id' => $c->id, 'status' => 'sent', 'issued_on' => '2026-11-01', 'currency' => 'USD',
+        'number' => 'INV-OLD-01', 'client_id' => $c->id, 'status' => 'sent', 'issued_on' => '2026-11-01', 'currency_id' => \App\Models\Currency::forCode('USD')->id,
         'subtotal_cents' => 100, 'tax_percent' => 0, 'tax_cents' => 0, 'total_cents' => 100, 'inr_rate' => 83.5, 'created_at' => now(), 'updated_at' => now(),
     ]);
     $migration->up();

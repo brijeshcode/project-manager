@@ -38,9 +38,9 @@ it('deactivates old rates when the local currency changes, keeping history', fun
         ->and(ExchangeRate::count())->toBe(1)->and(ExchangeRate::where('is_active', true)->count())->toBe(0);
 });
 
-it('never 500s for a client currency that is not 3 letters', function () {
-    $c = Client::create(['name' => 'Odd', 'currency' => 'US$', 'billing_mode' => 'fixed']);
-    expect(LocalCurrency::rateFor('US$'))->toBeNull();
+it('never 500s for a client currency that has no rate', function () {
+    $c = Client::create(['name' => 'Odd', 'currency' => 'XYZ', 'billing_mode' => 'fixed']);
+    expect(LocalCurrency::rateFor('XYZ'))->toBeNull();
     app(InvoiceService::class)->create($c, [rfLine($c)->id])->update(['status' => 'sent']);
 
     $this->actingAs($this->owner)->get('/dashboard')->assertOk()->assertSee('1 client without a rate');

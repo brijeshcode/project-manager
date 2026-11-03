@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\BillingMode;
 use App\Support\Money;
+use App\Models\Concerns\FreezesLocalAmounts;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,13 +13,25 @@ use Illuminate\Support\Facades\DB;
 
 class Module extends Model
 {
-    protected $fillable = ['project_id', 'name', 'description', 'position', 'budget_hours', 'hourly_rate_cents', 'budget_amount_cents', 'deadline'];
+    use FreezesLocalAmounts;
 
-    public const BUDGET_FIELDS = ['budget_hours', 'hourly_rate_cents', 'budget_amount_cents', 'deadline'];
+    protected $fillable = ['project_id', 'name', 'description', 'position', 'budget_hours', 'hourly_rate_cents', 'budget_amount_cents', 'deadline', 'exchange_rate', 'local_hourly_rate_cents', 'local_budget_amount_cents'];
+
+    public const BUDGET_FIELDS = ['budget_hours', 'hourly_rate_cents', 'budget_amount_cents', 'deadline', 'exchange_rate', 'local_hourly_rate_cents', 'local_budget_amount_cents'];
 
     protected function casts(): array
     {
         return ['budget_hours' => 'decimal:2', 'deadline' => 'date'];
+    }
+
+    protected function localAmounts(): array
+    {
+        return ['hourly_rate_cents' => ['local_hourly_rate_cents', 'cents'], 'budget_amount_cents' => ['local_budget_amount_cents', 'cents']];
+    }
+
+    protected function moneyCurrency(): ?string
+    {
+        return $this->project?->currency;
     }
 
     public function project(): BelongsTo

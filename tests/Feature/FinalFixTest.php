@@ -165,15 +165,15 @@ function ffPay(Client $c, int $cents, ?int $inv = null): Payment
     return Payment::create(['client_id' => $c->id, 'invoice_id' => $inv, 'amount_cents' => $cents, 'paid_on' => '2026-11-01', 'type' => 'project', 'notes' => 'secret-note']);
 }
 
-it('deleting a payment restores balance and unpays the invoice', function () {
+it('deleting a payment restores the client balance', function () {
     $c = ffClient();
     $inv = app(InvoiceService::class)->create($c, [ffLine($c)->id]);
     $p = ffPay($c, 10000, $inv->id);
     $acct = app(ClientAccount::class);
-    expect($acct->balanceCents($c))->toBe(0)->and($inv->fresh()->isPaid())->toBeTrue();
+    expect($acct->balanceCents($c))->toBe(0);
     Log::spy();
     Livewire::actingAs(ffOwner())->test(PayIndex::class)->assertSee('Delete')->call('deletePayment', $p->id)->assertOk();
-    expect($acct->balanceCents($c))->toBe(-10000)->and($inv->fresh()->isPaid())->toBeFalse()->and(Payment::count())->toBe(0);
+    expect($acct->balanceCents($c))->toBe(-10000)->and(Payment::count())->toBe(0);
     Log::shouldHaveReceived('info')->withArgs(fn ($m, $ctx = []) => $m === 'payment deleted'
         && $ctx['id'] === $p->id && $ctx['amount_cents'] === 10000 && ! str_contains(json_encode($ctx), 'secret-note'))->once();
 });

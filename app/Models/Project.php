@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\EstimateService;
 use Carbon\CarbonInterface;
+use App\Models\Concerns\HasCurrency;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -11,14 +12,25 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Project extends Model
 {
+    use HasCurrency;
+
     protected $fillable = [
         'client_id',
+        'currency',
         'name',
         'description',
         'buffer_percent',
         'start_date',
         'status',
     ];
+
+    protected static function booted(): void
+    {
+        // a project starts in its client's currency; the owner can change it
+        static::creating(function (self $p) {
+            $p->currency_id ??= Client::whereKey($p->client_id)->value('currency_id');
+        });
+    }
 
     protected function casts(): array
     {
@@ -53,11 +65,6 @@ class Project extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
-    }
-
-    public function currency(): string
-    {
-        return $this->client->currency;
     }
 
     /** Delegates deadline computation to EstimateService. */

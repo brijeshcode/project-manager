@@ -57,7 +57,7 @@
                         <tr wire:key="rc-{{ $c->id }}" class="{{ $c->active ? '' : 'opacity-50' }}">
                             <td class="table-td">{{ $c->client->name }}@if ($c->project) <span class="text-slate-500">/ {{ $c->project->name }}</span>@endif</td>
                             <td class="table-td">{{ $c->description }} <span class="text-slate-500">({{ $c->frequency->value }})</span></td>
-                            <td class="table-td">{{ \App\Support\Money::format($c->amount_cents, $c->client->currency) }}</td>
+                            <td class="table-td">{{ \App\Support\Money::format($c->amount_cents, $c->project?->currency ?? $c->client->currency) }}</td>
                             <td class="table-td">{{ $c->next_due_on->toFormattedDateString() }}</td>
                             <td class="table-td text-right"><button wire:click="toggle({{ $c->id }})" class="btn btn-ghost">{{ $c->active ? 'Pause' : 'Resume' }}</button></td>
                         </tr>

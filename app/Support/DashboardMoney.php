@@ -28,7 +28,7 @@ class DashboardMoney
 
         $outstanding = 0;
         $missing = 0;
-        $clients = Client::query()->pluck('currency', 'id');
+        $clients = Client::query()->get()->pluck('currency', 'id');
         $rates = [];
         foreach (app(ClientAccount::class)->totals($clients->keys()->all()) as $id => $t) {
             $balance = $t['received'] - $t['billed'];
@@ -110,60 +110,66 @@ class DashboardMoney
         return $series;
     }
 
-    private const PAID_SQL = '(select coalesce(sum(amount_cents), 0) from payments where payments.invoice_id = invoices.id) >= invoices.total_cents and invoices.total_cents > 0';
-
-    /** paid | pending | overdue | void for an invoice loaded withSum('payments', 'amount_cents'). */
-    public static function invoiceState(Invoice $i): string
+    /** Clients whose balance is negative (they owe money). Payments are not linked to invoices, so this decides "paid". */
+    public static function owingClientIds(): array
     {
-        if ($i->status === 'void') {
-            return 'void';
+        $ids = Client::pluck('id')->all();
+
+        return collect(app(ClientAccount::class)->totals($ids))->filter(fn ($t) => $t['received'] < $t['billed'])->keys()->all();
+    }
+
+    /** draft | void | paid | pending | overdue. Paid = the client owes nothing; overdue = sent, past due and the client still owes. */
+    public static function invoiceState(Invoice $i, array $owing): string
+    {
+        if ($i->status === 'void' || $i->status === 'draft') {
+            return $i->status;
         }
-        if ($i->total_cents > 0 && (int) $i->payments_sum_amount_cents >= $i->total_cents) {
+        if (! in_array($i->client_id, $owing, true)) {
             return 'paid';
         }
 
         return $i->due_on !== null && $i->due_on->toDateString() < now()->toDateString() ? 'overdue' : 'pending';
     }
 
-    /** Invoice counts by state for invoices issued in [from, to] (inclusive). Counts only, no money. */
+    /** Invoice counts by state for invoices issued in [from, to] (inclusive); drafts are not issued, so not counted. */
     public static function invoiceStatusCounts(CarbonInterface $from, CarbonInterface $to): array
     {
         $counts = ['paid' => 0, 'pending' => 0, 'overdue' => 0, 'void' => 0];
-        Invoice::withSum('payments', 'amount_cents')
+        $owing = self::owingClientIds();
+        Invoice::where('status', '!=', 'draft')
             ->whereDate('issued_on', '>=', $from->toDateString())->whereDate('issued_on', '<=', $to->toDateString())
-            ->get()->each(function (Invoice $i) use (&$counts) {
-                $counts[self::invoiceState($i)]++;
+            ->get()->each(function (Invoice $i) use (&$counts, $owing) {
+                $counts[self::invoiceState($i, $owing)]++;
             });
 
         return $counts;
     }
 
-    private static function sentUnpaid()
+    private static function sentOwing()
     {
-        return Invoice::where('status', 'sent')->whereRaw('not ('.self::PAID_SQL.')');
+        return Invoice::where('status', 'sent')->whereIn('client_id', self::owingClientIds());
     }
 
     public static function overdueCount(): int
     {
-        return self::sentUnpaid()->whereDate('due_on', '<', now()->toDateString())->count();
+        return self::sentOwing()->whereDate('due_on', '<', now()->toDateString())->count();
     }
-
     public static function sentThisMonthCount(): int
     {
-        return Invoice::where('status', '!=', 'void')
+        return Invoice::where('status', 'sent')
             ->whereDate('issued_on', '>=', now()->startOfMonth()->toDateString())
             ->whereDate('issued_on', '<=', now()->endOfMonth()->toDateString())->count();
     }
 
     public static function recentInvoices(int $limit = 5)
     {
-        return Invoice::with('client')->withSum('payments', 'amount_cents')
+        return Invoice::with('client')->where('status', '!=', 'draft')
             ->orderByDesc('issued_on')->orderByDesc('id')->limit($limit)->get();
     }
 
     public static function upcomingDues(int $limit = 5)
     {
-        return self::sentUnpaid()->with('client')->whereDate('due_on', '>=', now()->toDateString())
+        return self::sentOwing()->with('client')->whereDate('due_on', '>=', now()->toDateString())
             ->orderBy('due_on')->orderBy('id')->limit($limit)->get();
     }
 
@@ -177,7 +183,7 @@ class DashboardMoney
             ->whereDate('paid_on', '>=', $from->toDateString())->whereDate('paid_on', '<=', $to->toDateString())
             ->where('local_currency', LocalCurrency::code())
             ->groupBy('client_id')->selectRaw('client_id, SUM(local_amount_cents) as s')->pluck('s', 'client_id');
-        $invoices = Invoice::where('status', '!=', 'void')
+        $invoices = Invoice::where('status', 'sent')
             ->whereDate('issued_on', '>=', $from->toDateString())->whereDate('issued_on', '<=', $to->toDateString())
             ->groupBy('client_id')->selectRaw('client_id, COUNT(*) as n')->pluck('n', 'client_id');
 

@@ -42,7 +42,7 @@ function payForm(Client $c, array $o = [])
     return Livewire::test(Index::class)->set('client_id', $c->id)
         ->set('amount', $o['amount'] ?? '100.00')->set('paid_on', $o['paid_on'] ?? today()->toDateString())
         ->set('type', 'project')
-        ->set('project_id', $o['project_id'] ?? null)->set('invoice_id', $o['invoice_id'] ?? null);
+        ->set('project_id', $o['project_id'] ?? null);
 }
 
 it("shows the owner's worked example: invoiced 200, pay 300 -> +100", function () {
@@ -55,27 +55,22 @@ it("shows the owner's worked example: invoiced 200, pay 300 -> +100", function (
     expect(Payment::first()->amount_cents)->toBe(30000);
 });
 
-it('marks the invoice paid only once the total is reached', function () {
+it('settles the client balance once payments reach what was invoiced', function () {
     $this->actingAs(payOwner());
     $c = payClient();
-    $inv = payInvoice($c, 20000);
-    payForm($c, ['amount' => '100', 'invoice_id' => $inv->id])->call('save')->assertHasNoErrors();
-    expect($inv->fresh()->isPaid())->toBeFalse();
-    payForm($c, ['amount' => '100', 'invoice_id' => $inv->id])->call('save')->assertHasNoErrors();
-    expect($inv->fresh()->isPaid())->toBeTrue();
+    payInvoice($c, 20000);
+    payForm($c, ['amount' => '100'])->call('save')->assertHasNoErrors();
+    expect(app(ClientAccount::class)->balanceCents($c))->toBe(-10000);
+    payForm($c, ['amount' => '100'])->call('save')->assertHasNoErrors();
+    expect(app(ClientAccount::class)->balanceCents($c))->toBe(0);
 });
 
-it("rejects another client's project and invoice, and a void invoice", function () {
+it("rejects another client's project", function () {
     $this->actingAs(payOwner());
     $a = payClient('A');
     $b = payClient('B');
     $p = Project::create(['client_id' => $b->id, 'name' => 'Site', 'buffer_percent' => 0, 'start_date' => now(), 'status' => 'active']);
-    $inv = payInvoice($b, 1000);
     payForm($a, ['project_id' => $p->id])->call('save')->assertHasErrors('project_id');
-    payForm($a, ['invoice_id' => $inv->id])->call('save')->assertHasErrors('invoice_id');
-    $own = payInvoice($a, 1000);
-    app(InvoiceService::class)->void($own);
-    payForm($a, ['invoice_id' => $own->id])->call('save')->assertHasErrors('invoice_id');
     expect(Payment::count())->toBe(0);
 });
 

@@ -141,14 +141,13 @@ it('voids from Show and the list shows void', function () {
     Livewire::actingAs(ibOwner())->test(Index::class)->assertSee($inv->number)->assertSeeHtml('badge badge-rose');
 });
 
-it('lists newest first, filters by client and derives paid', function () {
+it('lists newest first and filters by client', function () {
     $a = ibClient();
     $b = ibClient(['name' => 'Bravo Ltd']);
     $svc = app(InvoiceService::class);
     $i1 = $svc->create($a, [ibLine($a, 1000)->id]);
     $i2 = $svc->create($b, [ibLine($b, 2000)->id]);
-    \App\Models\Payment::create(['client_id' => $b->id, 'invoice_id' => $i2->id, 'amount_cents' => 2000, 'type' => 'project', 'paid_on' => today()]);
-    Livewire::actingAs(ibOwner())->test(Index::class)->assertSeeInOrder([$i2->number, $i1->number])->assertSee('paid')
+    Livewire::actingAs(ibOwner())->test(Index::class)->assertSeeInOrder([$i2->number, $i1->number])->assertSee('sent')
         ->set('clientFilter', (string) $a->id)->assertSee($i1->number)->assertDontSee($i2->number);
 });
 

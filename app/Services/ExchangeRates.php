@@ -34,6 +34,8 @@ class ExchangeRates
             throw ValidationException::withMessages(['rate' => 'Enter a positive rate with up to 6 decimals.']);
         }
 
+        \App\Models\Currency::forCode($currency); // a currency with a rate is a currency in the system
+
         return DB::transaction(function () use ($currency, $rate, $by) {
             $prev = ExchangeRate::where('currency', $currency)->where('is_active', true)->lockForUpdate()->pluck('id');
             if ($prev->isNotEmpty()) {

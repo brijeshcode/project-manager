@@ -35,7 +35,7 @@ it('derives currency from client', function () {
         'status'    => 'draft',
     ]);
 
-    expect($project->currency())->toBe('EUR');
+    expect($project->currency)->toBe('EUR');
 });
 
 it('can list projects via client->projects()', function () {

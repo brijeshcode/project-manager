@@ -18,7 +18,7 @@
                 <h1 class="font-display text-2xl font-bold tracking-tight text-slate-900">{{ $project->name }}</h1>
                 <x-ui.badge :color="$project->status === 'active' ? 'green' : 'slate'">{{ ucfirst($project->status) }}</x-ui.badge>
             </div>
-            <p class="mt-1 text-sm text-slate-500">{{ $project->client->name }} &middot; {{ $project->currency() }}</p>
+            <p class="mt-1 text-sm text-slate-500">{{ $project->client->name }} &middot; {{ $project->currency }}</p>
         </div>
         <div class="flex items-center gap-2">
             <a href="{{ route('projects.board', $project) }}" wire:navigate class="btn btn-secondary">Board</a>
@@ -85,15 +85,15 @@
                                 @php $hourly = $project->client->billing_mode === \App\Enums\BillingMode::Hourly; @endphp
                                 <div class="mt-2 text-xs text-slate-500" x-data="{ editingBudget: false }">
                                     <div x-show="!editingBudget" class="flex items-center gap-2">
-                                        <span>Budget: {{ $module->budgetCents() === null ? 'not set' : \App\Support\Money::format($module->budgetCents(), $project->client->currency) }}@if ($module->deadline) &middot; due {{ $module->deadline->toDateString() }}@endif</span>
+                                        <span>Budget: {{ $module->budgetCents() === null ? 'not set' : \App\Support\Money::format($module->budgetCents(), $project->currency) }}@if ($module->deadline) &middot; due {{ $module->deadline->toDateString() }}@endif</span>
                                         <button @click="editingBudget = true" class="shrink-0 font-medium text-brand-600 hover:text-brand-700">Edit budget</button>
                                     </div>
                                     <form x-show="editingBudget" style="display:none" wire:submit.prevent="saveBudget({{ $module->id }})" @submit="editingBudget = false" class="space-y-1.5">
                                         @if ($hourly)
                                             <input type="number" step="0.01" min="0" wire:model="budget.{{ $module->id }}.hours" placeholder="Budget hours" class="input h-8 text-xs">
-                                            <input type="text" wire:model="budget.{{ $module->id }}.rate" placeholder="Hourly rate ({{ $project->client->currency }})" class="input h-8 text-xs">
+                                            <input type="text" wire:model="budget.{{ $module->id }}.rate" placeholder="Hourly rate ({{ $project->currency }})" class="input h-8 text-xs">
                                         @else
-                                            <input type="text" wire:model="budget.{{ $module->id }}.amount" placeholder="Fixed amount ({{ $project->client->currency }})" class="input h-8 text-xs">
+                                            <input type="text" wire:model="budget.{{ $module->id }}.amount" placeholder="Fixed amount ({{ $project->currency }})" class="input h-8 text-xs">
                                         @endif
                                         <input type="date" wire:model="budget.{{ $module->id }}.deadline" class="input h-8 text-xs">
                                         <input type="text" wire:model="budget.{{ $module->id }}.reason" placeholder="Reason (required when changing an existing value)" class="input h-8 text-xs">
@@ -247,7 +247,7 @@
             </x-ui.card>
 
             @can('manage-money')
-                @php $money = \App\Services\ProjectEconomics::money($project); $cur = $project->client->currency; @endphp
+                @php $money = \App\Services\ProjectEconomics::money($project); $cur = $project->currency; @endphp
                 <x-ui.card>
                     <div class="mb-3 flex items-center justify-between">
                         <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Money</h2>

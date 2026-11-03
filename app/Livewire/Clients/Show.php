@@ -64,8 +64,9 @@ class Show extends Component
             'billed' => $t['billed'],
             'received' => $t['received'],
             'projects' => $client->projects()->orderBy('name')->get(),
-            'payments' => $client->payments()->with(['project:id,name', 'invoice:id,number', 'documents'])->latest('paid_on')->latest('id')->get(),
-            'invoices' => $invoices,
+            'payments' => $client->payments()->with(['project:id,name', 'documents'])->latest('paid_on')->latest('id')->get(),
+            'invoices' => $invoices->where('status', '!=', 'draft'),
+            'futureInvoices' => $invoices->where('status', 'draft'),
         ]);
     }
 }

@@ -25,6 +25,22 @@ class Show extends Component
         $this->dispatch('toast', type: 'success', message: 'Invoice voided.');
     }
 
+    public function delete(InvoiceService $svc)
+    {
+        $this->authorize('manage-money');
+        $svc->delete(Invoice::findOrFail($this->invoiceId));
+        session()->flash('toast', 'Invoice deleted.');
+
+        return $this->redirectRoute('invoices.index');
+    }
+
+    public function sendNow(InvoiceService $svc): void
+    {
+        $this->authorize('manage-money');
+        $ok = $svc->markSent(Invoice::with('client')->findOrFail($this->invoiceId));
+        $this->dispatch('toast', type: $ok ? 'success' : 'error', message: $ok ? 'Invoice sent.' : 'This invoice was already sent.');
+    }
+
     public function resend(InvoiceService $svc): void
     {
         $this->authorize('manage-money');

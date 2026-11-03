@@ -47,6 +47,7 @@ class Dashboard extends Component
         $from = now()->subDays($this->period - 1)->startOfDay();
 
         return view('livewire.dashboard', [
+            'owing' => DashboardMoney::owingClientIds(),
             'statusCounts' => DashboardMoney::invoiceStatusCounts($from, now()),
             'overdue' => DashboardMoney::overdueCount(),
             'sentThisMonth' => DashboardMoney::sentThisMonthCount(),

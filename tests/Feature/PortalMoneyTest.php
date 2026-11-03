@@ -50,12 +50,12 @@ it('lists only own sent invoices, hides other clients and void', function () {
         ->assertDontSee($void->number)->assertDontSee('$222.22');
 });
 
-it('shows Paid or Due', function () {
+it('lists the invoices that were sent and never a draft', function () {
     [$k, $ku] = pmClient('K');
-    $inv = pmInvoice($k, 10000);
-    $this->actingAs($ku)->get('/portal/invoices')->assertSee('Due');
-    pmPay($k, 10000, ['invoice_id' => $inv->id]);
-    $this->actingAs($ku)->get('/portal/invoices')->assertSee('Paid')->assertDontSee('Due');
+    $sent = pmInvoice($k, 10000);
+    $draft = pmInvoice($k, 20000);
+    $draft->update(['status' => 'draft']);
+    $this->actingAs($ku)->get('/portal/invoices')->assertSee($sent->number)->assertDontSee($draft->number);
 });
 
 it('client cannot fetch another clients pdf', function () {
@@ -68,13 +68,12 @@ it('client cannot fetch another clients pdf', function () {
 it('lists only own payments and never notes', function () {
     [$k, $ku] = pmClient('K');
     [$l] = pmClient('L');
-    $inv = pmInvoice($k, 50000);
     $p = Project::create(['client_id' => $k->id, 'name' => 'Site K', 'status' => 'active']);
-    pmPay($k, 12345, ['invoice_id' => $inv->id, 'project_id' => $p->id, 'notes' => 'SECRET-NOTE']);
+    pmPay($k, 12345, ['project_id' => $p->id, 'notes' => 'SECRET-NOTE']);
     pmPay($l, 77777, ['notes' => 'L-NOTE']);
 
     $this->actingAs($ku)->get('/portal/payments')->assertOk()
-        ->assertSee('$123.45')->assertSee($inv->number)->assertSee('Site K')
+        ->assertSee('$123.45')->assertSee('Site K')
         ->assertDontSee('SECRET-NOTE')->assertDontSee('$777.77')->assertDontSee('L-NOTE');
 });
 
@@ -154,15 +153,6 @@ it('dashboard hides another clients data', function () {
 it('dashboard is 403 for a client without client_id', function () {
     [, $u] = pmClient('X', 'client', false);
     $this->actingAs($u)->get('/portal')->assertForbidden();
-});
-
-it('overpaid shows Paid, zero-total shows Due', function () {
-    [$k, $ku] = pmClient('K');
-    $inv = pmInvoice($k, 10000);
-    pmPay($k, 25000, ['invoice_id' => $inv->id]);
-    $this->actingAs($ku)->get('/portal/invoices')->assertSee('Paid')->assertDontSee('Due');
-    $inv->update(['total_cents' => 0]);
-    $this->actingAs($ku)->get('/portal/invoices')->assertSee('Due');
 });
 
 it('orders both lists newest first', function () {

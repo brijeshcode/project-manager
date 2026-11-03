@@ -11,10 +11,10 @@ return new class extends Migration {
             $t->id();
             $t->string('number')->unique();
             $t->foreignId('client_id')->constrained()->cascadeOnDelete();
-            $t->string('status')->default('sent'); // sent | void; paid is derived from payments
+            $t->string('status')->default('sent'); // draft (not sent) | sent | void; payments are not linked to invoices
             $t->date('issued_on');
             $t->date('due_on')->nullable();
-            $t->char('currency', 3);
+            $t->foreignId('currency_id')->constrained('currencies');
             $t->bigInteger('subtotal_cents');
             $t->decimal('tax_percent', 5, 2)->default(0);
             $t->bigInteger('tax_cents');
@@ -22,6 +22,7 @@ return new class extends Migration {
             $t->foreignId('bank_account_id')->nullable()->constrained()->nullOnDelete();
             $t->text('bank_snapshot')->nullable(); // encrypted copy of the bank details at creation
             $t->decimal('inr_rate', 10, 4)->nullable();
+            $t->bigInteger('local_total_cents')->nullable(); // total x rate, in the local currency
             $t->text('terms')->nullable();
             $t->timestamp('emailed_at')->nullable();
             $t->timestamps();
@@ -30,12 +31,10 @@ return new class extends Migration {
 
         // Plain indexes only: existing rows/tests reference invoice ids without an FK.
         Schema::table('billable_lines', fn (Blueprint $t) => $t->index('invoice_id'));
-        Schema::table('payments', fn (Blueprint $t) => $t->index('invoice_id'));
     }
 
     public function down(): void
     {
-        Schema::table('payments', fn (Blueprint $t) => $t->dropIndex(['invoice_id']));
         Schema::table('billable_lines', fn (Blueprint $t) => $t->dropIndex(['invoice_id']));
         Schema::dropIfExists('invoices');
     }

@@ -21,9 +21,8 @@ class Invoices extends Component
         // sent only (void hidden); explicit columns; one withSum for paid state
         $invoices = Invoice::where('client_id', auth()->user()->client_id)
             ->where('status', 'sent')
-            ->withSum('payments', 'amount_cents')
             ->latest('issued_on')->latest('id')
-            ->paginate(15, ['id', 'number', 'client_id', 'issued_on', 'due_on', 'currency', 'total_cents']);
+            ->paginate(15, ['id', 'number', 'client_id', 'issued_on', 'due_on', 'currency_id', 'total_cents']);
 
         return view('livewire.portal.invoices', ['invoices' => $invoices])->layout('layouts.app');
     }

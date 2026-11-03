@@ -3,17 +3,24 @@
 namespace Database\Seeders;
 
 use App\Enums\BillingMode;
+use App\Enums\PaymentType;
 use App\Enums\RecurringFrequency;
 use App\Models\BankAccount;
+use App\Models\BillableLine;
 use App\Models\ChecklistItem;
 use App\Models\Client;
+use App\Models\Invoice;
 use App\Models\Module;
+use App\Models\Payment;
 use App\Models\Project;
 use App\Models\RecurringCharge;
 use App\Models\Resource;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\ExchangeRates;
+use App\Services\LocalCurrency;
+use App\Support\Money;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -312,7 +319,7 @@ class DemoSeeder extends Seeder
                     'subtotal_cents' => $subtotal, 'tax_percent' => '10.00', 'tax_cents' => $tax, 'total_cents' => $subtotal + $tax,
                     'bank_account_id' => $bank->id, 'bank_snapshot' => $bank->only(['account_name', 'bank_name', 'account_number', 'ifsc_swift', 'email']),
                     'terms' => $terms, 'emailed_at' => $issued,
-                    'exchange_rate' => $currency === $local ? null : $rateFor($currency),
+                    'exchange_rate' => $currency === $local ? '1' : $rateFor($currency),
                     'lines_snapshot' => [['description' => $desc, 'quantity' => number_format($qty, 2, '.', ''), 'unit_price_cents' => $unit, 'amount_cents' => $subtotal, 'project_id' => $firstProject->id]],
                 ]);
                 BillableLine::create([
@@ -323,7 +330,7 @@ class DemoSeeder extends Seeder
                 if ($paidFraction > 0) {
                     $paid = (int) round(($subtotal + $tax) * $paidFraction);
                     Payment::create([
-                        'client_id' => $client->id, 'project_id' => $firstProject->id, 'invoice_id' => $invoice->id,
+                        'client_id' => $client->id, 'project_id' => $firstProject->id,
                         'amount_cents' => $paid, 'paid_on' => $issued->copy()->addDays(10),
                         'type' => PaymentType::Project, 'method' => 'bank_transfer',
                     ] + $this->localFields($paid, $currency, $local, $rateFor));

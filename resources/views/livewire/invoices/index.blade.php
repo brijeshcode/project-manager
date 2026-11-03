@@ -5,6 +5,16 @@
         </x-slot:actions>
     </x-ui.page-header>
 
+    @php $fmt = fn ($c) => $c === null ? '—' : \App\Support\Money::format($c, $stats['currency']); @endphp
+    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <x-ui.stat label="Total invoiced" :value="$fmt($stats['total'])" color="blue"
+            :hint="$stats['count'].' sent'.($stats['missing_rate'] ? ' · '.$stats['missing_rate'].' without a rate' : '')" />
+        <x-ui.stat label="Invoiced this month" :value="$fmt($stats['this_month'])" color="green" hint="Sent only" />
+        <x-ui.stat label="Outstanding" :value="$fmt($stats['outstanding'])" color="yellow"
+            :hint="'Client balances owed'.($stats['outstanding_missing_rate'] ? ' · '.$stats['outstanding_missing_rate'].' without a rate' : '')" />
+        <x-ui.stat label="Future invoices" :value="$fmt($stats['draft_total'])" color="purple" :hint="$stats['draft'].' not sent (estimate) · '.$stats['cancelled'].' cancelled'" />
+    </div>
+
     <x-ui.filter-card>
         <div class="sm:col-span-2">
             <label for="search" class="sr-only">Search invoices</label>
@@ -22,9 +32,8 @@
             <select wire:model.live="status" id="status" class="select">
                 <option value="">All statuses</option>
                 <option value="sent">Sent</option>
-                <option value="paid">Paid</option>
-                <option value="unpaid">Unpaid</option>
-                <option value="void">Void</option>
+                <option value="draft">Not sent</option>
+                <option value="void">Cancelled</option>
             </select>
         </div>
     </x-ui.filter-card>
@@ -46,8 +55,8 @@
                 <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
                     @foreach ($invoices as $i)
                         @php
-                            $paid = $i->status !== 'void' && $i->total_cents > 0 && (int) $i->payments_sum_amount_cents >= $i->total_cents;
-                            [$label, $color] = $i->status === 'void' ? ['void', 'rose'] : ($paid ? ['paid', 'green'] : ['sent', 'slate']);
+                            $state = \App\Support\DashboardMoney::invoiceState($i, $owing);
+                            [$label, $color] = match ($state) { 'void' => ['cancelled', 'rose'], 'draft' => ['not sent', 'amber'], 'overdue' => ['overdue', 'rose'], default => ['sent', 'green'] };
                         @endphp
                         <tr wire:key="inv-{{ $i->id }}">
                             <td class="table-td"><a href="{{ route('invoices.show', $i) }}" class="link">{{ $i->number }}</a></td>

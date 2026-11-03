@@ -39,7 +39,7 @@ class LocalCurrency
         $code = self::code();
 
         return Payment::whereNull('local_amount_cents')
-            ->whereIn('client_id', DB::table('clients')->where('currency', $code)->select('id'))
+            ->whereIn('client_id', DB::table('clients')->where('currency_id', DB::table('currencies')->where('code', $code)->value('id'))->select('id'))
             ->update(['exchange_rate' => 1, 'local_amount_cents' => DB::raw('amount_cents'), 'local_currency' => $code]);
     }
 
@@ -47,6 +47,12 @@ class LocalCurrency
     {
         return DB::table('payments')->whereNotNull('local_amount_cents')->exists()
             || (Schema::hasColumn('invoices', 'exchange_rate') && DB::table('invoices')->whereNotNull('exchange_rate')->exists());
+    }
+
+    /** Rate for lines priced in a project/client currency: the rate table, or 1 when the currency has none. */
+    public static function rateOrOne(string $code): string
+    {
+        return self::rateFor($code) ?? '1';
     }
 
     public static function rateFor(string $clientCurrency): ?string

@@ -120,9 +120,26 @@
         </div>
 
         <div role="tabpanel" x-show="tab === 'invoices'" x-cloak class="p-6">
-            @if ($invoices->isEmpty())
+            @if ($futureInvoices->isNotEmpty())
+                <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/10">
+                    <div class="mb-2 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-200">Future invoices (not sent)</h3>
+                        <span class="text-sm font-semibold tabular-nums text-amber-900 dark:text-amber-200">Estimate: {{ \App\Support\Money::format($futureInvoices->sum('total_cents'), $client->currency) }}</span>
+                    </div>
+                    <p class="mb-3 text-xs text-amber-800 dark:text-amber-300">For your planning only. These do not change the client's balance until you send them.</p>
+                    <ul class="space-y-1 text-sm">
+                        @foreach ($futureInvoices as $f)
+                            <li wire:key="future-{{ $f->id }}" class="flex items-center justify-between">
+                                <a href="{{ route('invoices.show', $f) }}" wire:navigate class="link font-medium">{{ $f->number }}</a>
+                                <span class="tabular-nums">{{ \App\Support\Money::format($f->total_cents, $f->currency) }}</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+            @if ($invoices->isEmpty() && $futureInvoices->isEmpty())
                 <x-ui.empty-state title="No invoices yet" message="Invoices issued to this client will appear here." name="document" />
-            @else
+            @elseif ($invoices->isNotEmpty())
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
                         <thead><tr><th class="table-th">Invoice</th><th class="table-th">Date</th><th class="table-th">Total</th><th class="table-th">Status</th></tr></thead>
@@ -132,7 +149,7 @@
                                     <td class="table-td"><a href="{{ route('invoices.show', $invoice) }}" wire:navigate class="link font-medium">{{ $invoice->number }}</a></td>
                                     <td class="table-td">{{ $invoice->issued_on?->format('M j, Y') }}</td>
                                     <td class="table-td tabular-nums">{{ \App\Support\Money::format($invoice->total_cents, $invoice->currency) }}</td>
-                                    <td class="table-td"><x-ui.badge :color="['sent' => 'green', 'void' => 'rose', 'draft' => 'amber'][$invoice->status] ?? 'slate'">{{ ucfirst($invoice->status) }}</x-ui.badge></td>
+                                    <td class="table-td"><x-ui.badge :color="['sent' => 'green', 'void' => 'rose', 'draft' => 'amber'][$invoice->status] ?? 'slate'">{{ ['sent' => 'Sent', 'void' => 'Cancelled', 'draft' => 'Not sent'][$invoice->status] ?? ucfirst($invoice->status) }}</x-ui.badge></td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -152,18 +169,13 @@
                             @foreach ($payments as $payment)
                                 <tr wire:key="payment-{{ $payment->id }}">
                                     <td class="table-td">{{ $payment->paid_on?->format('M j, Y') }}</td>
-                                    <td class="table-td tabular-nums font-medium">{{ \App\Support\Money::format($payment->amount_cents, $client->currency) }}
-                                        @if ($payment->hasLocal() && strtoupper($client->currency) !== $payment->local_currency)
+                                    <td class="table-td tabular-nums font-medium">{{ \App\Support\Money::format($payment->amount_cents, $payment->currency) }}
+                                        @if ($payment->hasLocal() && strtoupper($payment->currency) !== $payment->local_currency)
                                             <div class="text-xs font-normal text-gray-500 dark:text-gray-400">{{ \App\Support\Money::format($payment->local_amount_cents, $payment->local_currency) }} @ {{ rtrim(rtrim($payment->exchange_rate, '0'), '.') }}</div>
                                         @endif
                                     </td>
                                     <td class="table-td">{{ str_replace('_', ' ', ucfirst($payment->type->value)) }}</td>
                                     <td class="table-td">{{ $payment->project?->name ?? '—' }}</td>
-                                    <td class="table-td">
-                                        @if ($payment->invoice)
-                                            <a href="{{ route('invoices.show', $payment->invoice) }}" wire:navigate class="link">{{ $payment->invoice->number }}</a>
-                                        @else — @endif
-                                    </td>
                                     <td class="table-td">{{ $payment->method ?: '—' }}</td>
                                     <td class="table-td">
                                         @forelse ($payment->documents as $doc)

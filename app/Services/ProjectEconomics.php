@@ -63,7 +63,7 @@ class ProjectEconomics
             'profit_cents'         => $received - $cost,
             'hourly_received_cents' => $perHour($received),
             'hourly_invoiced_cents' => $perHour($invoiced),
-            'currency'             => $project->client->currency,
+            'currency'             => $project->currency,
         ] + $money;
     }
 
@@ -74,7 +74,7 @@ class ProjectEconomics
      */
     public static function money(Project $project): array
     {
-        $same = strtoupper($project->client->currency) === LocalCurrency::code();
+        $same = strtoupper($project->currency) === LocalCurrency::code();
 
         $invoiced = 0;
         $invoicedLocal = 0;

@@ -22,11 +22,10 @@ class Payments extends Component
         $cid = auth()->user()->client_id;
         $payments = Payment::where('client_id', $cid)
             ->with([
-                'invoice' => fn ($q) => $q->where('client_id', $cid)->select('id', 'number', 'client_id'),
                 'project' => fn ($q) => $q->where('client_id', $cid)->select('id', 'name', 'client_id'),
             ])
             ->latest('paid_on')->latest('id')
-            ->paginate(15, ['id', 'client_id', 'project_id', 'invoice_id', 'amount_cents', 'paid_on', 'type', 'method']);
+            ->paginate(15, ['id', 'client_id', 'project_id', 'currency_id', 'amount_cents', 'paid_on', 'type', 'method']);
 
         return view('livewire.portal.payments', [
             'payments' => $payments,

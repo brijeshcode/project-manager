@@ -27,6 +27,7 @@ class Create extends Component
     public string $taxPercent = '0';
     public string $bankAccountId = '';
     public string $exchangeRate = '';
+    public string $currency = '';
     public string $pick = '';
 
     public function mount(BillableService $billable): void
@@ -37,6 +38,7 @@ class Create extends Component
         if ($client) {
             $this->clientId = $client->id;
             $billable->syncCompletedWork($client);
+            $this->currency = strtoupper($client->currency);
             $this->exchangeRate = self::tidy(LocalCurrency::rateFor($client->currency));
             $this->selected = $billable->pendingFor($client)->pluck('id')->map(fn ($i) => (string) $i)->all();
         }
@@ -46,6 +48,18 @@ class Create extends Component
     private static function tidy(?string $r): string
     {
         return $r === null ? '' : (str_contains($r, '.') ? rtrim(rtrim($r, '0'), '.') : $r);
+    }
+
+    public function updatedCurrency(): void
+    {
+        $this->exchangeRate = $this->currency !== '' ? self::tidy(LocalCurrency::rateFor($this->currency)) : '';
+    }
+
+    /** Every active currency, plus the local one and the client's own. */
+    private function currencyOptions(?Client $client): array
+    {
+        return collect([LocalCurrency::code(), $client ? strtoupper($client->currency) : null])
+            ->merge(\App\Models\Currency::active()->pluck('code'))->filter()->unique()->sort()->values()->all();
     }
 
     public function choose(): void
@@ -76,14 +90,26 @@ class Create extends Component
         $this->selected = array_values(array_diff($this->selected, [(string) $lineId]));
     }
 
+    public function saveDraft(InvoiceService $svc)
+    {
+        return $this->persist($svc, true);
+    }
+
     public function save(InvoiceService $svc)
+    {
+        return $this->persist($svc, false);
+    }
+
+    private function persist(InvoiceService $svc, bool $draft)
     {
         $this->authorize('manage-money');
         $client = Client::findOrFail($this->clientId);
 
-        $same = strtoupper($client->currency) === LocalCurrency::code();
+        $cur = $this->currency !== '' ? strtoupper($this->currency) : strtoupper($client->currency);
+        $same = $cur === LocalCurrency::code();
         $positive = fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('Must be greater than zero.');
         $this->validate([
+            'currency' => ['nullable', Rule::in($this->currencyOptions($client))],
             'selected' => 'array|max:500',
             'custom' => 'array|max:50',
             'selected.*' => ['bail', 'regex:/^\d{1,18}$/'],
@@ -102,6 +128,8 @@ class Create extends Component
             (float) $this->taxPercent,
             $this->bankAccountId === '' ? null : (int) $this->bankAccountId,
             $same ? null : $this->exchangeRate,
+            $cur,
+            $draft,
         );
 
         return $this->redirectRoute('invoices.show', $invoice);
@@ -115,7 +143,8 @@ class Create extends Component
         return view('livewire.invoices.create', [
             'client' => $client,
             'local' => LocalCurrency::code(),
-            'sameCurrency' => $client && strtoupper($client->currency) === LocalCurrency::code(),
+            'sameCurrency' => $client && ($this->currency !== '' ? strtoupper($this->currency) : strtoupper($client->currency)) === LocalCurrency::code(),
+            'currencies' => $client ? $this->currencyOptions($client) : [],
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'lines' => $client ? app(BillableService::class)->pendingFor($client) : collect(),
             'banks' => BankAccount::orderBy('label')->get(['id', 'label', 'bank_name']),
