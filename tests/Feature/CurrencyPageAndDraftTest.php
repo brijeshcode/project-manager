@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Clients\Show as ClientShow;
+use App\Livewire\Currencies\Form;
 use App\Livewire\Currencies\Index;
 use App\Livewire\Invoices\Create;
 use App\Livewire\Invoices\Index as InvoiceIndex;
@@ -39,24 +40,43 @@ function cdLine(Client $c, int $cents = 10000): BillableLine
 
 // ---- currency page
 
-it('lists currencies, adds one, renames it and sets a rate', function () {
-    $c = Livewire::actingAs($this->owner)->test(Index::class)->assertSee('USD')->assertSee('INR')->assertSee('local');
-    $c->set('code', 'gbp')->set('name', 'Pound Sterling')->call('add')->assertHasNoErrors()->assertSee('GBP');
+it('lists currencies with no form on the page and links to create and edit', function () {
+    cdClient('USD');
+    $page = Livewire::actingAs($this->owner)->test(Index::class)->assertSee('USD')->assertSee('INR')->assertSee('local')
+        ->assertSee(route('currencies.create'), false)->assertDontSeeHtml('<form');
+    $usd = Currency::where('code', 'USD')->first();
+    $page->assertSee(route('currencies.edit', $usd), false);
+});
+
+it('creates a currency on its own page, with an optional rate', function () {
+    Livewire::actingAs($this->owner)->test(Form::class)->set('code', 'gbp')->set('name', 'Pound Sterling')->set('rate', '105.5')
+        ->call('save')->assertHasNoErrors()->assertRedirect(route('currencies.index'));
     $gbp = Currency::where('code', 'GBP')->firstOrFail();
-    expect($gbp->is_active)->toBeTrue();
-
-    $c->set("names.{$gbp->id}", 'British Pound')->call('rename', $gbp->id)->assertHasNoErrors();
-    expect($gbp->fresh()->name)->toBe('British Pound');
-
-    $c->set("rate.{$gbp->id}", '105.5')->call('setRate', $gbp->id)->assertHasNoErrors();
-    expect(app(ExchangeRates::class)->active('GBP'))->toBe('105.500000');
+    expect($gbp->name)->toBe('Pound Sterling')->and($gbp->is_active)->toBeTrue()
+        ->and(app(ExchangeRates::class)->active('GBP'))->toBe('105.500000');
 });
 
-it('rejects a bad or duplicate code', function () {
-    Livewire::actingAs($this->owner)->test(Index::class)->set('code', 'US$')->set('name', 'x')->call('add')->assertHasErrors('code');
-    Livewire::actingAs($this->owner)->test(Index::class)->set('code', 'USD')->set('name', 'x')->call('add')->assertHasErrors('code');
+it('rejects a bad or duplicate code on create', function () {
+    Livewire::actingAs($this->owner)->test(Form::class)->set('code', 'US$')->set('name', 'x')->call('save')->assertHasErrors('code');
+    Livewire::actingAs($this->owner)->test(Form::class)->set('code', 'USD')->set('name', 'x')->call('save')->assertHasErrors('code');
+    Livewire::actingAs($this->owner)->test(Form::class)->set('code', 'JPY')->set('name', '')->call('save')->assertHasErrors('name');
 });
 
+it('edits name, rate and active flag on its own page, and never the code', function () {
+    $eur = Currency::forCode('EUR');
+    Livewire::actingAs($this->owner)->test(Form::class, ['currency' => $eur])->assertSet('code', 'EUR')
+        ->set('code', 'XXX')->set('name', 'Euro (EU)')->set('rate', '95')->set('is_active', false)
+        ->call('save')->assertHasNoErrors()->assertRedirect(route('currencies.index'));
+    $eur->refresh();
+    expect($eur->code)->toBe('EUR')->and($eur->name)->toBe('Euro (EU)')->and($eur->is_active)->toBeFalse()
+        ->and(app(ExchangeRates::class)->active('EUR'))->toBe('95.000000');
+});
+
+it('keeps the local currency active and rate-free when edited', function () {
+    $inr = Currency::forCode('INR');
+    Livewire::actingAs($this->owner)->test(Form::class, ['currency' => $inr])->set('is_active', false)->set('rate', '5')->call('save')->assertHasNoErrors();
+    expect($inr->fresh()->is_active)->toBeTrue()->and(app(ExchangeRates::class)->active('INR'))->toBeNull();
+});
 it('deactivating a currency removes it from the payment form, and the local currency stays active', function () {
     $c = cdClient('USD');
     $eur = Currency::forCode('EUR');
@@ -128,4 +148,32 @@ it('a positive client balance is an advance, a negative one is owed', function (
     expect(app(ClientAccount::class)->balanceCents($c))->toBe(-10000); // owes
     Payment::create(['client_id' => $c->id, 'amount_cents' => 25000, 'currency' => 'USD', 'paid_on' => today(), 'type' => 'project', 'exchange_rate' => '80', 'local_amount_cents' => 2000000, 'local_currency' => 'INR']);
     expect(app(ClientAccount::class)->balanceCents($c))->toBe(15000);   // advance
+});
+
+it('shows the old rates of a currency on the index, newest first, with no form', function () {
+    $rates = new ExchangeRates;
+    $rates->setRate('EUR', '90', $this->owner);
+    $rates->setRate('EUR', '95.5', $this->owner);
+    Livewire::actingAs($this->owner)->test(Index::class)
+        ->assertSee('Rate history')->assertSeeInOrder(['95.500000', '90.000000'])->assertSee('Active')
+        ->assertSee('Its rate is always 1.')->assertDontSeeHtml('<form');
+});
+
+it('changes the local currency from a popup on the currencies page', function () {
+    Currency::forCode('EUR');
+    Livewire::actingAs($this->owner)->test(Index::class)
+        ->assertSee('Change local currency')->assertSee('Select local currency')->assertSet('localCurrency', 'INR')
+        ->set('localCurrency', 'EUR')->call('saveLocalCurrency')->assertHasNoErrors()->assertDispatched('close-modal');
+    expect(\App\Services\LocalCurrency::code())->toBe('EUR');
+});
+
+it('refuses to change the local currency once money is recorded, and rejects unknown or inactive ones', function () {
+    $c = cdClient('INR');
+    Payment::create(['client_id' => $c->id, 'amount_cents' => 100, 'currency' => 'INR', 'paid_on' => today(), 'type' => 'project', 'exchange_rate' => '1', 'local_amount_cents' => 100, 'local_currency' => 'INR']);
+    Currency::forCode('EUR');
+    $page = Livewire::actingAs($this->owner)->test(Index::class)->assertSee('Locked: money has already been recorded')
+        ->set('localCurrency', 'EUR')->call('saveLocalCurrency')->assertSet('localCurrency', 'INR');
+    expect(\App\Services\LocalCurrency::code())->toBe('INR');
+
+    $page->set('localCurrency', 'JPY')->call('saveLocalCurrency')->assertHasErrors('localCurrency');
 });

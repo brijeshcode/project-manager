@@ -14,42 +14,31 @@ use Livewire\Component;
 
 class Index extends Component
 {
-    public string $code = '';
-    public string $name = '';
-
-    /** @var array<int,string> typed rate per currency id */
-    public array $rate = [];
-    /** @var array<int,string> inline name edits per currency id */
-    public array $names = [];
+    public string $localCurrency = '';
 
     public function mount(): void
     {
         $this->authorize('manage-money');
         Currency::forCode(LocalCurrency::code()); // the local currency is always on the list
-        $this->names = Currency::pluck('name', 'id')->all();
+        $this->localCurrency = LocalCurrency::code();
     }
 
-    public function add(): void
+    /** Popup action: pick which currency is the local one. Refused once money has been recorded. */
+    public function saveLocalCurrency(): void
     {
         $this->authorize('manage-money');
-        $this->code = strtoupper(trim($this->code));
-        $data = $this->validate([
-            'code' => ['required', 'regex:/\A[A-Z]{3}\z/', Rule::unique('currencies', 'code')],
-            'name' => ['required', 'string', 'max:100'],
-        ], ['code.regex' => 'Use a 3-letter code such as USD.']);
-        $c = Currency::create($data + ['is_active' => true]);
-        $this->names[$c->id] = $c->name;
-        $this->reset('code', 'name');
-        $this->dispatch('toast', message: 'Currency added.');
-    }
+        $this->validate(['localCurrency' => ['required', 'regex:/\A[A-Z]{3}\z/', Rule::exists('currencies', 'code')->where('is_active', true)]]);
 
-    public function rename(int $id): void
-    {
-        $this->authorize('manage-money');
-        $c = Currency::findOrFail($id);
-        $v = $this->validate(["names.{$id}" => ['required', 'string', 'max:100']])['names'][$id];
-        $c->update(['name' => $v]);
-        $this->dispatch('toast', message: 'Name saved.');
+        try {
+            LocalCurrency::set($this->localCurrency, auth()->user());
+        } catch (\DomainException $e) {
+            $this->localCurrency = LocalCurrency::code();
+            $this->dispatch('toast', type: 'error', message: $e->getMessage());
+
+            return;
+        }
+        $this->dispatch('close-modal', 'local-currency');
+        $this->dispatch('toast', type: 'success', message: 'Local currency saved.');
     }
 
     public function toggle(int $id): void
@@ -64,19 +53,6 @@ class Index extends Component
         $c->update(['is_active' => ! $c->is_active]);
     }
 
-    public function setRate(int $id): void
-    {
-        $this->authorize('manage-money');
-        $c = Currency::findOrFail($id);
-        if ($c->code === LocalCurrency::code()) {
-            return;
-        }
-        $v = $this->validate(["rate.{$id}" => ['required', 'string']])['rate'][$id];
-        app(ExchangeRates::class)->setRate($c->code, $v, auth()->user());
-        unset($this->rate[$id]);
-        $this->dispatch('toast', message: 'Rate saved.');
-    }
-
     public function delete(int $id): void
     {
         $this->authorize('manage-money');
@@ -87,7 +63,6 @@ class Index extends Component
             return;
         }
         $c->delete();
-        unset($this->names[$id]);
         $this->dispatch('toast', message: 'Currency deleted.');
     }
 
@@ -106,8 +81,13 @@ class Index extends Component
             $c->is_local = $c->code === $local;
             $c->active_rate = $c->is_local ? '1' : ($rates[$c->code]->rate ?? null);
             $c->used = $this->usage($c->id);
+            $c->history = $c->is_local ? collect() : app(ExchangeRates::class)->history($c->code);
         });
 
-        return view('livewire.currencies.index', ['currencies' => $currencies, 'local' => $local]);
+        return view('livewire.currencies.index', [
+            'currencies' => $currencies, 'local' => $local,
+            'locked' => LocalCurrency::isLocked(),
+            'localOptions' => Currency::active()->orderBy('code')->pluck('code'),
+        ]);
     }
 }

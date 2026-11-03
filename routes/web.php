@@ -47,8 +47,11 @@ Route::middleware(['auth', 'role:super_admin'])->group(function () {
 
 Route::get('billing/recurring', \App\Livewire\Billing\Recurring::class)
     ->middleware(['auth', 'can:manage-money'])->name('billing.recurring');
-Route::get('currencies', \App\Livewire\Currencies\Index::class)
-    ->middleware(['auth', 'can:manage-money'])->name('currencies.index');
+Route::middleware(['auth', 'can:manage-money'])->prefix('currencies')->name('currencies.')->group(function () {
+    Route::get('/', \App\Livewire\Currencies\Index::class)->name('index');
+    Route::get('create', \App\Livewire\Currencies\Form::class)->name('create');
+    Route::get('{currency}/edit', \App\Livewire\Currencies\Form::class)->name('edit');
+});
 
 Route::get('settings', \App\Livewire\Settings\Index::class)
     ->middleware(['auth', 'can:manage-money'])->name('settings.index');

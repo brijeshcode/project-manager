@@ -27,6 +27,6 @@ class Currency extends Model
             throw new \InvalidArgumentException("Invalid currency code: {$code}");
         }
 
-        return self::firstOrCreate(['code' => $code], ['name' => $code]);
+        return self::firstOrCreate(['code' => $code], ['name' => $code, 'is_active' => true]);
     }
 }

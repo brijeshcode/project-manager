@@ -25,9 +25,9 @@ function stUser(string $role): User
     return $u;
 }
 
-it('shows the page and menu entry to the owner', function () {
+it('shows the page to the owner (no menu entry)', function () {
     $r = actingAs(stUser('super_admin'))->get(route('settings.index'));
-    $r->assertOk()->assertSee('Local currency')->assertSee('Exchange rates')->assertSee(route('settings.index'));
+    $r->assertOk()->assertSee('Local currency')->assertSee('Exchange rates')->assertDontSee('href="'.route('settings.index').'"', false);
     $r->assertSeeHtml('<option value="INR" selected>');
 });
 
