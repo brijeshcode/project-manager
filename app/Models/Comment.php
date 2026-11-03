@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Comment extends Model
 {
-    protected $fillable = ['author_id', 'body', 'parent_id'];
+    protected $fillable = ['author_id', 'body', 'parent_id', 'edited_by'];
 
     public function commentable(): MorphTo
     {
@@ -20,6 +20,12 @@ class Comment extends Model
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'author_id');
+    }
+
+    /** Last person to edit the body; null while the comment is untouched. */
+    public function editor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'edited_by');
     }
 
     public function parent(): BelongsTo

@@ -57,15 +57,15 @@ function ipSetup(): array
 it('replaces the inline add-module form with a link to the create page', function () {
     $s = ipSetup();
     Livewire::actingAs($s['admin'])->test(ProjectShow::class, ['project' => $s['project']])->set('tab', 'modules')
-        ->assertSee('data-test="add-module"', false)->assertSee('+ Add module')->assertSee(route('modules.create', $s['project']), false)
+        ->assertSee('data-test="add-module"', false)->assertSee('Add module')->assertSee(route('modules.create', $s['project']), false)
         ->assertDontSee('New module name')->assertDontSee('+ Module');
 });
 
 it('renders the task progress as a small bar with the percentage beside it, not full width', function () {
     $s = ipSetup();
     $html = Livewire::actingAs($s['admin'])->test(ProjectShow::class, ['project' => $s['project']])->set('tab', 'modules')->html();
-    expect($html)->toContain('data-test="task-progress-bar"')->toContain('data-test="task-progress"')
-        ->and($html)->toContain('flex w-40 items-center gap-2')
+    expect($html)->toContain('data-test="task-progress-bar"')
+        ->and($html)->toContain('w-40')->toContain('data-test="progress-label"')
         ->and($html)->not->toContain('mt-2 h-1 w-full');
 });
 

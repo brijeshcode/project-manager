@@ -31,9 +31,7 @@
             @if($module->description)
                 <x-ui.markdown :text="$module->description" />
             @endif
-            <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                <div class="h-full rounded-full bg-blue-500" style="width: {{ round($module->progress() * 100) }}%"></div>
-            </div>
+            <x-ui.progress :pct="app(\App\Services\ProgressService::class)->forModule($module)" :label="false" />
             @include('livewire.portal._threads', ['subject' => $module, 'kind' => 'module'])
             <form wire:submit="addModuleComment({{ $module->id }})" class="space-y-2">
                 <x-ui.markdown-editor model="moduleBody.{{ $module->id }}" :rows="2" :uploads="false" placeholder="Comment on this module…" />

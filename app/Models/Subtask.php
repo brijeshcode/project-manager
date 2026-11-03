@@ -84,6 +84,16 @@ class Subtask extends Model
         return (int) static::where('task_id', $taskId)->max('position') + 1;
     }
 
+    /** Persist a drag-reorder of a task's subtasks (ids of other tasks are ignored). */
+    public static function reorder(array $orderedIds, int $taskId): void
+    {
+        DB::transaction(function () use ($orderedIds, $taskId) {
+            foreach (array_values(array_map('intval', $orderedIds)) as $i => $id) {
+                static::where('id', $id)->where('task_id', $taskId)->update(['position' => $i + 1]);
+            }
+        });
+    }
+
     protected static function booted(): void
     {
         static::deleting(function (Subtask $s) {

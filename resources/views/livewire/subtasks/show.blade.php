@@ -9,9 +9,9 @@
             <span class="text-sm text-slate-500">{{ $project->name }} &middot; {{ $task->module->name }} &middot; {{ $task->title }}</span>
             @if ($canEdit)
                 <span class="ml-auto flex flex-wrap items-center gap-2">
-                    <button wire:click="toggleDone" class="btn btn-secondary h-8 px-3 py-1 text-xs">{{ $subtask->is_done ? 'Reopen' : 'Mark done' }}</button>
-                    <button wire:click="convertToTask" wire:confirm="Convert this subtask into a task of the module? Its comments and attachments move with it and this subtask is removed." class="btn btn-secondary h-8 px-3 py-1 text-xs" data-test="convert">Convert to task</button>
-                    <button wire:click="deleteSubtask" wire:confirm="Delete this subtask?" class="btn btn-ghost h-8 px-3 py-1 text-xs">Delete</button>
+                    <button wire:click="toggleDone" class="btn btn-secondary h-8 gap-1 px-3 py-1 text-xs" title="{{ $subtask->is_done ? 'Reopen' : 'Mark done' }}" data-test="toggle-done"><x-icon name="check" /> {{ $subtask->is_done ? 'Reopen' : 'Mark done' }}</button>
+                    <button wire:click="convertToTask" wire:confirm="Convert this subtask into a task of the module? Its comments and attachments move with it and this subtask is removed." class="btn btn-secondary h-8 gap-1 px-3 py-1 text-xs" title="Convert to task" data-test="convert"><x-icon name="arrow-up-right" /> Convert to task</button>
+                    <button wire:click="deleteSubtask" wire:confirm="Delete this subtask?" class="btn btn-ghost h-8 gap-1 px-3 py-1 text-xs" title="Delete subtask" data-test="delete"><x-icon name="trash-2" /> Delete</button>
                 </span>
             @endif
         </div>
@@ -20,6 +20,8 @@
     <div class="mt-6 grid gap-6 lg:grid-cols-3">
         <div class="min-w-0 space-y-6 lg:col-span-2">
             @include('livewire.items._description', ['text' => $subtask->description, 'canEdit' => $canEdit])
+
+            <livewire:checklist.panel :checklistable="$subtask" :key="'checklist-sub-'.$subtask->id" />
 
             <div>
                 <h2 class="mb-3 font-display text-lg font-semibold text-slate-900">Timeline</h2>

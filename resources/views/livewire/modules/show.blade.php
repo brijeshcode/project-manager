@@ -1,6 +1,5 @@
 <div>
     @php
-        $pct = round($module->progress() * 100);
         $openTasks = $module->openTaskCount();
         $money = auth()->user()->can('manage-money');
         $canEdit = $canManage;
@@ -29,7 +28,7 @@
                             <button wire:click="markCompleted" class="btn btn-secondary h-8 px-3 py-1 text-xs">Mark completed</button>
                         @endif
                     @endif
-                    <a href="{{ $copyUrl }}" wire:navigate class="btn btn-secondary h-8 px-3 py-1 text-xs" data-test="copy">Copy</a>
+                    <a href="{{ $copyUrl }}" wire:navigate class="btn btn-secondary h-8 gap-1 px-3 py-1 text-xs" title="Copy this module" data-test="copy"><x-icon name="copy" /> Copy</a>
                 </span>
             @endif
         </div>
@@ -44,17 +43,18 @@
                 <div class="flex items-center justify-between border-b border-slate-100 px-5 py-3">
                     <h2 class="font-display text-sm font-semibold text-slate-900">Tasks <span class="font-normal text-slate-400">({{ $tasks->count() }})</span></h2>
                     @if ($canManage)
-                        <a href="{{ route('tasks.create', ['module' => $module->id]) }}" wire:navigate class="text-xs font-medium text-brand-600 hover:text-brand-700" data-test="add-task">+ Add task</a>
+                        <a href="{{ route('tasks.create', ['module' => $module->id]) }}" wire:navigate class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700" data-test="add-task"><x-icon name="plus" /> Add task</a>
                     @endif
                 </div>
-                <ul class="divide-y divide-slate-100">
+                <ul class="divide-y divide-slate-100" x-data x-sortable data-sort-method="reorderTasks" data-test="task-rows">
                     @forelse ($tasks as $task)
-                        @php
-                            $tp = round($progressService->forTask($task));
-                            $late = $task->deadline && $task->deadline->isPast() && $task->column?->stage !== 'done';
-                        @endphp
-                        <li class="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-5 py-3" data-test="task-row">
+                        @php $done = $task->column?->stage === 'done'; @endphp
+                        <li wire:key="task-{{ $task->id }}" data-id="{{ $task->id }}" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-white px-3 py-3 dark:bg-transparent" data-test="task-row">
+                            @if ($canManage)
+                                <span class="drag-handle cursor-grab text-slate-300 hover:text-slate-500" title="Drag to reorder" aria-label="Drag to reorder"><x-icon name="grip-vertical" /></span>
+                            @endif
                             <a href="{{ route('tasks.show', $task) }}" wire:navigate class="min-w-0 flex-1 basis-40 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
+                            <x-ui.priority :value="$task->priority" />
                             <span class="flex -space-x-1">
                                 @foreach ($task->assignees as $u)
                                     <span title="{{ $u->name }}" class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700 ring-2 ring-white">{{ $initials($u) }}</span>
@@ -63,14 +63,9 @@
                             @foreach ($task->labels as $l)
                                 <span class="hidden items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ring-slate-200 sm:inline-flex"><span class="h-2 w-2 rounded-full" style="background: {{ $l->color }}"></span>{{ $l->name }}</span>
                             @endforeach
-                            @if ($task->deadline)
-                                <span @class(['text-xs', 'font-medium text-rose-600' => $late, 'text-slate-500' => ! $late])>{{ $task->deadline->format('M j') }}</span>
-                            @endif
-                            <x-ui.badge color="slate">{{ $task->column?->name }}@if ($task->column) <span class="text-slate-400">&middot; {{ str_replace('_', ' ', $task->column->stage) }}</span>@endif</x-ui.badge>
-                            <div class="flex w-32 items-center gap-2" title="{{ $tp }}% done">
-                                <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-500" style="width: {{ $tp }}%"></div></div>
-                                <span class="w-9 text-right text-xs font-semibold tabular-nums text-slate-500">{{ $tp }}%</span>
-                            </div>
+                            <x-ui.deadline :date="$task->deadline" :done="$done" class="text-xs" />
+                            <x-ui.stage-badge :column="$task->column" />
+                            <x-ui.progress :pct="$progressService->forTask($task)" class="w-32" data-test="task-bar" />
                         </li>
                     @empty
                         <li class="px-5 py-3 text-sm text-slate-400">No tasks in this module yet.</li>
@@ -80,13 +75,8 @@
 
             {{-- Module progress --}}
             <x-ui.card data-test="module-progress">
-                <div class="flex items-center justify-between text-sm">
-                    <h2 class="font-display font-semibold text-slate-900">Progress</h2>
-                    <span class="font-semibold tabular-nums text-slate-600">{{ $pct }}%</span>
-                </div>
-                <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div class="h-full rounded-full bg-blue-500" style="width: {{ $pct }}%"></div>
-                </div>
+                <h2 class="mb-2 font-display text-sm font-semibold text-slate-900">Progress</h2>
+                <x-ui.progress :pct="$pct" data-test="module-bar" />
             </x-ui.card>
 
             {{-- Timeline --}}
@@ -103,7 +93,7 @@
 
                 <x-ui.side-section title="Deadline" name="deadline" :panel="$panel" :can="$canManage">
                     @if ($module->deadline)
-                        <span @class(['text-rose-600 font-medium' => $module->deadline->isPast() && $status !== 'completed']) data-test="deadline">{{ $module->deadline->format('M j, Y') }}</span>
+                        <x-ui.deadline :date="$module->deadline" :done="$status === 'completed'" format="M j, Y" data-test="deadline" />
                     @else
                         <p class="text-slate-400">Not set</p>
                     @endif
@@ -112,6 +102,13 @@
                         @error('deadline') <p class="field-error">{{ $message }}</p> @enderror
                         <input type="text" wire:model="deadlineReason" placeholder="Reason (optional)" class="input mt-1.5 h-8 text-sm">
                     </x-slot:editor>
+                </x-ui.side-section>
+
+                <x-ui.side-section title="Dates" name="dates">
+                    <dl class="space-y-0.5" data-test="dates">
+                        <div class="flex justify-between"><dt class="text-slate-500">Started</dt><dd data-test="module-started">{{ $startedAt?->format('M j, Y') ?? '—' }}</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Completed</dt><dd data-test="module-ended">{{ $endedAt?->format('M j, Y') ?? '—' }}</dd></div>
+                    </dl>
                 </x-ui.side-section>
 
                 <x-ui.side-section title="Client visible" name="visibility" :panel="$panel" :can="$canManage">

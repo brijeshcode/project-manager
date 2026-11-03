@@ -97,7 +97,9 @@
                                     @if($task->estimate_hours)
                                         <p class="mt-1 text-xs text-slate-400">{{ $task->estimate_hours }}h</p>
                                     @endif
-                                    <div class="mt-2 flex items-center gap-2">
+                                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                                        <x-ui.priority :value="$task->priority" />
+                                        <x-ui.deadline :date="$task->deadline" :done="$col->stage === 'done'" class="text-xs" />
                                         @if($task->client_visible)
                                             <span class="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">Client</span>
                                         @endif
@@ -105,8 +107,8 @@
                                             <span class="text-xs text-slate-500">{{ $subsDone }}/{{ $subs->count() }} done</span>
                                         @endif
                                         <a href="{{ route('tasks.show', $task) }}" wire:navigate draggable="false"
-                                           class="ml-auto text-xs font-medium text-brand-600 opacity-0 group-hover:opacity-100">
-                                            Open
+                                           class="ml-auto text-slate-400 opacity-0 hover:text-brand-600 group-hover:opacity-100" title="Open task" aria-label="Open task" data-test="open-task">
+                                            <x-icon name="external-link" />
                                         </a>
                                     </div>
                                 </li>

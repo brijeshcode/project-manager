@@ -68,11 +68,14 @@ it('moveTo persists new column and position', function () {
     $module  = boardModule($project);
     $user    = boardMember($project);
     $task    = boardTask($module, $user);
+    $other   = boardTask($module, $user, ['position' => 2, 'board_column_id' => colId($module, 'In progress')]);
 
     $task->moveTo(colId($module, 'In progress'), 2);
 
+    // slot 2 in the column: after the task already there; positions are the module's single order
     $fresh = $task->fresh();
     expect($fresh->board_column_id)->toBe(colId($module, 'In progress'))
+        ->and($other->fresh()->position)->toBe(1)
         ->and($fresh->position)->toBe(2);
 });
 

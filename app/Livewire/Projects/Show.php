@@ -148,6 +148,13 @@ class Show extends Component
         $task->update(['description' => trim($this->taskDescriptions[$taskId] ?? '') ?: null]);
     }
 
+    /** Drag-reorder of a module's tasks (the module's one task order). */
+    public function reorderTasks(int $moduleId, array $ids): void
+    {
+        $this->authorize('update', $this->project);
+        Task::reorder($this->project->modules()->findOrFail($moduleId)->id, $ids);
+    }
+
     public function addTask(int $moduleId): void
     {
         $this->authorize('update', $this->project);
@@ -237,7 +244,7 @@ class Show extends Component
     {
         $modules = $this->project->modules()
             ->with([
-                'tasks' => fn ($q) => $q->visibleTo(auth()->user())->orderBy('position'),
+                'tasks' => fn ($q) => $q->visibleTo(auth()->user())->orderBy('position')->orderBy('id'),
                 'tasks.subtasks',
                 'tasks.assignees',
                 'tasks.labels',

@@ -5,6 +5,7 @@ namespace App\Livewire\Modules;
 use App\Livewire\Concerns\ItemPage;
 use App\Models\Module;
 use App\Models\Project;
+use App\Models\Task;
 use App\Services\ProgressService;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Model;
@@ -112,6 +113,13 @@ class Show extends Component
         }
     }
 
+    /** Drag-reorder of the task list: the module's one task order (also what the board shows within a column). */
+    public function reorderTasks(array $ids): void
+    {
+        $this->authorize('update', $this->project);
+        Task::reorder($this->module->id, $ids);
+    }
+
     public function markCompleted(): void
     {
         $this->authorize('update', $this->project);
@@ -142,8 +150,11 @@ class Show extends Component
     public function render()
     {
         return view('livewire.modules.show', $this->panelData() + [
-            'tasks' => $this->module->tasks()->visibleTo(auth()->user())->with(['column', 'assignees', 'labels'])->orderBy('position')->get(),
+            'tasks' => $this->module->tasks()->visibleTo(auth()->user())->with(['column', 'assignees', 'labels', 'checklistItems', 'subtasks'])->orderBy('position')->orderBy('id')->get(),
             'progressService' => app(ProgressService::class),
+            'pct' => app(ProgressService::class)->forModule($this->module),
+            'startedAt' => $this->module->startedAt(),
+            'endedAt' => $this->module->endedAt(),
             'copyUrl' => route('modules.create', ['project' => $this->project, 'copy' => $this->module->id]),
             'status' => $this->module->status(),
             'hourly' => $this->project->client->billing_mode === \App\Enums\BillingMode::Hourly,

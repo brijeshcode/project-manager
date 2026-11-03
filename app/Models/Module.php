@@ -84,10 +84,10 @@ class Module extends Model
         return $this->hasMany(\App\Models\Task::class);
     }
 
-    /** Tasks that count toward status/progress: no ideas, drafts or out-of-scope work. */
-    private function countedTasks()
+    /** Tasks that count toward status/progress: no ideas, drafts or out-of-scope work */
+    public function countedTasks(array $with = ['column'])
     {
-        return $this->tasks()->with('column')->where('is_idea', false)->where('status', 'published')->where('scope', 'in')->get();
+        return $this->tasks()->with($with)->counted()->get();
     }
 
     /** pending | working | in_review | completed, derived from the tasks' board-column stages. */
@@ -130,17 +130,20 @@ class Module extends Model
         return $this->countedTasks()->filter(fn ($t) => $t->column?->stage !== 'done')->count();
     }
 
-    /** Done share of the module, 0..1: hours-weighted when tasks have estimates, else by task count. */
-    public function progress(): float
+    /** Earliest task start (derived, never stored). */
+    public function startedAt(): ?\Illuminate\Support\Carbon
     {
-        $tasks = $this->countedTasks();
-        if ($tasks->isEmpty()) {
-            return 0.0;
-        }
-        $done = $tasks->filter(fn ($t) => $t->column?->stage === 'done');
-        $hours = $tasks->sum(fn ($t) => $t->effectiveHours());
+        $min = $this->tasks()->min('started_at');
 
-        return $hours > 0 ? $done->sum(fn ($t) => $t->effectiveHours()) / $hours : $done->count() / $tasks->count();
+        return $min ? \Illuminate\Support\Carbon::parse($min) : null;
+    }
+
+    /** Latest task completion, only once the module is completed (derived or manual). */
+    public function endedAt(): ?\Illuminate\Support\Carbon
+    {
+        $max = $this->status() === 'completed' ? $this->tasks()->max('completed_at') : null;
+
+        return $max ? \Illuminate\Support\Carbon::parse($max) : null;
     }
 
     /** Hourly client: hours x rate; fixed client: the fixed amount. Null when not configured. */

@@ -6,8 +6,10 @@ use App\Livewire\Concerns\ItemPage;
 use App\Models\Project;
 use App\Models\Subtask;
 use App\Models\Task;
+use App\Services\ProgressService;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class Show extends Component
@@ -41,6 +43,10 @@ class Show extends Component
     public string $price = '';
 
     public string $newSubtask = '';
+
+    public string $startedAt = '';
+
+    public string $completedAt = '';
 
     public function mount(Task $task): void
     {
@@ -81,6 +87,8 @@ class Show extends Component
         $this->scope = $t->scope->value;
         $this->estimate = (string) $t->estimate_hours;
         $this->price = $t->price === null ? '' : (string) $t->price;
+        $this->startedAt = $t->started_at?->toDateString() ?? '';
+        $this->completedAt = $t->completed_at?->toDateString() ?? '';
     }
 
     protected function saveExtra(string $panel): void
@@ -91,6 +99,7 @@ class Show extends Component
             'priority' => $t->update($this->validate(['priority' => 'integer|in:0,1,2'])),
             'visibility' => $this->saveVisibility($t),
             'estimate' => $this->saveEstimate($t),
+            'dates' => $this->saveDates($t),
             default => null,
         };
     }
@@ -106,6 +115,13 @@ class Show extends Component
         $this->validate(['deadline' => 'nullable|date', 'deadlineReason' => 'nullable|string|max:1000']);
         $t->activityReason = $this->deadlineReason;
         $t->update(['deadline' => $this->deadline ?: null]);
+    }
+
+    /** Hand-edited dates win over the automatic ones (see Task::syncDatesWithColumn); each change is logged. */
+    private function saveDates(Task $t): void
+    {
+        $this->validate(['startedAt' => 'nullable|date', 'completedAt' => 'nullable|date|after_or_equal:startedAt']);
+        $t->update(['started_at' => $this->startedAt ?: null, 'completed_at' => $this->completedAt ?: null]);
     }
 
     private function saveEstimate(Task $t): void
@@ -130,7 +146,17 @@ class Show extends Component
         $this->validate(['newSubtask' => 'required|string|max:255']);
         Subtask::create(['task_id' => $this->task->id, 'title' => trim($this->newSubtask)]);
         $this->reset('newSubtask');
+        $this->dispatch('subtask-added'); // closes the add-subtask input
     }
+
+    public function reorderSubtasks(array $ids): void
+    {
+        $this->authorize('update', $this->task);
+        Subtask::reorder($ids, $this->task->id);
+    }
+
+    #[On('checklist-changed')]
+    public function refreshProgress(): void {}
 
     public function toggleSubtask(int $id): void
     {
@@ -142,6 +168,7 @@ class Show extends Component
     public function render()
     {
         $project = $this->itemProject();
+        $this->task->unsetRelation('checklistItems')->unsetRelation('subtasks')->unsetRelation('column');
         $subtasks = $this->task->subtasks()->withCount('comments')->with('assignees')->get();
 
         return view('livewire.tasks.show', $this->panelData() + [
@@ -151,6 +178,7 @@ class Show extends Component
             'subtasks' => $subtasks,
             'attachments' => $this->task->attachments()->latest('id')->get(),
             'canCopy' => auth()->user()->can('update', $project),
+            'pct' => app(ProgressService::class)->forTask($this->task),
         ]);
     }
 }

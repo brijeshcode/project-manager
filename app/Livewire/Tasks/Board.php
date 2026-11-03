@@ -53,6 +53,7 @@ class Board extends Component
             ->when($this->filterModule, fn ($q) => $q->where('module_id', $this->filterModule))
             ->with(['module', 'subtasks.checklistItems'])
             ->orderBy('position')
+            ->orderBy('id')
             ->get()
             ->groupBy('board_column_id');
     }
@@ -61,7 +62,7 @@ class Board extends Component
      * Handle a drag-and-drop event emitted by SortableJS via Livewire.
      * Only moves tasks of this project that the user can see.
      */
-    public function taskMoved(int $taskId, int $column, int $position): void
+    public function taskMoved(int $taskId, int $column, int $position, array $order = []): void
     {
         $this->authorize('view', $this->project);
 
@@ -71,6 +72,13 @@ class Board extends Component
                 ->findOrFail($taskId);
         } catch (ModelNotFoundException) {
             return; // foreign-project task; silently no-op
+        }
+
+        // `order` = card ids of the target column after the drop; the slot that matters is among this task's own module
+        if ($order) {
+            $sameModule = Task::whereIn('id', array_map('intval', $order))->where('module_id', $task->module_id)->pluck('id')->all();
+            $idx = array_search($taskId, array_values(array_filter(array_map('intval', $order), fn ($i) => in_array($i, $sameModule, true))), true);
+            $position = $idx === false ? $position : $idx + 1;
         }
 
         $task->moveTo($column, $position);
@@ -150,7 +158,7 @@ class Board extends Component
 
             return;
         }
-        Task::where('board_column_id', $id)->update(['board_column_id' => $target]);
+        Task::where('board_column_id', $id)->get()->each->update(['board_column_id' => $target]); // per model so the date automation runs
         $col->delete();
         unset($this->deleteTarget[$id]);
         unset($this->boardColumns, $this->columns);

@@ -59,6 +59,11 @@ function psTask(Module $module, User $creator, array $attrs = []): Task
     ], $attrs));
 }
 
+function psDone(Project $project): int
+{
+    return $project->columns()->where('name', 'Done')->value('id');
+}
+
 function addItem(Task|Subtask $owner, string $title, bool $done = false): ChecklistItem
 {
     return ChecklistItem::create([
@@ -82,7 +87,7 @@ it('forTask: task with no items returns 0.0, no error', function () {
     expect($service->forTask($task))->toBe(0.0);
 });
 
-it('forTask: 2 of 4 items done = 50%', function () {
+it('forTask: 2 of 4 items done = 2/5 = 40% (the Done step counts)', function () {
     $project = psProject();
     $module  = psModule($project);
     $user    = psUser($project);
@@ -94,10 +99,10 @@ it('forTask: 2 of 4 items done = 50%', function () {
     addItem($task, 'D', false);
 
     $service = new ProgressService();
-    expect($service->forTask($task))->toBe(50.0);
+    expect($service->forTask($task))->toBe(40.0);
 });
 
-it('forTask: all items done = 100%', function () {
+it('forTask: all items ticked outside Done = 2/3, in Done = 100%', function () {
     $project = psProject();
     $module  = psModule($project);
     $user    = psUser($project);
@@ -107,12 +112,14 @@ it('forTask: all items done = 100%', function () {
     addItem($task, 'B', true);
 
     $service = new ProgressService();
-    expect($service->forTask($task))->toBe(100.0);
+    expect(round($service->forTask($task), 2))->toBe(66.67);
+
+    $task->update(['board_column_id' => psDone($project)]);
+    expect($service->forTask($task->fresh()))->toBe(100.0);
 });
 
-it('forTask: combines task items + subtask items in progress', function () {
-    // Task has 1 done item; subtask has 1 done + 1 not-done.
-    // Total: 2 done / 3 total = 66.666...
+it('forTask: a subtask is one step (its is_done); its own checklist items are not pooled in', function () {
+    // 1 of 1 item ticked + 1 undone subtask + the Done step = 1/3
     $project = psProject();
     $module  = psModule($project);
     $user    = psUser($project);
@@ -121,12 +128,13 @@ it('forTask: combines task items + subtask items in progress', function () {
     addItem($task, 'Task-done', true);
 
     $subtask = Subtask::create(['task_id' => $task->id, 'title' => 'Sub', 'estimate_hours' => 1.0, 'position' => 1]);
-    addItem($subtask, 'Sub-done',   true);
-    addItem($subtask, 'Sub-notdone', false);
+    addItem($subtask, 'Sub-done', true);
 
     $service = new ProgressService();
-    // 2 done / 3 total = 66.666... round to 2dp
-    expect(round($service->forTask($task), 2))->toBe(66.67);
+    expect(round($service->forTask($task), 2))->toBe(33.33);
+
+    $subtask->update(['is_done' => true]);
+    expect($service->forTask($task->fresh()))->toBe(round(2 / 3 * 100, 10));
 });
 
 // ── forModule ─────────────────────────────────────────────────────────────────
@@ -136,8 +144,7 @@ it('forModule: hours-weighted — 40h at 100% + 10h at 0% ≈ 80%', function () 
     $module  = psModule($project);
     $user    = psUser($project);
 
-    $task40 = psTask($module, $user, ['estimate_hours' => 40.0, 'title' => 'Big']);
-    addItem($task40, 'A', true);   // 100%
+    $task40 = psTask($module, $user, ['estimate_hours' => 40.0, 'title' => 'Big', 'board_column_id' => psDone($project)]);   // 100%
 
     $task10 = psTask($module, $user, ['estimate_hours' => 10.0, 'title' => 'Small', 'position' => 2]);
     addItem($task10, 'B', false);  // 0%
@@ -156,8 +163,8 @@ it('forModule: 0-hour task does not crash weighting', function () {
     addItem($task0, 'X', true);
 
     $service = new ProgressService();
-    // all tasks are 0-hour; returns 0.0 per docs
-    expect($service->forModule($module))->toBe(0.0);
+    // no task has hours: plain average of the task progress (1 of 1 ticked + Done step = 50%)
+    expect($service->forModule($module))->toBe(50.0);
 });
 
 it('forModule: module with no tasks returns 0.0', function () {
@@ -174,22 +181,21 @@ it('forProject: rolls modules up hours-weighted to project', function () {
     $project = psProject();
     $user    = psUser($project);
 
-    // Module 1: task with 40h, 1/2 items done (50%)
+    // Module 1: task with 40h, 1 of 2 items done (+ Done step) = 33.33%
     $mod1   = Module::create(['project_id' => $project->id, 'name' => 'M1', 'position' => 1]);
     $task1a = psTask($mod1, $user, ['estimate_hours' => 40.0, 'title' => 'T1a', 'position' => 1]);
     addItem($task1a, 'I1', true);
     addItem($task1a, 'I2', false);
-    // mod1 progress = 50%, weight = 40h
+    // mod1 progress = 33.33%, weight = 40h
 
     // Module 2: task with 10h, all done (100%)
     $mod2   = Module::create(['project_id' => $project->id, 'name' => 'M2', 'position' => 2]);
-    $task2a = psTask($mod2, $user, ['estimate_hours' => 10.0, 'title' => 'T2a', 'position' => 1]);
-    addItem($task2a, 'J1', true);
+    $task2a = psTask($mod2, $user, ['estimate_hours' => 10.0, 'title' => 'T2a', 'position' => 1, 'board_column_id' => psDone($project)]);
     // mod2 progress = 100%, weight = 10h
 
-    // Project progress: (40 * 50 + 10 * 100) / 50 = (2000 + 1000) / 50 = 60
+    // Project progress: (40 * 33.33 + 10 * 100) / 50 = 46.67
     $service = new ProgressService();
-    expect($service->forProject($project))->toBe(60.0);
+    expect(round($service->forProject($project), 2))->toBe(46.67);
 });
 
 it('forProject: project with no modules returns 0.0', function () {

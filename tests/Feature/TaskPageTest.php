@@ -74,7 +74,7 @@ it('logs every tracked task field, with the column as its name', function () {
         'board_column_id' => $cols[2]->id, 'client_visible' => false, 'estimate_hours' => 5]);
 
     $rows = $t->activities()->get()->keyBy('field');
-    expect($rows->keys()->sort()->values()->all())->toBe(['board_column_id', 'client_visible', 'deadline', 'description', 'estimate_hours', 'priority', 'title']);
+    expect($rows->keys()->sort()->values()->all())->toBe(['board_column_id', 'client_visible', 'deadline', 'description', 'estimate_hours', 'priority', 'started_at', 'title']);
     expect($rows['title'])->old->toBe('Build form')->new->toBe('Build checkout form');
     expect($rows['board_column_id'])->old->toBe($cols[0]->name)->new->toBe($cols[2]->name);
     expect($rows['priority'])->old->toBe('Low')->new->toBe('High');
@@ -83,9 +83,9 @@ it('logs every tracked task field, with the column as its name', function () {
     expect($rows['board_column_id']->summary())->toContain('changed the column from');
 
     $t->update(['title' => 'Build checkout form']); // unchanged
-    expect($t->activities()->count())->toBe(7);
+    expect($t->activities()->count())->toBe(8);
     $t->update(['status' => 'draft']); // untracked
-    expect($t->activities()->count())->toBe(7);
+    expect($t->activities()->count())->toBe(8);
 });
 
 it('logs task assign, unassign, label add and remove', function () {

@@ -1,21 +1,13 @@
-{{-- GitHub-style timeline, oldest first: comment cards, events as one-liners, composer last. $timeline, $authorId (optional). --}}
+{{-- GitHub-style timeline (comment cards: items/_comment), oldest first: comment cards, events as one-liners, composer last. $timeline, $authorId (optional). --}}
 <ol class="space-y-3" data-test="timeline">
     @foreach ($timeline as $item)
         @php($m = $item['m'])
         @if ($item['kind'] === 'comment')
-            <li class="card overflow-hidden" data-kind="comment">
-                <div class="flex items-center gap-2 border-b border-slate-100 px-4 py-2 text-xs text-slate-500">
-                    <span><span class="font-semibold text-slate-800">{{ $m->author?->name }}</span> commented &middot; {{ $m->created_at->diffForHumans() }}</span>
-                    @if (($authorId ?? null) && $m->author_id === $authorId) <x-ui.badge color="slate" class="ml-auto" data-test="author-badge">Author</x-ui.badge> @endif
-                </div>
-                <div class="px-4 py-3"><x-ui.markdown :text="$m->body" /></div>
+            <li class="card" data-kind="comment" id="comment-{{ $m->id }}">
+                @include('livewire.items._comment', ['c' => $m, 'label' => 'commented', 'top' => true])
                 @foreach ($m->replies as $r)
-                    <div class="border-t border-slate-100 bg-slate-50 px-4 py-3 pl-8" data-kind="reply">
-                        <div class="mb-1 flex items-center gap-2 text-xs text-slate-500">
-                            <span><span class="font-semibold text-slate-800">{{ $r->author?->name }}</span> replied &middot; {{ $r->created_at->diffForHumans() }}</span>
-                            @if (($authorId ?? null) && $r->author_id === $authorId) <x-ui.badge color="slate" class="ml-auto">Author</x-ui.badge> @endif
-                        </div>
-                        <x-ui.markdown :text="$r->body" />
+                    <div class="border-t border-slate-100 bg-slate-50 pl-4" data-kind="reply" id="comment-{{ $r->id }}">
+                        @include('livewire.items._comment', ['c' => $r, 'label' => 'replied', 'top' => false])
                     </div>
                 @endforeach
                 <div class="border-t border-slate-100 px-4 py-2">
@@ -50,7 +42,7 @@
     @endforeach
 </ol>
 
-<x-ui.card class="mt-4 space-y-2">
+<x-ui.card class="mt-4 space-y-2" id="composer">
     <p class="text-sm font-semibold text-slate-700">Add a comment</p>
     <x-ui.markdown-editor model="commentBody" :rows="4" :uploads="false" placeholder="Leave a comment…" />
     @error('commentBody') <p class="field-error">{{ $message }}</p> @enderror

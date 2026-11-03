@@ -4,6 +4,7 @@ namespace App\Livewire\Concerns;
 
 use App\Models\Label;
 use App\Models\Project;
+use App\Support\Markdown;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
@@ -25,6 +26,10 @@ trait ItemPage
     public string $description = '';
 
     public string $commentBody = '';
+
+    public ?int $editingComment = null;
+
+    public string $commentEditBody = '';
 
     public ?int $replyTo = null;
 
@@ -110,6 +115,65 @@ trait ItemPage
         $this->validate(['commentBody' => 'required|string|max:10000']);
         $this->item()->addComment(auth()->user(), $this->commentBody);
         $this->reset('commentBody');
+    }
+
+    /** A comment is editable by its author (and the super admin). */
+    private function ownComment(int $id): \App\Models\Comment
+    {
+        $c = $this->item()->comments()->findOrFail($id);
+        abort_unless($c->author_id === auth()->id() || auth()->user()->hasRole('super_admin'), 403);
+
+        return $c;
+    }
+
+    public function editComment(int $id): void
+    {
+        $this->commentEditBody = $this->ownComment($id)->body;
+        $this->resetErrorBag();
+        $this->editingComment = $id;
+    }
+
+    public function saveComment(): void
+    {
+        $c = $this->ownComment((int) $this->editingComment);
+        $this->validate(['commentEditBody' => 'required|string|max:10000']);
+        // "Last edited by" = edited_by + updated_at on the comment; the description uses its activity log rows.
+        $c->update(['body' => trim($this->commentEditBody), 'edited_by' => auth()->id()]);
+        $this->reset('editingComment', 'commentEditBody');
+    }
+
+    public function cancelCommentEdit(): void
+    {
+        $this->reset('editingComment', 'commentEditBody');
+    }
+
+    /**
+     * A task-list checkbox in rendered markdown was clicked. `target` is 'description' or 'comment:ID', `index` the nth
+     * task item of that text, `checked` the new state. A stale click (text changed meanwhile) is ignored.
+     */
+    public function toggleTask(string $target, int $index, bool $checked): void
+    {
+        if ($target === 'description') {
+            $this->authorizeEdit();
+            $new = Markdown::toggleTask($this->item()->description ?? '', $index, $checked);
+            $new === null || $this->item()->update(['description' => $new]); // logged as a description edit
+        } elseif (preg_match('/^comment:(\d+)$/', $target, $m)) {
+            $c = $this->ownComment((int) $m[1]);
+            $new = Markdown::toggleTask($c->body, $index, $checked);
+            $new === null || $c->update(['body' => $new, 'edited_by' => auth()->id()]);
+        }
+    }
+
+    /** Raw markdown for the "..." menu (Copy Markdown / Quote reply): fetched on click instead of embedded in the page. */
+    public function rawMarkdown(string $target): string
+    {
+        $this->authorize('view', $this->itemProject());
+        if ($target === 'description') {
+            return (string) $this->item()->description;
+        }
+        abort_unless(preg_match('/^comment:(\d+)$/', $target, $m), 404);
+
+        return $this->item()->comments()->findOrFail((int) $m[1])->body;
     }
 
     public function startReply(int $commentId): void
@@ -210,6 +274,7 @@ trait ItemPage
             'labels' => $this->item()->labels()->orderBy('name')->get(),
             'participants' => $this->participants(),
             'timeline' => $this->timeline(),
+            'descEdit' => $this->item()->activities()->where('field', 'description')->with('user')->first(),
         ];
     }
 }

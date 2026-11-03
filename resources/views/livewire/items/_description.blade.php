@@ -1,5 +1,6 @@
-{{-- Description card; pencil edits in place, an empty one shows the editor straight away. $text, $canEdit. --}}
-<x-ui.card padding="p-0" data-test="description-card">
+{{-- Description card; "..." menu (Copy link / Copy Markdown / Edit) and in-place editor; an empty one shows the editor straight away.
+     $text, $canEdit, $descEdit (latest description activity, may be null). --}}
+<x-ui.card padding="p-0" data-test="description-card" id="description">
     @if ($editingDesc || (! $text && $canEdit))
         <div class="space-y-2 p-4" @if (! $text) data-test="empty-description" @endif>
             @unless ($text)
@@ -13,17 +14,24 @@
             </div>
         </div>
     @else
-        <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2">
-            <span class="text-xs font-semibold text-slate-500">Description</span>
-            @if ($canEdit)
-                <button type="button" wire:click="editDescription" class="text-slate-400 hover:text-brand-600" title="Edit description" aria-label="Edit description" data-test="edit-description">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"/></svg>
-                </button>
-            @endif
+        <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-2">
+            <span class="text-xs font-semibold text-slate-500">Description
+                @if ($descEdit ?? null)
+                    <span class="font-normal text-slate-400" data-test="last-edited">&middot; Last edited by {{ $descEdit->user?->name ?? 'System' }} {{ $descEdit->created_at->diffForHumans() }}</span>
+                @endif
+            </span>
+            <div class="flex items-center gap-1">
+                @if ($canEdit)
+                    <button type="button" wire:click="editDescription" class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-brand-600" title="Edit description" aria-label="Edit description" data-test="edit-description">
+                        <x-icon name="pencil" />
+                    </button>
+                @endif
+                <x-ui.card-menu anchor="description" target="description" :edit="$canEdit ? 'editDescription' : null" />
+            </div>
         </div>
         <div class="p-4">
             @if ($text)
-                <x-ui.markdown :text="$text" />
+                <x-ui.markdown :text="$text" :toggle="$canEdit ? 'description' : null" />
             @else
                 <p class="text-sm text-slate-400">No description yet.</p>
             @endif

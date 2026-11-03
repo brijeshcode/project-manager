@@ -5,104 +5,76 @@ namespace App\Services;
 use App\Models\Module;
 use App\Models\Project;
 use App\Models\Task;
+use Illuminate\Support\Collection;
 
+/**
+ * The ONE progress rule for tasks, modules and projects (0..100).
+ *
+ * Task steps = checklist items + subtasks + 1 extra "moved to Done" step.
+ *   done = ticked items + done subtasks (is_done) + 1 when the task sits in a done-stage column.
+ * A task in a done-stage column is always 100%. No items and not done = 0%.
+ * A subtask counts as ONE step (its is_done); the subtask's own checklist items are not pooled in.
+ * Example: 2 checklist items, both ticked, task not in Done = 2/3 = 66.67%.
+ *
+ * Module = hours-weighted average of its counted tasks' progress (same task rule), plain average when no
+ * task has hours. Project = the same weighting over its modules.
+ */
 class ProgressService
 {
-    /**
-     * Task progress: flat pool of ALL checklist items across the task itself
-     * AND all of its subtasks. done ÷ total × 100.
-     *
-     * Rationale: a subtask is just another slice of work on the same task;
-     * treating every checklist item uniformly avoids needing weights between
-     * the task-level items and the subtask-level items, and keeps the math simple.
-     *
-     * Guard: zero items → 0.0 (never divides by zero).
-     */
     public function forTask(Task $task): float
     {
-        $taskItems    = $task->checklistItems;
-        $subtaskItems = $task->subtasks()
-            ->with('checklistItems')
-            ->get()
-            ->flatMap(fn ($st) => $st->checklistItems);
-
-        $all   = $taskItems->merge($subtaskItems);
-        $total = $all->count();
-
-        if ($total === 0) {
-            return 0.0;
+        if ($task->column?->stage === 'done') {
+            return 100.0;
         }
 
-        return round($all->where('is_done', true)->count() / $total * 100, 10);
+        $items = $task->checklistItems;
+        $subtasks = $task->subtasks;
+        $total = $items->count() + $subtasks->count() + 1;
+        $done = $items->where('is_done', true)->count() + $subtasks->where('is_done', true)->count();
+
+        // nothing to tick and not in Done yet
+        return $total === 1 ? 0.0 : round($done / $total * 100, 10);
     }
 
-    /**
-     * Module progress: hours-weighted average of its tasks' progress.
-     * Weight for each task = totalEstimateHours() (task's effectiveHours + subtask hours).
-     *
-     * Guard: if all tasks have 0 totalEstimateHours → returns 0.0.
-     * ponytail: 0-hour tasks contribute 0 weight; a module of all-zero-hour tasks
-     *           returns 0.0 rather than an unweighted average — documented choice.
-     */
     public function forModule(Module $module): float
     {
-        $tasks = $module->tasks()->with(['checklistItems', 'subtasks.checklistItems'])->get();
-
-        if ($tasks->isEmpty()) {
-            return 0.0;
-        }
-
-        $totalWeight    = 0.0;
-        $weightedSum    = 0.0;
-
-        foreach ($tasks as $task) {
-            $weight = $task->totalEstimateHours();
-            if ($weight <= 0.0) {
-                continue; // ponytail: skip 0-hour tasks from weighting
-            }
-            $totalWeight += $weight;
-            $weightedSum += $weight * $this->forTask($task);
-        }
-
-        if ($totalWeight === 0.0) {
-            return 0.0;
-        }
-
-        return round($weightedSum / $totalWeight, 10);
+        return $this->ofTasks($module->countedTasks(['column', 'checklistItems', 'subtasks']));
     }
 
-    /**
-     * Project progress: hours-weighted average of its modules' progress.
-     * Module weight = sum of its tasks' totalEstimateHours.
-     *
-     * Consistent with forModule — same weighting strategy one level up.
-     */
+    /** Constant number of queries however many modules the project has. */
     public function forProject(Project $project): float
     {
-        $modules = $project->modules()
-            ->with(['tasks.checklistItems', 'tasks.subtasks.checklistItems'])
-            ->get();
+        $modules = $project->modules()->with(['tasks' => fn ($q) => $q->counted()->with(['column', 'checklistItems', 'subtasks'])])->get();
 
-        if ($modules->isEmpty()) {
+        return $this->weighted(
+            $modules,
+            fn (Module $m) => $m->tasks->sum(fn (Task $t) => $this->hours($t)),
+            fn (Module $m) => $this->ofTasks($m->tasks),
+        );
+    }
+
+    private function ofTasks(Collection $tasks): float
+    {
+        return $this->weighted($tasks, fn (Task $t) => $this->hours($t), fn (Task $t) => $this->forTask($t));
+    }
+
+    /** Task weight: own effective hours plus its subtasks' hours (uses the loaded relation, no extra query). */
+    private function hours(Task $task): float
+    {
+        return $task->effectiveHours() + (float) $task->subtasks->sum('estimate_hours');
+    }
+
+    /** Hours-weighted average of value(); a plain average when nothing has hours; 0 for an empty set. */
+    private function weighted(Collection $items, callable $weight, callable $value): float
+    {
+        if ($items->isEmpty()) {
             return 0.0;
         }
+        $rows = $items->map(fn ($i) => [$weight($i), $value($i)]);
+        $total = $rows->sum(0);
 
-        $totalWeight = 0.0;
-        $weightedSum = 0.0;
-
-        foreach ($modules as $module) {
-            $weight = $module->tasks->sum(fn ($t) => $t->totalEstimateHours());
-            if ($weight <= 0.0) {
-                continue;
-            }
-            $totalWeight += $weight;
-            $weightedSum += $weight * $this->forModule($module);
-        }
-
-        if ($totalWeight === 0.0) {
-            return 0.0;
-        }
-
-        return round($weightedSum / $totalWeight, 10);
+        return $total > 0
+            ? round($rows->sum(fn ($r) => $r[0] * $r[1]) / $total, 10)
+            : round($rows->avg(1), 10);
     }
 }

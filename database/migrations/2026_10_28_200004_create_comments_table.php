@@ -13,6 +13,7 @@ return new class extends Migration
             $table->foreignId('author_id')->constrained('users')->cascadeOnDelete();
             $table->morphs('commentable');
             $table->text('body');
+            $table->foreignId('edited_by')->nullable()->constrained('users')->nullOnDelete(); // last editor, null = never edited
             $table->foreignId('parent_id')->nullable()->constrained('comments')->cascadeOnDelete(); // replies
             $table->timestamps();
         });

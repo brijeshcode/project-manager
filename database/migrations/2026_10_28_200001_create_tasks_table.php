@@ -29,6 +29,8 @@ return new class extends Migration
             $table->foreignId('board_column_id')->nullable()->constrained('board_columns')->nullOnDelete();
             $table->unsignedInteger('position')->default(0);
             $table->date('deadline')->nullable();
+            $table->date('started_at')->nullable();     // first time in an active-stage column (auto, editable)
+            $table->date('completed_at')->nullable();   // while in a done-stage column (auto, editable)
             $table->timestamps();
         });
     }

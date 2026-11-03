@@ -167,15 +167,16 @@ it('derives module status from stages on the blank template', function (array $c
 it('progress is by count, hours-weighted when estimates exist, 0 when empty', function () {
     $p = bcolProject('blank');
     $m = bcolModule($p);
-    expect($m->progress())->toBe(0.0);
+    $svc = app(\App\Services\ProgressService::class);
+    expect($svc->forModule($m))->toBe(0.0);
 
     $tasks = collect(['Backlog', 'Done', 'Done', 'Backlog'])->map(fn ($c) => bcolTask($m, $c));
-    expect($m->progress())->toBe(0.5);
+    expect($svc->forModule($m))->toBe(50.0);
 
     foreach ([6, 2, 2, 0] as $i => $h) {
         $tasks[$i]->update(['estimate_hours' => $h]);
     }
-    expect(round($m->progress(), 2))->toBe(0.4);   // 4 of 10 hours done
+    expect(round($svc->forModule($m), 2))->toBe(40.0);   // 4 of 10 hours done
 });
 
 it('ignores ideas, drafts and out-of-scope tasks in status and progress', function () {
@@ -186,7 +187,7 @@ it('ignores ideas, drafts and out-of-scope tasks in status and progress', functi
     bcolTask($m, 'Backlog', ['status' => 'draft']);
     bcolTask($m, 'Backlog', ['scope' => 'out']);
 
-    expect($m->derivedStatus())->toBe('completed')->and($m->progress())->toBe(1.0);
+    expect($m->derivedStatus())->toBe('completed')->and(app(\App\Services\ProgressService::class)->forModule($m))->toBe(100.0);
 });
 
 it('new tasks land in the first column and tasks cannot move to another project\'s column', function () {

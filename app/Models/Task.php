@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\DB;
 
 class Task extends Model
 {
@@ -23,7 +24,7 @@ class Task extends Model
     use LogsActivity { activityValue as protected baseActivityValue; }
 
     /** Changes to these are written to the activity log. */
-    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'board_column_id', 'client_visible', 'estimate_hours'];
+    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'board_column_id', 'client_visible', 'estimate_hours', 'started_at', 'completed_at'];
 
     protected $attributes = [
         'is_idea'        => false,
@@ -55,6 +56,8 @@ class Task extends Model
         'board_column_id',
         'position',
         'deadline',
+        'started_at',
+        'completed_at',
         'section',
         'client_approval',
     ];
@@ -66,6 +69,8 @@ class Task extends Model
             'scope'            => TaskScope::class,
             'is_idea'          => 'boolean',
             'deadline'         => 'date',
+            'started_at'       => 'date',
+            'completed_at'     => 'date',
             'client_visible'   => 'boolean',
             'testing_enabled'  => 'boolean',
             'estimate_hours'   => 'float',
@@ -79,6 +84,17 @@ class Task extends Model
         // a new task starts in its project's first column unless told otherwise
         static::creating(function (self $t) {
             $t->board_column_id ??= Module::find($t->module_id)?->project?->columns()->value('id');
+            // one order per module: a new task goes to the bottom
+            if (! $t->position) {
+                $t->position = (int) static::where('module_id', $t->module_id)->max('position') + 1;
+            }
+            $t->syncDatesWithColumn();
+        });
+
+        static::updating(function (self $t) {
+            if ($t->isDirty('board_column_id')) {
+                $t->syncDatesWithColumn();
+            }
         });
 
         static::deleting(function (self $t) {
@@ -87,6 +103,29 @@ class Task extends Model
             $t->activities()->delete();
             $t->attachments->each->delete(); // also removes the files
         });
+    }
+
+    /**
+     * Auto dates on a column change (a hand-edited date in the same save wins):
+     * entering an active or done stage sets started_at when empty, entering done sets completed_at,
+     * leaving done clears completed_at.
+     */
+    public function syncDatesWithColumn(): void
+    {
+        $stage = BoardColumn::find($this->board_column_id)?->stage;
+        $today = now()->startOfDay();
+        if (in_array($stage, ['active', 'done'], true) && ! $this->started_at && ! $this->isDirty('started_at')) {
+            $this->started_at = $today;
+        }
+        if (! $this->isDirty('completed_at')) {
+            $this->completed_at = $stage === 'done' ? ($this->completed_at ?? $today) : null;
+        }
+    }
+
+    /** Whole days from start to completion, null unless both dates exist. */
+    public function daysTaken(): ?int
+    {
+        return $this->started_at && $this->completed_at ? (int) $this->started_at->diffInDays($this->completed_at) : null;
     }
 
     protected function localAmounts(): array
@@ -196,8 +235,9 @@ class Task extends Model
     }
 
     /**
-     * Move this task to another column of its own project at the given position.
-     * Silently ignores a column from another project (no exception, just a no-op guard).
+     * Move this task to another column of its own project. `position` is the 1-based slot among this module's
+     * tasks in that column; the module's single task order (tasks.position) is renumbered to match, so the
+     * board and the module lists never disagree. A column from another project is silently ignored.
      */
     public function moveTo(int $columnId, int $position): void
     {
@@ -205,7 +245,51 @@ class Task extends Model
             return;
         }
 
-        $this->update(['board_column_id' => $columnId, 'position' => $position]);
+        DB::transaction(function () use ($columnId, $position) {
+            $this->update(['board_column_id' => $columnId]);
+            $others = static::where('module_id', $this->module_id)->whereKeyNot($this->id)->orderBy('position')->orderBy('id')->get(['id', 'board_column_id']);
+            $inColumn = $others->where('board_column_id', $columnId)->values();
+            $ids = $others->pluck('id')->all();
+            if ($inColumn->isEmpty()) {
+                $ids[] = $this->id; // nothing to be relative to: it goes last
+            } elseif ($position - 1 < $inColumn->count()) {
+                array_splice($ids, array_search($inColumn[max(0, $position - 1)]->id, $ids, true), 0, [$this->id]);
+            } else {
+                array_splice($ids, array_search($inColumn->last()->id, $ids, true) + 1, 0, [$this->id]);
+            }
+            static::renumber($ids);
+        });
+    }
+
+    /** Write positions 1..n in the given order. */
+    private static function renumber(array $ids): void
+    {
+        foreach (array_values($ids) as $i => $id) {
+            static::whereKey($id)->update(['position' => $i + 1]);
+        }
+    }
+
+    /**
+     * Apply a drag-reorder of some of a module's tasks (a user may only see part of them): the given ids
+     * take over, in the new order, the slots the same tasks occupied before; everything else stays put.
+     */
+    public static function reorder(int $moduleId, array $orderedIds): void
+    {
+        DB::transaction(function () use ($moduleId, $orderedIds) {
+            $all = static::where('module_id', $moduleId)->orderBy('position')->orderBy('id')->pluck('id')->all();
+            $ordered = array_values(array_unique(array_intersect(array_map('intval', $orderedIds), $all)));
+            $queue = $ordered;
+            $new = array_map(function ($id) use (&$queue, $ordered) {
+                return in_array($id, $ordered, true) ? array_shift($queue) : $id;
+            }, $all);
+            static::renumber($new);
+        });
+    }
+
+    /** Tasks that count toward module status/progress: no ideas, drafts or out-of-scope work. */
+    public function scopeCounted(Builder $query): Builder
+    {
+        return $query->where('is_idea', false)->where('status', TaskStatus::Published->value)->where('scope', TaskScope::In->value);
     }
 
     /**

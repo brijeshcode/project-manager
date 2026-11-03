@@ -188,24 +188,23 @@
                 <div class="mb-3 flex items-center justify-between">
                     <h2 class="font-display text-lg font-semibold text-slate-900">Modules & tasks</h2>
                     @if ($canManage)
-                        <a href="{{ route('modules.create', $project) }}" wire:navigate class="btn btn-primary" data-test="add-module">+ Add module</a>
+                        <a href="{{ route('modules.create', $project) }}" wire:navigate class="btn btn-primary gap-1" title="Add a module" data-test="add-module"><x-icon name="plus" /> Add module</a>
                     @endif
                 </div>
 
                 @forelse ($modules as $module)
                     @php
                         $mStatus = $module->status();
-                        $mPct = round($module->progress() * 100);
-                        $mOverdue = $module->deadline && $module->deadline->isPast() && $mStatus !== 'completed';
+                        $mPct = round($progress->forModule($module));
                     @endphp
                     <x-ui.card class="mb-4" padding="p-0" data-test="module-row" x-data="{ open: false }">
                         <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
-                            <button type="button" @click="open = !open" class="shrink-0 text-slate-400 hover:text-slate-600" aria-label="Expand module" data-test="module-toggle">
-                                <svg class="h-4 w-4 transition" :class="open && 'rotate-90'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
+                            <button type="button" @click="open = !open" class="shrink-0 text-slate-400 hover:text-slate-600" title="Expand module" aria-label="Expand module" data-test="module-toggle">
+                                <x-icon name="chevron-right" class="h-4 w-4 transition" ::class="open && 'rotate-90'" />
                             </button>
                             <h3 class="min-w-0 flex-1 basis-40 truncate font-display text-sm font-semibold text-slate-900"><a href="{{ route('modules.show', [$project, $module]) }}" wire:navigate class="hover:text-brand-600">{{ $module->name }}</a></h3>
                             <x-ui.badge :color="\App\Models\Module::STATUS_COLORS[$mStatus]" data-test="module-status">{{ \App\Models\Module::STATUS_LABELS[$mStatus] }}</x-ui.badge>
-                            <span @class(['w-24 text-xs', 'font-medium text-rose-600' => $mOverdue, 'text-slate-500' => ! $mOverdue]) data-test="module-deadline">{{ $module->deadline ? $module->deadline->format('M j, Y') : 'No deadline' }}</span>
+                            <span class="w-24 text-xs" data-test="module-deadline">@if ($module->deadline)<x-ui.deadline :date="$module->deadline" :done="$mStatus === 'completed'" format="M j, Y" />@else<span class="text-slate-500">No deadline</span>@endif</span>
                             <span class="flex -space-x-1">
                                 @foreach ($module->assignees as $u)
                                     <span title="{{ $u->name }}" class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700 ring-2 ring-white">{{ collect(explode(' ', $u->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') }}</span>
@@ -216,10 +215,7 @@
                                     <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ring-slate-200"><span class="h-2 w-2 rounded-full" style="background: {{ $l->color }}"></span>{{ $l->name }}</span>
                                 @endforeach
                             </span>
-                            <div class="flex w-40 items-center gap-2" title="{{ $mPct }}% of the work done">
-                                <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-500" style="width: {{ $mPct }}%"></div></div>
-                                <span class="w-9 text-right text-xs font-semibold tabular-nums text-slate-600" data-test="module-progress">{{ $mPct }}%</span>
-                            </div>
+                            <x-ui.progress :pct="$mPct" class="w-40" data-test="module-progress" />
                             <span class="w-14 text-right text-xs text-slate-400" data-test="module-task-count">{{ $module->tasks->count() }} {{ Str::plural('task', $module->tasks->count()) }}</span>
                             @can('manage-money')
                                 <span class="text-xs text-slate-500">{{ $module->budgetAmount() === null ? 'No budget' : \App\Support\Money::format(\App\Support\Money::toCents($module->budgetAmount()), $project->currency) }}</span>
@@ -270,13 +266,16 @@
                             @endcan
                         </div>
 
-                        <ul class="divide-y divide-slate-100">
+                        <ul class="divide-y divide-slate-100" x-data x-sortable data-sort-method="reorderTasks" data-sort-scope="{{ $module->id }}" data-test="module-task-rows">
                             @foreach ($module->tasks as $task)
                                 @php $taskProgress = $progress->forTask($task); @endphp
-                                <li x-data="{ open: false }" class="px-5 py-3">
+                                <li x-data="{ open: false }" wire:key="mt-{{ $task->id }}" data-id="{{ $task->id }}" class="bg-white px-3 py-3 dark:bg-transparent">
                                     <div class="flex items-center gap-3">
-                                        <button @click="open = !open" class="flex shrink-0 items-center text-left">
-                                            <svg class="h-4 w-4 shrink-0 text-slate-400 transition" :class="open && 'rotate-90'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg>
+                                        @if ($canManage)
+                                            <span class="drag-handle cursor-grab text-slate-300 hover:text-slate-500" title="Drag to reorder" aria-label="Drag to reorder"><x-icon name="grip-vertical" /></span>
+                                        @endif
+                                        <button @click="open = !open" class="flex shrink-0 items-center text-left" title="Expand task" aria-label="Expand task">
+                                            <x-icon name="chevron-right" class="h-4 w-4 text-slate-400 transition" ::class="open && 'rotate-90'" />
                                         </button>
                                         <a href="{{ route('tasks.show', $task) }}" wire:navigate data-test="task-link" class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
                                         <span class="flex -space-x-1">
@@ -287,16 +286,12 @@
                                         @foreach ($task->labels as $l)
                                             <span class="hidden items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ring-slate-200 sm:inline-flex"><span class="h-2 w-2 rounded-full" style="background: {{ $l->color }}"></span>{{ $l->name }}</span>
                                         @endforeach
-                                        @if ($task->deadline)
-                                            <span @class(['text-xs', 'font-medium text-rose-600' => $task->deadline->isPast() && $task->column?->stage !== 'done', 'text-slate-500' => ! ($task->deadline->isPast() && $task->column?->stage !== 'done')])>{{ $task->deadline->format('M j') }}</span>
-                                        @endif
-                                        <x-ui.badge color="slate">{{ $task->column?->name }}@if ($task->column) <span class="text-slate-400">&middot; {{ str_replace('_', ' ', $task->column->stage) }}</span>@endif</x-ui.badge>
-                                        <div class="flex w-40 items-center gap-2" title="{{ round($taskProgress) }}% done" data-test="task-progress-bar">
-                                            <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-500" style="width: {{ round($taskProgress) }}%"></div></div>
-                                            <span class="w-9 text-right text-xs font-semibold tabular-nums text-slate-600" data-test="task-progress">{{ round($taskProgress) }}%</span>
-                                        </div>
+                                        <x-ui.priority :value="$task->priority" />
+                                        <x-ui.deadline :date="$task->deadline" :done="$task->column?->stage === 'done'" class="text-xs" />
+                                        <x-ui.stage-badge :column="$task->column" />
+                                        <x-ui.progress :pct="$taskProgress" class="w-40" data-test="task-progress-bar" />
                                         @if($canManage)
-                                        <a href="{{ route('tasks.show', $task) }}" wire:navigate class="shrink-0 text-xs font-medium text-brand-600 hover:text-brand-700">Edit</a>
+                                        <a href="{{ route('tasks.show', $task) }}" wire:navigate class="shrink-0 text-slate-400 hover:text-brand-600" title="Edit task" aria-label="Edit task" data-test="edit-task"><x-icon name="pencil" /></a>
                                         @endif
                                     </div>
 
@@ -378,7 +373,7 @@
                         @if ($canManage)
                             <form wire:submit.prevent="addTask({{ $module->id }})" class="flex gap-2 border-t border-slate-100 px-5 py-3">
                                 <input type="text" wire:model="newTaskTitle.{{ $module->id }}" placeholder="Add a task…" class="input h-9 flex-1 text-sm">
-                                <button type="submit" class="btn btn-secondary h-9 whitespace-nowrap text-sm">+ Task</button>
+                                <button type="submit" class="btn btn-secondary h-9 gap-1 whitespace-nowrap text-sm" title="Add task" data-test="add-task"><x-icon name="plus" /> Task</button>
                             </form>
                         @endif
                         </div>
