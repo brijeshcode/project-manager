@@ -98,6 +98,18 @@
                     @endif
                 </x-ui.side-section>
 
+                <x-ui.side-section title="Sprint" name="sprint">
+                    @php $locked = $task->column?->stage === 'done' || $task->sprint?->status === 'completed'; @endphp
+                    @if ($canEdit && ! $locked)
+                        <select wire:change="setSprint($event.target.value)" class="select h-9 text-sm" aria-label="Sprint" data-test="sprint-select">
+                            <option value="0">None</option>
+                            @foreach ($sprints as $sp) <option value="{{ $sp->id }}" @selected($sp->id === $task->sprint_id)>{{ $sp->name }} ({{ $sp->status }})</option> @endforeach
+                        </select>
+                    @else
+                        <p data-test="sprint-side">{{ $task->sprint ? $task->sprint->name.($task->sprint->status === 'completed' ? ' (completed)' : '') : 'None' }}</p>
+                    @endif
+                </x-ui.side-section>
+
                 @include('livewire.items._sidebar-people', ['canEdit' => $canEdit])
 
                 <x-ui.side-section title="Deadline" name="deadline" :panel="$panel" :can="$canEdit">

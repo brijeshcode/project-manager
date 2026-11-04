@@ -37,6 +37,18 @@ return new class extends Migration
             $t->timestamps();
         });
 
+        Schema::create('sprints', function (Blueprint $t) {
+            $t->id();
+            $t->foreignId('project_id')->constrained()->cascadeOnDelete();
+            $t->string('name');
+            $t->text('goal')->nullable();
+            $t->date('starts_on');
+            $t->date('ends_on');
+            $t->string('status')->default('planned');   // planned|active|completed
+            $t->timestamp('completed_at')->nullable();
+            $t->timestamps();
+        });
+
         Schema::create('project_deadline_changes', function (Blueprint $t) {
             $t->id();
             $t->foreignId('project_id')->constrained()->cascadeOnDelete();
@@ -51,6 +63,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('project_deadline_changes');
+        Schema::dropIfExists('sprints');
         Schema::dropIfExists('board_columns');
         Schema::dropIfExists('projects');
     }

@@ -61,7 +61,7 @@ class ProgressService
     /** Task weight: own effective hours plus its subtasks' hours (uses the loaded relation, no extra query). */
     private function hours(Task $task): float
     {
-        return $task->effectiveHours() + (float) $task->subtasks->sum('estimate_hours');
+        return $task->hours();
     }
 
     /** Hours-weighted average of value(); a plain average when nothing has hours; 0 for an empty set. */

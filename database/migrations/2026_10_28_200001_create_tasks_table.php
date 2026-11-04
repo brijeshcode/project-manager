@@ -38,6 +38,7 @@ return new class extends Migration
             $table->string('testing_add_type')->nullable();      // 'percent'|'fixed'
             $table->decimal('testing_add_value', 12, 2)->nullable();
             $table->foreignId('board_column_id')->nullable()->constrained('board_columns')->nullOnDelete();
+            $table->foreignId('sprint_id')->nullable()->constrained('sprints')->nullOnDelete();   // at most one sprint
             $table->unsignedInteger('position')->default(0);
             $table->date('deadline')->nullable();
             $table->date('started_at')->nullable();     // first time in an active-stage column (auto, editable)

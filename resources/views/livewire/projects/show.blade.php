@@ -214,6 +214,8 @@
 
                 @if ($modules->isEmpty())
                     <x-ui.empty-state title="No modules yet" message="Modules group related tasks — like “Checkout” or “Onboarding”. Add one to start building the plan."></x-ui.empty-state>
+                @elseif ($filter === 'sprint' && ! $activeSprint)
+                    <x-ui.empty-state title="No active sprint" message="Start a sprint in the Sprint tab to see which modules are part of it." data-test="module-no-sprint"></x-ui.empty-state>
                 @elseif ($mainRows->isEmpty() && $doneRows->isEmpty())
                     <x-ui.empty-state title="No modules match" message="Nothing fits this filter. Try another one, or pick Everyone." data-test="module-empty"></x-ui.empty-state>
                 @endif
@@ -234,6 +236,8 @@
                 @endif
             </div>
     </div>
+@elseif ($active === 'sprint')
+    <div class="mt-6"><livewire:sprints.panel :project="$project" :key="'sprints-'.$project->id" /></div>
 @elseif ($active === 'resources')
     <div class="mt-6"><livewire:resources.panel :project="$project" /></div>
 @elseif ($active === 'board')

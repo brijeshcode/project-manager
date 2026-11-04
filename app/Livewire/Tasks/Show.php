@@ -143,6 +143,17 @@ class Show extends Component
         $this->task->update(['board_column_id' => $columnId]);
     }
 
+    /** Put the task in a planned/active sprint of its project, or take it out (0). Done tasks stay with their sprint. */
+    public function setSprint(int $sprintId): void
+    {
+        $this->authorize('update', $this->task);
+        $project = $this->itemProject();
+        abort_if($this->task->column?->stage === 'done' || $this->task->sprint?->status === 'completed', 422);
+        $sprint = $sprintId ? $project->sprints()->whereIn('status', ['planned', 'active'])->find($sprintId) : null;
+        abort_if($sprintId && ! $sprint, 422);
+        $this->task->update(['sprint_id' => $sprint?->id]);
+    }
+
     // ── subtasks ──────────────────────────────────────────────────────────────
 
     public function addSubtask(): void
@@ -173,13 +184,14 @@ class Show extends Component
     public function render()
     {
         $project = $this->itemProject();
-        $this->task->unsetRelation('checklistItems')->unsetRelation('subtasks')->unsetRelation('column')->unsetRelation('type');
+        $this->task->unsetRelation('checklistItems')->unsetRelation('subtasks')->unsetRelation('column')->unsetRelation('type')->unsetRelation('sprint');
         $subtasks = $this->task->subtasks()->withCount('comments')->with('assignees')->get();
 
         return view('livewire.tasks.show', $this->panelData() + [
             'project' => $project,
             'module' => $this->task->module,
             'columns' => $project->columns,
+            'sprints' => $project->sprints()->whereIn('status', ['planned', 'active'])->get(),
             'types' => $this->panel === 'type' ? \App\Models\TaskType::orderBy('position')->get() : collect(),
             'subtasks' => $subtasks,
             'attachments' => $this->task->attachments()->latest('id')->get(),

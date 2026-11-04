@@ -24,7 +24,7 @@ class Task extends Model
     use LogsActivity { activityValue as protected baseActivityValue; }
 
     /** Changes to these are written to the activity log. */
-    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'task_type_id', 'board_column_id', 'client_visible', 'estimate_hours', 'started_at', 'completed_at'];
+    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'task_type_id', 'board_column_id', 'client_visible', 'estimate_hours', 'started_at', 'completed_at', 'sprint_id'];
 
     protected $attributes = [
         'is_idea'        => false,
@@ -55,6 +55,7 @@ class Task extends Model
         'testing_add_type',
         'testing_add_value',
         'board_column_id',
+        'sprint_id',
         'position',
         'deadline',
         'started_at',
@@ -145,6 +146,7 @@ class Task extends Model
         return match (true) {
             $v === null || $v === '' => null,
             $field === 'board_column_id' => BoardColumn::find($v)?->name ?? (string) $v,
+            $field === 'sprint_id' => Sprint::find($v)?->name ?? (string) $v,
             $field === 'task_type_id' => TaskType::find($v)?->name ?? (string) $v,
             $field === 'priority' => ['Low', 'Medium', 'High'][(int) $v] ?? (string) $v,
             default => $this->baseActivityValue($v, $field),
@@ -194,6 +196,11 @@ class Task extends Model
         return $this->belongsTo(BoardColumn::class, 'board_column_id');
     }
 
+    public function sprint(): BelongsTo
+    {
+        return $this->belongsTo(Sprint::class);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_id');
@@ -236,6 +243,12 @@ class Task extends Model
         };
     }
 
+    /** Same weight as totalEstimateHours() but from the loaded `subtasks` relation (no query). */
+    public function hours(): float
+    {
+        return $this->effectiveHours() + (float) $this->subtasks->sum('estimate_hours');
+    }
+
     /** Own effectiveHours + sum of all subtask estimate_hours. */
     public function totalEstimateHours(): float
     {
@@ -267,6 +280,24 @@ class Task extends Model
             }
             static::renumber($ids);
         });
+    }
+
+    /**
+     * Reorder a list that mixes modules (a sprint or backlog list). tasks.position is ONE order per module, so the
+     * list order is applied per module: each module's tasks keep the order they have in the list and take over only
+     * the slots they occupied. The relative order BETWEEN modules is not stored (lists group by module).
+     */
+    public static function reorderMixed(array $orderedIds): void
+    {
+        $ids = array_map('intval', $orderedIds);
+        $byModule = static::whereIn('id', $ids)->pluck('module_id', 'id');
+        $groups = [];
+        foreach ($ids as $id) {
+            isset($byModule[$id]) && $groups[$byModule[$id]][] = $id;
+        }
+        foreach ($groups as $moduleId => $group) {
+            static::reorder($moduleId, $group);
+        }
     }
 
     /** Write positions 1..n in the given order. */

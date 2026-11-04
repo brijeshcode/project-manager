@@ -107,6 +107,11 @@ class Project extends Model
         return $this->hasMany(BoardColumn::class)->orderBy('position')->orderBy('id');
     }
 
+    public function sprints(): HasMany
+    {
+        return $this->hasMany(Sprint::class)->orderBy('starts_on')->orderBy('id');
+    }
+
     public function modules(): HasMany
     {
         return $this->hasMany(Module::class)->orderBy('position');

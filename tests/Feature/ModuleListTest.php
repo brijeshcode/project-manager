@@ -146,12 +146,17 @@ it('assigns from the list with logging, only active members, and toggles off', f
     denied($s, listPage($s))->call('toggleModuleAssignee', $s['module']->id, $s['member']->id)->assertForbidden();
 });
 
-it('filters Sprint, Backlog, Completed and All by derived status', function () {
-    $s = listSetup();               // Checkout: no tasks => pending (backlog)
+it('filters Sprint, Backlog, Completed and All by active-sprint membership', function () {
+    $s = listSetup();               // Checkout: no tasks => backlog
     $work = listModule($s, 'Working', 'active');
     $rev = listModule($s, 'Reviewing', 'review');
     $hold = listModule($s, 'Holding', 'active', ['status_override' => 'on_hold']);
     $done = listModule($s, 'Finished', 'done');
+    $sprint = $s['project']->sprints()->create(['name' => 'Sprint 1', 'status' => 'active', 'starts_on' => today(), 'ends_on' => today()->addDays(6)]);
+    $planned = $s['project']->sprints()->create(['name' => 'Sprint 2', 'status' => 'planned', 'starts_on' => today()->addWeek(), 'ends_on' => today()->addDays(13)]);
+    $work->tasks()->first()->update(['sprint_id' => $sprint->id]);
+    $hold->tasks()->first()->update(['sprint_id' => $sprint->id]);
+    $rev->tasks()->first()->update(['sprint_id' => $planned->id]); // a planned sprint does not count
 
     $names = fn ($c) => $c->viewData('mainRows')->pluck('m.name')->sort()->values()->all();
 
@@ -159,8 +164,8 @@ it('filters Sprint, Backlog, Completed and All by derived status', function () {
     expect($names($p))->toBe(['Checkout', 'Holding', 'Reviewing', 'Working']); // All: completed leaves the main list
     expect($p->viewData('doneRows')->pluck('m.name')->all())->toBe(['Finished']);
 
-    expect($names($p->set('filter', 'sprint')))->toBe(['Reviewing', 'Working']);
-    expect($names($p->set('filter', 'backlog')))->toBe(['Checkout', 'Holding']);
+    expect($names($p->set('filter', 'sprint')))->toBe(['Holding', 'Working']);
+    expect($names($p->set('filter', 'backlog')))->toBe(['Checkout', 'Reviewing']);
     $p->set('filter', 'completed');
     expect($names($p))->toBe(['Finished']);
     expect($p->viewData('doneRows'))->toHaveCount(0); // shown expanded in the main area instead
@@ -182,7 +187,14 @@ it('filters by user: assigned to the module or to any task in it', function () {
 
 it('shows an empty state when filters match nothing', function () {
     $s = listSetup();
+    $s['project']->sprints()->create(['name' => 'Sprint 1', 'status' => 'active', 'starts_on' => today(), 'ends_on' => today()->addDays(6)]);
     listPage($s)->set('filter', 'sprint')->assertSee('No modules match');
+});
+
+it('hints "No active sprint" on the Sprint filter and keeps everything in Backlog when none is active', function () {
+    $s = listSetup();
+    listPage($s)->set('filter', 'sprint')->assertSee('No active sprint')->assertDontSee('Checkout');
+    expect(listPage($s)->set('filter', 'backlog')->viewData('mainRows')->pluck('m.name')->all())->toBe(['Checkout']);
 });
 
 it('collapses completed modules into a counted section, including manual overrides', function () {

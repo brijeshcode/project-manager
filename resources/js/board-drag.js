@@ -31,6 +31,9 @@ document.addEventListener('alpine:init', () => {
  * `x-sortable` on a list: drag-to-reorder its children (each needs data-id) by their grip handle.
  *   data-sort-method  Livewire method on the nearest component, called with (ids[]) or (scope, ids[])
  *   data-sort-scope   optional leading argument (e.g. a module id)
+ *   data-sort-group   optional SortableJS group: lists sharing it accept each other's rows
+ *   data-sort-move    Livewire method called on the RECEIVING list when a row arrives from another list, with
+ *                     (rowId, data-sort-target as int, ids[] of this list after the drop); the sending list stays quiet
  *   data-sort-handle  CSS selector of the grip, default '.drag-handle'
  * Alpine re-runs it on every initialised element, so lists survive Livewire morphs like x-board-drag does.
  */
@@ -39,8 +42,15 @@ document.addEventListener('alpine:init', () => {
         const sortable = Sortable.create(el, {
             handle: el.dataset.sortHandle || '.drag-handle',
             draggable: '[data-id]',
+            group: el.dataset.sortGroup,
             animation: 150,
-            onEnd() {
+            onAdd(evt) {
+                if (!el.dataset.sortMove) return;
+                const ids = [...el.querySelectorAll(':scope > [data-id]')].map((c) => parseInt(c.dataset.id, 10));
+                window.Livewire.find(el.closest('[wire\\:id]')?.getAttribute('wire:id'))?.call(el.dataset.sortMove, parseInt(evt.item.dataset.id, 10), parseInt(el.dataset.sortTarget, 10), ids);
+            },
+            onEnd(evt) {
+                if (evt.from !== evt.to) return; // moved to another list: the receiving list reports it
                 const ids = [...el.querySelectorAll(':scope > [data-id]')].map((c) => parseInt(c.dataset.id, 10));
                 const args = el.dataset.sortScope !== undefined ? [parseInt(el.dataset.sortScope, 10), ids] : [ids];
                 window.Livewire.find(el.closest('[wire\\:id]')?.getAttribute('wire:id'))?.call(el.dataset.sortMethod, ...args);

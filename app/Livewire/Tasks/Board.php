@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -19,6 +20,14 @@ class Board extends Component
 
     #[Url]
     public ?int $filterModule = null;
+
+    /** Embedded in the Sprint tab: pinned to this sprint (set by the parent, not changeable from the browser). */
+    #[Locked]
+    public ?int $sprintId = null;
+
+    /** Board tab switch: all | sprint (the active sprint only). */
+    #[Url(as: 'scope')]
+    public string $scope = 'all';
 
     public bool $grouped = false;      // group by module: one swimlane per module
     public bool $managing = false;     // show the manage-columns panel
@@ -39,6 +48,18 @@ class Board extends Component
         return $this->project->columns()->get();
     }
 
+    #[Computed]
+    public function activeSprint(): ?\App\Models\Sprint
+    {
+        return $this->project->sprints()->active()->first();
+    }
+
+    /** Sprint to restrict to: the pinned one, the active one under "Active sprint" (0 = none exists, so nothing matches), or null for all tasks. */
+    private function sprintFilter(): ?int
+    {
+        return $this->sprintId ?? ($this->scope === 'sprint' ? ($this->activeSprint?->id ?? 0) : null);
+    }
+
     /**
      * Tasks grouped by board_column_id, restricted to project tasks visible
      * to the authenticated user (drafts of others excluded via visibleTo scope).
@@ -51,6 +72,7 @@ class Board extends Component
         return Task::visibleTo(auth()->user())
             ->whereIn('module_id', $this->project->modules()->pluck('id'))
             ->when($this->filterModule, fn ($q) => $q->where('module_id', $this->filterModule))
+            ->when($this->sprintFilter() !== null, fn ($q) => $q->where('sprint_id', $this->sprintFilter()))
             ->with(['module', 'type', 'labels', 'subtasks.checklistItems'])
             ->orderBy('position')
             ->orderBy('id')

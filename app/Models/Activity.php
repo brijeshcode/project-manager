@@ -33,9 +33,15 @@ class Activity extends Model
             'label_added' => "added the label {$this->new}",
             'label_removed' => "removed the label {$this->old}",
             'converted' => "converted this from a subtask of {$this->old}",
-            default => $this->field === 'description'
+            default => $this->field === 'sprint_id'
+                ? match (true) {
+                    $this->old === null => "added this to {$this->new}",
+                    $this->new === null => "removed this from {$this->old}",
+                    default => "moved this from {$this->old} to {$this->new}",
+                }
+                : ($this->field === 'description'
                 ? 'updated the description'
-                : "changed the {$field} from ".($this->old ?? 'none').' to '.($this->new ?? 'none'),
+                : "changed the {$field} from ".($this->old ?? 'none').' to '.($this->new ?? 'none')),
         };
     }
 }

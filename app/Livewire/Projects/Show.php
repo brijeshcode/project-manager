@@ -43,12 +43,6 @@ class Show extends Component
     #[Url(as: 'user')]
     public string $assignedTo = '';
 
-    // Step 3 definitions (statuses are derived). Step 4 (sprints) redefines Sprint/Backlog by sprint
-    // membership: swap inSprint() and its Backlog counterpart, nothing else reads these constants.
-    public const SPRINT_STATUSES = ['working', 'in_review'];
-
-    public const BACKLOG_STATUSES = ['pending', 'on_hold'];
-
     /** Keyed by module id. */
     public array $newTaskTitle = [];
 
@@ -213,12 +207,6 @@ class Show extends Component
         return $this->project->members()->wherePivot('active', true)->orderBy('name')->get();
     }
 
-    /** Step 4 swaps this for "has tasks in the active sprint". */
-    protected function inSprint(string $status): bool
-    {
-        return in_array($status, self::SPRINT_STATUSES, true);
-    }
-
     public function addTask(int $moduleId): void
     {
         $this->authorize('update', $this->project);
@@ -321,6 +309,9 @@ class Show extends Component
             ])
             ->get();
 
+        // Sprint = modules with at least one task in the ACTIVE sprint; Backlog = open modules without one.
+        $activeSprint = $this->project->sprints()->active()->first();
+        $sprintModules = $activeSprint ? Task::counted()->where('sprint_id', $activeSprint->id)->pluck('module_id')->unique() : collect();
         $userId = (int) $this->assignedTo;
         $filter = in_array($this->filter, ['all', 'sprint', 'backlog', 'completed'], true) ? $this->filter : 'all';
         $rows = $modules->map(fn ($m) => ['m' => $m, 'status' => $m->status()])
@@ -330,12 +321,12 @@ class Show extends Component
         $open = $rows->reject(fn ($r) => $r['status'] === 'completed')->values();
         $main = match ($filter) {
             'completed' => $done,
-            'sprint' => $open->filter(fn ($r) => $this->inSprint($r['status']))->values(),
-            'backlog' => $open->reject(fn ($r) => $this->inSprint($r['status']))->values(),
+            'sprint' => $rows->filter(fn ($r) => $sprintModules->contains($r['m']->id))->values(),
+            'backlog' => $open->reject(fn ($r) => $sprintModules->contains($r['m']->id))->values(),
             default => $open,
         };
 
-        $tabs = ['details' => 'Details', 'modules' => 'Modules', 'resources' => 'Resources', 'board' => 'Board']
+        $tabs = ['details' => 'Details', 'modules' => 'Modules', 'sprint' => 'Sprint', 'resources' => 'Resources', 'board' => 'Board']
             + (auth()->user()->can('manage-money') ? ['economics' => 'Economics'] : []);
 
         return view('livewire.projects.show', [
@@ -346,6 +337,7 @@ class Show extends Component
             'mainRows' => $main,
             'doneRows' => $filter === 'all' ? $done : collect(),
             'filter'   => $filter,
+            'activeSprint' => $activeSprint,
             'candidates' => $this->candidates(),
             'userOptions' => $this->project->members()->orderBy('name')->get(),
             'progress' => app(ProgressService::class),

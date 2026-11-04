@@ -44,6 +44,37 @@ class DemoSeeder extends Seeder
         $this->seedBulk();
         $this->seedLargeProject();
         $this->seedTypes();
+        $this->seedSprints();
+    }
+
+    /**
+     * Two projects get sprints: one completed (done tasks linked), one active spanning this week (tasks across stages),
+     * one planned; the rest stays in the backlog. Written straight to the table (no activity noise); idempotent per project.
+     */
+    private function seedSprints(): void
+    {
+        $monday = now()->startOfWeek();
+        foreach (['Customer Portal Revamp', 'Northwind Storefront'] as $name) {
+            $project = Project::where('name', $name)->first();
+            if (! $project || $project->sprints()->exists()) {
+                continue;
+            }
+            $make = fn (string $n, string $status, $from, $goal) => $project->sprints()->create([
+                'name' => $n, 'status' => $status, 'goal' => $goal, 'starts_on' => $from->copy()->toDateString(), 'ends_on' => $from->copy()->addDays(6)->toDateString(),
+                'completed_at' => $status === 'completed' ? $from->copy()->addDays(6) : null,
+            ]);
+            $past = $make('Sprint 1', 'completed', $monday->copy()->subWeek(), 'Foundations in place.');
+            $active = $make('Sprint 2', 'active', $monday, 'Ship the first usable slice.');
+            $planned = $make('Sprint 3', 'planned', $monday->copy()->addWeek(), 'Polish and hardening.');
+
+            $tasks = Task::counted()->whereIn('module_id', $project->modules()->pluck('id'))->with('column')->orderBy('id')->get();
+            [$done, $open] = $tasks->partition(fn ($t) => $t->column?->stage === 'done');
+            $set = fn ($ts, $s) => $ts->each(fn ($t) => \Illuminate\Support\Facades\DB::table('tasks')->where('id', $t->id)->update(['sprint_id' => $s->id]));
+            $set($done->take(2), $past);
+            $set($done->slice(2, 1), $active); // one finished task already in the active sprint
+            $set($open->values()->filter(fn ($t, $i) => $i % 3 === 0)->take(7), $active);
+            $set($open->values()->filter(fn ($t, $i) => $i % 3 === 1)->take(4), $planned);
+        }
     }
 
     /** A mix of task types: tasks still on the default "Task" type are spread over the others (written straight to the table, no activity noise). */
