@@ -237,7 +237,7 @@ trait ItemPage
     {
         $m = $this->item();
         $items = $m->commentThreads()->map(fn ($c) => ['at' => $c->created_at, 'kind' => 'comment', 'seq' => $c->id, 'm' => $c]);
-        $items = $items->concat($m->activities()->with('user')->get()->map(fn ($a) => ['at' => $a->created_at, 'kind' => 'activity', 'seq' => $a->id, 'm' => $a]));
+        $items = $items->concat($m->activities()->visibleTo(auth()->user())->with('user')->get()->map(fn ($a) => ['at' => $a->created_at, 'kind' => 'activity', 'seq' => $a->id, 'm' => $a]));
         $items = $items->concat($this->extraTimeline());
 
         return $items->sortBy(fn ($i) => [$i['at']?->getTimestamp() ?? 0, $i['seq']])->values();

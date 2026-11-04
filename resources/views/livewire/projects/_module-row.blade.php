@@ -133,9 +133,12 @@
                                         {{-- Checklist --}}
                                         <div>
                                             <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Checklist</p>
-                                            <ul class="space-y-1.5">
+                                            <ul class="space-y-1.5" x-data x-sortable data-sort-method="reorderChecklist" data-sort-scope="{{ $task->id }}" data-sort-handle=".item-handle" data-test="task-checklist-items">
                                                 @foreach ($task->checklistItems as $item)
-                                                    <li>
+                                                    <li wire:key="mci-{{ $item->id }}" data-id="{{ $item->id }}" class="flex items-center gap-1.5">
+                                                        @if ($canManage)
+                                                            <span class="item-handle cursor-grab text-slate-300 hover:text-slate-500" title="Drag to reorder" aria-label="Drag to reorder" data-test="item-handle"><x-icon name="grip-vertical" /></span>
+                                                        @endif
                                                         <button wire:click="toggleChecklistItem({{ $item->id }})" @class(['flex w-full items-center gap-2 text-left text-sm', 'text-slate-400 line-through' => $item->is_done, 'text-slate-700' => ! $item->is_done]) @if(! $canManage) disabled @endif>
                                                             <span @class(['flex h-4 w-4 shrink-0 items-center justify-center rounded border', 'border-brand-600 bg-brand-600 text-white' => $item->is_done, 'border-slate-300' => ! $item->is_done])>
                                                                 @if ($item->is_done)<svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>@endif
@@ -159,10 +162,12 @@
                                         {{-- Subtasks --}}
                                         <div>
                                             <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Subtasks</p>
-                                            <ul class="space-y-1.5">
+                                            <ul class="space-y-1.5" x-data x-sortable data-sort-method="reorderSubtasksOf" data-sort-scope="{{ $task->id }}" data-sort-handle=".item-handle" data-test="task-subtasks">
                                                 @foreach ($task->subtasks as $subtask)
-                                                    <li class="flex items-center gap-2 text-sm text-slate-700">
-                                                        <span class="h-1.5 w-1.5 rounded-full bg-slate-300"></span>
+                                                    <li wire:key="msub-{{ $subtask->id }}" data-id="{{ $subtask->id }}" class="flex items-center gap-1.5 text-sm text-slate-700">
+                                                        @if ($canManage)
+                                                            <span class="item-handle cursor-grab text-slate-300 hover:text-slate-500" title="Drag to reorder" aria-label="Drag to reorder" data-test="item-handle"><x-icon name="grip-vertical" /></span>
+                                                        @endif
                                                         {{ $subtask->title }}
                                                     </li>
                                                 @endforeach
@@ -171,10 +176,14 @@
                                                 @endif
                                             </ul>
                                             @if ($canManage)
-                                                <form wire:submit.prevent="addSubtask({{ $task->id }})" class="mt-2 flex gap-2">
-                                                    <input type="text" wire:model="newSubtaskTitle.{{ $task->id }}" placeholder="Add subtask…" class="input h-8 flex-1 py-1 text-sm">
-                                                    <button type="submit" class="btn btn-secondary h-8 px-2.5 py-1 text-xs">Add</button>
-                                                </form>
+                                                <div class="mt-2" x-data="{ adding: false }">
+                                                    <button type="button" x-show="!adding" @click="adding = true; $nextTick(() => $refs.sub.focus())" class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700" data-test="add-subtask-link"><x-icon name="plus" /> Add subtask</button>
+                                                    <form x-show="adding" style="display:none" wire:submit.prevent="addSubtask({{ $task->id }})" @submit="adding = false" class="flex gap-2" data-test="add-subtask-form">
+                                                        <input type="text" x-ref="sub" wire:model="newSubtaskTitle.{{ $task->id }}" placeholder="Add subtask…" class="input h-8 flex-1 py-1 text-sm" @keydown.escape="adding = false">
+                                                        <button type="submit" class="btn btn-secondary h-8 px-2.5 py-1 text-xs">Add</button>
+                                                        <button type="button" @click="adding = false" class="btn btn-ghost h-8 px-2" title="Cancel" aria-label="Cancel"><x-icon name="x" /></button>
+                                                    </form>
+                                                </div>
                                             @endif
                                         </div>
                                       </div>

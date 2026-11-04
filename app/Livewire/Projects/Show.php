@@ -281,6 +281,20 @@ class Show extends Component
         $this->newChecklistTitle[$taskId] = '';
     }
 
+    /** Drag-reorder of a task's checklist items (same logic as the task page). */
+    public function reorderChecklist(int $taskId, array $ids): void
+    {
+        $this->authorize('update', $this->project);
+        ChecklistItem::reorder(array_map('intval', $ids), Task::class, $this->taskInProject($taskId)->id);
+    }
+
+    /** Drag-reorder of a task's subtasks (same logic as the task page). */
+    public function reorderSubtasksOf(int $taskId, array $ids): void
+    {
+        $this->authorize('update', $this->project);
+        Subtask::reorder($ids, $this->taskInProject($taskId)->id);
+    }
+
     public function toggleChecklistItem(int $itemId): void
     {
         $this->authorize('update', $this->project);

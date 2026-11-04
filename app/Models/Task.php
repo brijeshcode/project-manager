@@ -25,7 +25,7 @@ class Task extends Model
     use LogsActivity { activityValue as protected baseActivityValue; }
 
     /** Changes to these are written to the activity log. */
-    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'task_type_id', 'board_column_id', 'client_visible', 'estimate_hours', 'started_at', 'completed_at', 'sprint_id', 'billing_mode', 'hourly_rate', 'billable_hours'];
+    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'task_type_id', 'board_column_id', 'client_visible', 'estimate_hours', 'started_at', 'completed_at', 'sprint_id', 'billing_mode', 'hourly_rate', 'billable_hours', 'budget_amount'];
 
     protected $attributes = [
         'is_idea'        => false,
@@ -92,6 +92,9 @@ class Task extends Model
     protected static function booting(): void
     {
         static::saving(function (self $t) {
+            // hourly values are derived (hours x rate, both logged): no row per recalculation
+            $t->activityMute = array_values(array_diff($t->activityMute, ['budget_amount']));
+            $t->billingMode() === 'hourly' && $t->activityMute[] = 'budget_amount';
             if ($t->billingMode() === 'hourly' && (! $t->exists || $t->isDirty(['billing_mode', 'hourly_rate', 'billable_hours', 'module_id', 'budget_amount']))) {
                 $t->budget_amount = $t->derivedValue();
             }

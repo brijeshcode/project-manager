@@ -1,4 +1,5 @@
 <?php
+uses(Tests\TestCase::class);
 
 it('reapplies dark mode after livewire navigate swaps html', function () {
     expect(file_get_contents(base_path('resources/js/theme.js')))

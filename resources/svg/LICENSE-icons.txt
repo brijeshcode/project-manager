@@ -1,4 +1,4 @@
-Icons in resources/svg/icons are copied from Lucide (https://lucide.dev), licensed under the ISC License.
+Icons in resources/svg/icons are copied from Lucide (https://lucide.dev, lucide-static v1.68.0), licensed under the ISC License.
 
 ISC License
 

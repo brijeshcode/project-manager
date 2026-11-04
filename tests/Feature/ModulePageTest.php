@@ -284,11 +284,12 @@ it('merges comments, activity and budget changes by time, with threaded replies'
     $m->update(['name' => 'Payments']);
     $m->activities()->first()->forceFill(['created_at' => $t->copy()->addMinutes(3)])->save();
     $m->updateBudget(['budget_hours' => '10'], $s['admin'], '');
+    $m->activities()->where('field', 'budget_hours')->first()->forceFill(['created_at' => $t->copy()->addMinutes(4)])->save(); // amount rows are logged too
     $m->budgetChanges()->first()->forceFill(['created_at' => $t->copy()->addMinutes(5)])->save();
 
     $c = modPage($s);
     $tl = $c->instance()->timeline();
-    expect($tl->pluck('kind')->all())->toBe(['comment', 'activity', 'budget']); // oldest first; reply sits inside its thread
+    expect($tl->pluck('kind')->all())->toBe(['comment', 'activity', 'activity', 'budget']); // oldest first; reply sits inside its thread
     expect($tl->first()['m']->replies->pluck('body')->all())->toBe(['A reply']);
     $c->assertSeeInOrder(['First', 'A reply', 'changed the name from Checkout to Payments', 'changed the budget']);
 });

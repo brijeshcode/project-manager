@@ -1,6 +1,6 @@
 # Project Tracker ("Helm") — Status & Next Steps
 
-_Last updated: 2026-11-01. Branch: `local-currency` (local-currency work on top of phase 3; merge to `main` pending the owner). Tests: **628 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
+_Last updated: 2026-11-04. Branch: `main`. Tests: **1001 passing** (Pest). Cypress specs written but not run on this machine (Electron crashes — run on CI)._
 
 This is the living "where are we / what's next" doc. The task-by-task build plan is
 [docs/superpowers/plans/2026-10-26-project-tracker-phase-1.md](superpowers/plans/2026-10-26-project-tracker-phase-1.md);
@@ -67,7 +67,7 @@ Money is owner-only (`manage-money` gate); amounts are integer cents.
 - Owner-only project economics (revenue vs. derived cost; flat-rate cost counted once per project).
 - `DemoSeeder` also seeds hourly billing, one module budget, one recurring charge and one demo bank account (idempotent; no invoices/payments).
 
-### ✅ Local currency — built (branch `local-currency`)
+### ✅ Local currency — built
 Spec: [docs/superpowers/specs/2026-11-02-local-currency-design.md](superpowers/specs/2026-11-02-local-currency-design.md). Owner-only; **the client portal, invoice PDF and invoice email never show local currency**.
 
 - **Setting:** system-wide local currency, default **INR**, on the owner-only **Settings** page. It locks once any money is recorded.
@@ -77,6 +77,23 @@ Spec: [docs/superpowers/specs/2026-11-02-local-currency-design.md](superpowers/s
 - **Dashboard, project and client pages** show local figures with all-or-nothing totals: if any payment/invoice lacks a rate the total is hidden and a "N without a rate" note is shown.
 - **Payment documents:** up to 5 per payment (PDF/image), stored on the private disk, owner-only download route (`nosniff`), removed with the payment.
 - Guard: `tests/Feature/PortalLocalCurrencyPrivacyTest.php` renders every portal page as a client and asserts no local figure, rate, document name or settings text appears.
+
+### ✅ Modules overhaul — built (branch `main`, 2026-11-02 → 2026-11-04)
+Work-management layer on top of phases 1-3; all of it is in `main`. Older plan/spec documents were not updated.
+
+- **Project key and task codes:** each project has a 3-5 letter `key` (auto-derived from the name, unique, editable); tasks get a per-project number and show as `KEY-12`. `/t/{code}` redirects to the task.
+- **Board columns and templates:** columns are per project (name, stage, order), created from a template and editable; module status and progress are derived from task stages and checklist/subtask completion (one progress rule everywhere). The Board tab has drag between columns, a filter toolbar, group-by-module swimlanes, and a card opens the task in a side panel.
+- **Sprints:** per-project Sprint tab with a plan view, one active sprint at a time, rollover of open tasks on completion; Done tasks sink in sprint lists.
+- **Task types and labels:** dynamic task types (icon, colour, default type) and labels with icons, seeded defaults, super-admin pages under Settings (`manage-taxonomy`).
+- **Issue-style pages:** module, task and subtask pages share one layout (breadcrumbs, markdown description with edit history, comments + activity timeline, side panel with assignees, priority, dates, labels, type, sprint). Subtasks can be converted to tasks, tasks can be copied, modules are added on their own page.
+- **Markdown editor and attachments:** toolbar editor with preview and image/file uploads on modules, tasks and subtasks; downloads go through a permission-checked route.
+- **Modules tab:** module list with priority, drag order, row assignees, filters (sprint / backlog / completed, user), collapsed Completed section; expanded rows edit description and budget and show each task with description, checklist, subtasks and time. Checklist items and subtasks are drag-reorderable; "+ Add subtask" reveals its input.
+- **Resources:** redesigned and encrypted (values encrypted at rest, masked until revealed), task-style editor, labels, per-resource viewers, and an access log (viewed / edited / viewer added or removed) shown to admins.
+- **Budget model:** each module is `fixed` (amount) or `hourly` (hours x rate); tasks follow the module and can override mode/rate; a task bills its logged hours or an explicit **billed hours** value; a module cap blocks task amounts that exceed it; project totals are calculated from modules. Done tasks of a sprint become **sprint invoice lines**. Budget edits keep their `ModuleBudgetChange` history (reason required when overwriting).
+- **Activity log:** assignees, labels, sprint, column, type, deadline, description and amount changes are written to `activities`. Amount rows (`budget_amount`, `budget_hours`, `hourly_rate`, `billable_hours`, `billing_mode`) are hidden, summary and values, from anyone without `manage-money`. Hourly task amounts are derived and not logged separately.
+- **Layout and settings:** three sidebar layouts (full, half = icons only, mini = menu button); **System settings** (`manage-system`, super admin) sets the system-wide sidebar layout and the **rows-per-page** setting (10-100) used by every list. Project breadcrumbs on all project pages; split-screen login; public registration removed.
+- **Client portal visibility:** clients see only published, `client_visible` tasks and modules, never activity, attachments, budgets or the staff pages (404); they can comment on visible items and create tasks. Developers never see amounts; only `super_admin` holds `manage-money`.
+- **Icons:** `<x-icon name="…">` renders the Lucide SVGs in `resources/svg/icons` (ISC, licence file alongside); no icon package is a project dependency.
 
 ---
 
@@ -129,6 +146,13 @@ Still open by choice:
 - **Flat-rate time cost** `derivedCost()` returns the flat amount per entry; `ProjectEconomics` de-dups once per project.
 - `client_approval` and task `section` stay raw strings (two values each; an enum adds nothing yet).
 - Cypress cannot run on this machine (Electron crash) — run specs on CI.
+
+## Modules overhaul — known limits
+
+- Not built: client file uploads, sprint role restrictions, Playwright/Cypress suites (drag-and-drop was verified by hand in a real browser, not by automated browser tests).
+- Inline editors on the Modules tab are text-only (no uploads); attach files on the module/task page.
+- Hourly task amounts are derived, so they have no activity rows of their own (hours and rate are logged).
+- Drag handles are shown only to users who can edit the project; the reorder endpoints re-check that server-side.
 
 ## Phase 3 deferred items / known limits
 

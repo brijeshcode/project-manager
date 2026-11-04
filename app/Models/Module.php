@@ -22,7 +22,7 @@ class Module extends Model
     use LogsActivity { activityValue as protected baseActivityValue; }
 
     /** Changes to these are written to the activity log. */
-    public array $loggedFields = ['name', 'description', 'status_override', 'deadline', 'client_visible', 'priority'];
+    public array $loggedFields = ['name', 'description', 'status_override', 'deadline', 'client_visible', 'priority', 'billing_mode', 'budget_hours', 'hourly_rate', 'budget_amount'];
 
     protected $attributes = ['client_visible' => false, 'priority' => 1];
 

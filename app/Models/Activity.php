@@ -10,7 +10,15 @@ class Activity extends Model
 {
     public const UPDATED_AT = null;
 
+    /** Rows about amounts: only users with the manage-money gate may see them (developers never see money). */
+    public const MONEY_FIELDS = ['budget_amount', 'budget_hours', 'hourly_rate', 'billable_hours', 'billing_mode'];
+
     protected $fillable = ['user_id', 'event', 'field', 'old', 'new', 'reason'];
+
+    public function scopeVisibleTo($q, ?User $user)
+    {
+        return $user?->can('manage-money') ? $q : $q->where(fn ($w) => $w->whereNull('field')->orWhereNotIn('field', self::MONEY_FIELDS));
+    }
 
     public function subject(): MorphTo
     {
