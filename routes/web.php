@@ -99,7 +99,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('tasks/{task}/edit', TaskForm::class)->name('tasks.edit');
     Route::get('tasks/{task}', \App\Livewire\Tasks\Show::class)->whereNumber('task')->name('tasks.show');
     Route::get('subtasks/{subtask}', \App\Livewire\Subtasks\Show::class)->whereNumber('subtask')->name('subtasks.show');
-    Route::get('resource-items/{item}/download', \App\Http\Controllers\ResourceItemDownloadController::class)->whereNumber('item')->name('resource-items.download');
 });
 
 require __DIR__.'/auth.php';

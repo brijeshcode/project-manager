@@ -15,7 +15,7 @@ class Attachment extends Model
     /** Raster types that are safe to show inline; everything else downloads. */
     public const INLINE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 
-    protected $fillable = ['user_id', 'path', 'name', 'mime', 'size'];
+    protected $fillable = ['user_id', 'path', 'name', 'mime', 'size', 'encrypted'];
 
     protected static function booted(): void
     {

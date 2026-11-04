@@ -40,6 +40,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('mime')->nullable();
             $table->unsignedBigInteger('size')->default(0);
+            $table->boolean('encrypted')->default(false); // file bytes encrypted at rest (resources)
             $table->timestamps();
         });
     }

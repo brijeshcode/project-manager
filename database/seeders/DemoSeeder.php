@@ -37,8 +37,8 @@ class DemoSeeder extends Seeder
             $this->seedWorkspace();
         }
 
-        $this->seedResource();
         $this->seedModuleCollaboration();
+        $this->seedResource();
         $this->seedTaskCollaboration();
         $this->seedBilling();
         $this->seedBulk();
@@ -217,29 +217,53 @@ See the [gateway docs](https://example.com/docs).", 'client_visible' => true]);
         auth()->forgetUser();
     }
 
+    /** Realistic resources on the Storefront: credentials, links, one with an (encrypted) image attachment. */
     private function seedResource(): void
     {
         $project = Project::where('name', 'Northwind Storefront')->first();
         $admin = User::where('email', 'admin@example.com')->first();
-        if (! $project || ! $admin) {
+        if (! $project || ! $admin || $project->resources()->exists()) {
             return;
         }
+        $dev = User::where('email', 'priya@example.com')->first();
+        $client = User::where('email', 'client@example.com')->first();
+        $label = fn ($n) => \App\Models\Label::where('name', $n)->value('id');
 
-        $resource = Resource::firstOrCreate(
-            ['project_id' => $project->id, 'title' => 'Staging access'],
-            ['description' => 'Demo shared resource'],
-        );
-        if ($resource->items()->exists()) {
-            return;
+        auth()->setUser($admin);
+        $make = function (string $title, string $value, array $labels, array $viewers, ?User $by = null) use ($project, $admin, $label) {
+            $by ??= $admin;
+            auth()->setUser($by);
+            $r = Resource::create(['project_id' => $project->id, 'title' => $title, 'value' => $value, 'created_by' => $by->id]);
+            $r->logActivity('created');
+            $r->viewers()->sync(collect($viewers)->filter()->map->id->all());
+            $r->labels()->sync(collect($labels)->map($label)->filter()->all());
+
+            return $r;
+        };
+
+        $make('Production database', "**Host:** `db.northwind.example.com:5432`\n\n- **Username:** `northwind_app`\n- **Password:** `Pr0d-9fK2!vQx7`\n\nRead replica: `db-ro.northwind.example.com`. Rotate the password every quarter.", ['Production'], [$dev]);
+        $make('Staging site and admin login', "- **URL:** https://staging.northwind.example.com\n- **Admin:** https://staging.northwind.example.com/admin\n- **Username:** `qa@northwind.example.com`\n- **Password:** `staging-Tr4de!`\n\nBasic-auth in front: `preview` / `northwind2026`.", ['Staging'], [$dev, $client]);
+        $make('Payment gateway sandbox keys', "Publishable: `pk_test_51NwDemoPublishableKey`\n\nSecret: `sk_test_51NwDemoSecretKeyDoNotShare`\n\nWebhook signing secret: `whsec_demo_9d8f7a6b5c4d3e2f`", ['Development'], [$dev]);
+        $make('Local development setup', "1. Copy `.env.example` to `.env`\n2. `composer install && npm install`\n3. Seeded login: `dev@northwind.test` / `password`\n\nMailpit runs on http://localhost:8025.", ['Development'], [$dev, $client]);
+
+        // One with an image attachment (png), encrypted on disk like every resource file.
+        $img = imagecreatetruecolor(360, 160);
+        imagefill($img, 0, 0, imagecolorallocate($img, 238, 242, 255));
+        foreach ([[20, 'Browser'], [135, 'Storefront'], [250, 'Database']] as [$x, $t]) {
+            imagefilledrectangle($img, $x, 50, $x + 90, 100, imagecolorallocate($img, 79, 70, 229));
+            imagestring($img, 3, $x + 8, 70, $t, imagecolorallocate($img, 255, 255, 255));
         }
+        imageline($img, 110, 75, 135, 75, imagecolorallocate($img, 100, 116, 139));
+        imageline($img, 225, 75, 250, 75, imagecolorallocate($img, 100, 116, 139));
+        ob_start();
+        imagepng($img);
+        $png = (string) ob_get_clean();
+        $r = $make('Server access (SSH)', "Bastion: `ssh deploy@bastion.northwind.example.com`\n\nKey passphrase: `correct-horse-battery-staple`\n\nNetwork layout is in the diagram below.", ['Production', 'Staging'], []);
+        $a = $r->attachEncrypted($png, 'network-diagram.png', 'image/png', $admin->id);
+        $r->update(['value' => $r->value."\n\n![network-diagram.png]({$a->url()})"]);
+        $r->viewers()->sync(array_filter([$dev?->id]));
 
-        $item = $resource->items()->create([
-            'type' => 'text',
-            'label' => 'Staging URL',
-            'value' => 'https://staging.northwind.test',
-            'created_by' => $admin->id,
-        ]);
-        $item->assignees()->sync(User::whereIn('email', ['admin@example.com', 'client@example.com'])->pluck('id'));
+        auth()->forgetUser();
     }
 
     private function seedBilling(): void

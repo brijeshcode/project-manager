@@ -2,44 +2,48 @@
 
 namespace App\Livewire\Resources;
 
+use App\Livewire\Concerns\HandlesMarkdownUploads;
+use App\Models\Label;
 use App\Models\Project;
 use App\Models\Resource;
-use App\Models\ResourceItem;
 use App\Models\User;
+use App\Support\Markdown;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
-use Livewire\WithFileUploads;
 
+/**
+ * The project's Resources tab: one row per secret. The value is never in the page: it is fetched by reveal() when a row
+ * is expanded (which also writes the access log).
+ *
+ * Attachments on a not-yet-saved resource: the first upload from the Add form creates a hidden DRAFT resource
+ * (is_draft) that owns the files; save() turns the draft into the real row, cancel deletes it (files included),
+ * and drafts older than a day are pruned whenever someone opens the Add form.
+ */
 class Panel extends Component
 {
-    use WithFileUploads;
-
-    public array $upload = [];
+    use HandlesMarkdownUploads;
 
     #[Locked]
     public Project $project;
 
-    public string $newTitle = '';
+    public string $search = '';
 
-    public string $newDescription = '';
+    public string $labelFilter = '';
 
-    /** Keyed by resource id. */
-    public array $itemLabel = [];
+    public bool $showForm = false;
 
-    public array $itemValue = [];
+    #[Locked]
+    public ?int $editingId = null;
 
-    /** Keyed by item id. */
-    public array $assigneeIds = [];
+    #[Locked]
+    public ?int $draftId = null;
 
-    public array $commentBody = [];
-
-    /** Keyed by item id (admin edit form). */
-    public array $editLabel = [];
-
-    public array $editValue = [];
+    /** title, value, labels (ids), viewers (user ids) */
+    public array $form = ['title' => '', 'value' => '', 'labels' => [], 'viewers' => []];
 
     public function mount(Project $project): void
     {
@@ -49,24 +53,44 @@ class Panel extends Component
         $this->project = $project;
     }
 
-    private function isAdmin(): bool
+    private function canAdd(): bool
     {
-        return (bool) auth()->user()?->hasRole('super_admin');
+        return ! auth()->user()->hasRole('client');
     }
 
     #[Computed]
     public function resources(): Collection
     {
-        $user = auth()->user();
+        $term = mb_substr(trim($this->search), 0, 100);
 
-        return Resource::visibleTo($user)
+        return Resource::visibleTo(auth()->user())
+            ->select('id', 'project_id', 'title', 'created_by', 'created_at', 'updated_at') // never load the value for the list
             ->where('project_id', $this->project->id)
-            ->with(['items' => fn ($q) => $q->visibleTo($user)->with(['assignees', 'creator', 'comments' => fn ($c) => $c->oldest('id')->with('author')])])
-            ->orderBy('id')
-            ->get();
+            ->when($term !== '', fn ($q) => $q->whereRaw("title like ? escape '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $term).'%']))
+            ->when($this->labelFilter !== '', fn ($q) => $q->whereHas('labels', fn ($l) => $l->where('labels.id', (int) $this->labelFilter)))
+            ->with(['labels', 'viewers', 'creator'])
+            ->latest('id')
+            ->get()
+            ->each->setRelation('project', $this->project); // canEdit() needs it; avoids a query per row
     }
 
-    /** Users who may be assigned: active project members + the project's client users. */
+    #[Computed]
+    public function labels(): Collection
+    {
+        return Label::orderBy('name')->get();
+    }
+
+    /** Label filter options: only labels on resources this user can see (a client must not learn other label names). */
+    #[Computed]
+    public function filterLabels(): Collection
+    {
+        $visible = Resource::visibleTo(auth()->user())->where('project_id', $this->project->id)->select('id');
+
+        return Label::whereIn('id', DB::table('labelables')->where('labelable_type', (new Resource)->getMorphClass())
+            ->whereIn('labelable_id', $visible)->select('label_id'))->orderBy('name')->get();
+    }
+
+    /** Users who may be viewers: active project members + the project's client users. */
     #[Computed]
     public function candidates(): Collection
     {
@@ -78,142 +102,135 @@ class Panel extends Component
             ->get();
     }
 
-    public function addResource(): void
+    private function find(int $id): Resource
     {
-        abort_unless($this->isAdmin(), 403);
-        $this->validate(['newTitle' => 'required|string|max:255', 'newDescription' => 'nullable|string|max:5000']);
-
-        $this->project->resources()->create([
-            'title' => $this->newTitle,
-            'description' => $this->newDescription ?: null,
-        ]);
-
-        $this->reset('newTitle', 'newDescription');
-        unset($this->resources);
+        return Resource::visibleTo(auth()->user())->where('project_id', $this->project->id)->findOrFail($id);
     }
 
-    public function addTextItem(int $resourceId): void
+    private function editable(int $id): Resource
+    {
+        $r = $this->find($id);
+        abort_unless($r->canEdit(auth()->user()), 403);
+
+        return $r;
+    }
+
+    // ── add / edit form ──
+
+    public function openAdd(): void
+    {
+        abort_unless($this->canAdd(), 403);
+        Resource::where('is_draft', true)->where('updated_at', '<', now()->subDay())->get()->each->delete();
+        $this->reset('form', 'editingId', 'draftId');
+        $this->resetValidation();
+        $this->showForm = true;
+    }
+
+    public function startEdit(int $id): void
+    {
+        $r = $this->editable($id);
+        $r->logView(auth()->user()); // the editor sees the value in the form
+        $this->resetValidation();
+        $this->form = [
+            'title' => $r->title, 'value' => (string) $r->value,
+            'labels' => $r->labels()->pluck('labels.id')->map(fn ($i) => (string) $i)->all(),
+            'viewers' => $r->viewers()->pluck('users.id')->map(fn ($i) => (string) $i)->all(),
+        ];
+        $this->editingId = $r->id;
+        $this->draftId = null;
+        $this->showForm = true;
+    }
+
+    public function cancelForm(): void
+    {
+        $this->draftId && Resource::where('is_draft', true)->where('created_by', auth()->id())->whereKey($this->draftId)->first()?->delete();
+        $this->reset('form', 'editingId', 'draftId', 'showForm');
+    }
+
+    protected function uploadTarget(): Model
+    {
+        if ($this->editingId) {
+            return $this->editable($this->editingId);
+        }
+        abort_unless($this->canAdd(), 403);
+        $draft = $this->draftId ? Resource::where('is_draft', true)->where('created_by', auth()->id())->find($this->draftId) : null;
+        $draft ??= Resource::create(['project_id' => $this->project->id, 'title' => '', 'created_by' => auth()->id(), 'is_draft' => true]);
+        $this->draftId = $draft->id;
+
+        return $draft;
+    }
+
+    public function save(): void
     {
         $user = auth()->user();
-        $resource = Resource::visibleTo($user)->where('project_id', $this->project->id)->findOrFail($resourceId);
-
         $this->validate([
-            "itemLabel.$resourceId" => 'required|string|max:255',
-            "itemValue.$resourceId" => 'required|string|max:10000',
-        ]);
+            'form.title' => 'required|string|max:255',
+            'form.value' => 'required|string|max:50000',
+            'form.labels' => 'array',
+            'form.labels.*' => 'integer|exists:labels,id',
+            'form.viewers' => 'array',
+            'form.viewers.*' => 'integer|in:'.$this->candidates->pluck('id')->implode(','),
+        ], ['form.title.required' => 'Give the resource a title.', 'form.value.required' => 'Enter the value to store.']);
 
-        $item = $resource->items()->create([
-            'type' => 'text',
-            'label' => trim($this->itemLabel[$resourceId]),
-            'value' => $this->itemValue[$resourceId],
-            'created_by' => $user->id,
-        ]);
-        $item->assignees()->attach($user->id);
+        $labels = collect($this->form['labels'])->map(fn ($i) => (int) $i)->unique()->all();
+        $viewers = collect($this->form['viewers'])->map(fn ($i) => (int) $i)->unique()->all();
+        $title = trim($this->form['title']);
 
-        unset($this->itemLabel[$resourceId], $this->itemValue[$resourceId]);
+        if ($this->editingId) {
+            $r = $this->editable($this->editingId);
+            $changed = array_filter(['title' => $r->title !== $title, 'value' => $r->value !== $this->form['value']]);
+            $r->update(['title' => $title, 'value' => $this->form['value']]);
+            $changed && $r->logActivity('edited', implode(' and ', array_keys($changed))); // field names only, never the value
+            $r->logSync('viewers', $viewers, 'viewer_added', 'viewer_removed');
+            $r->syncLabels($labels);
+        } else {
+            abort_unless($this->canAdd(), 403);
+            $draft = $this->draftId ? Resource::where('is_draft', true)->where('created_by', $user->id)->find($this->draftId) : null;
+            $r = $draft ?? new Resource;
+            $r->fill(['project_id' => $this->project->id, 'title' => $title, 'value' => $this->form['value'], 'created_by' => $user->id, 'is_draft' => false])->save();
+            $r->logActivity('created');
+            $r->viewers()->sync($viewers);
+            $r->labels()->sync($labels);
+        }
+
+        $this->reset('form', 'editingId', 'draftId', 'showForm');
         unset($this->resources);
+        $this->dispatch('resources-changed'); // open rows re-fetch their value and log
     }
 
-    public function addFileItem(int $resourceId, string $type): void
+    // ── expanded row ──
+
+    /** Fetch the value for an expanded row (rendered + raw for Copy) and log the reveal; editors also get the access log. */
+    public function reveal(int $id): array
     {
         $user = auth()->user();
-        $resource = Resource::visibleTo($user)->where('project_id', $this->project->id)->findOrFail($resourceId);
-
-        validator(['type' => $type], ['type' => 'in:image,file'])->validate();
-        $mimes = $type === 'image' ? 'png,jpg,jpeg,webp,gif' : 'pdf,doc,docx,xls,xlsx,zip';
-        $this->validate([
-            "itemLabel.$resourceId" => 'required|string|max:255',
-            "upload.$resourceId" => "required|file|mimes:$mimes|max:10240",
-        ]);
-
-        $file = $this->upload[$resourceId];
-        $name = basename(str_replace(chr(92), '/', $file->getClientOriginalName()));
-        $name = mb_substr(preg_replace('/[\x00-\x1F\x7F]/u', '', $name), 0, 255);
-
-        $item = $resource->items()->create([
-            'type' => $type,
-            'label' => trim($this->itemLabel[$resourceId]),
-            'value' => $file->store('resources', 'local'),
-            'original_name' => $name !== '' ? $name : 'file',
-            'created_by' => $user->id,
-        ]);
-        $item->assignees()->attach($user->id);
-
-        unset($this->itemLabel[$resourceId], $this->upload[$resourceId]);
-        unset($this->resources);
-    }
-
-    public function setAssignees(int $itemId, array $userIds): void
-    {
-        abort_unless($this->isAdmin(), 403);
-        $item = ResourceItem::visibleTo(auth()->user())
-            ->whereHas('resource', fn ($r) => $r->where('project_id', $this->project->id))
-            ->findOrFail($itemId);
-
-        $ids = collect($userIds)->map(fn ($i) => (int) $i)->unique()->values();
-        if ($ids->diff($this->candidates->pluck('id'))->isNotEmpty()) {
-            throw ValidationException::withMessages(['assignees' => 'Every assignee must be an active project member or a client user of this project.']);
+        $r = $this->find($id);
+        $r->logView($user);
+        $out = ['html' => Markdown::render($r->value), 'raw' => (string) $r->value, 'log' => ''];
+        if ($r->canEdit($user)) {
+            $out['log'] = view('livewire.resources._log', ['activities' => $r->activities()->with('user')->limit(50)->get()])->render();
         }
 
-        $item->assignees()->sync($ids->all());
-        unset($this->resources);
+        return $out;
     }
 
-    public function addComment(int $itemId): void
+    public function toggleViewer(int $id, int $userId): void
     {
-        $user = auth()->user();
-        $item = ResourceItem::visibleTo($user)
-            ->whereHas('resource', fn ($r) => $r->where('project_id', $this->project->id))
-            ->findOrFail($itemId);
-
-        $this->validate(["commentBody.$itemId" => 'required|string|max:2000']);
-
-        $item->comments()->create(['author_id' => $user->id, 'body' => $this->commentBody[$itemId]]);
-
-        unset($this->commentBody[$itemId]);
+        $r = $this->editable($id);
+        abort_unless($this->candidates->contains('id', $userId), 403);
+        $ids = $r->viewers()->pluck('users.id')->all();
+        $ids = in_array($userId, $ids, true) ? array_values(array_diff($ids, [$userId])) : [...$ids, $userId];
+        $r->logSync('viewers', $ids, 'viewer_added', 'viewer_removed');
         unset($this->resources);
+        $this->dispatch('resources-changed');
     }
 
-    public function updateItem(int $itemId): void
+    public function deleteResource(int $id): void
     {
-        abort_unless($this->isAdmin(), 403);
-        $item = $this->projectItem($itemId);
-
-        $rules = ["editLabel.$itemId" => 'required|string|max:255'];
-        if ($item->type === 'text') {
-            $rules["editValue.$itemId"] = 'required|string|max:10000';
-        }
-        $this->validate($rules);
-
-        $item->label = trim($this->editLabel[$itemId]);
-        if ($item->type === 'text') {
-            $item->value = $this->editValue[$itemId];
-        }
-        $item->save();
-
-        unset($this->editLabel[$itemId], $this->editValue[$itemId]);
+        $r = $this->editable($id);
+        $r->logActivity('deleted', null, $r->title); // the activity row outlives the resource as the audit trail
+        $r->delete();
         unset($this->resources);
-    }
-
-    public function deleteItem(int $itemId): void
-    {
-        abort_unless($this->isAdmin(), 403);
-        $this->projectItem($itemId)->delete();
-        unset($this->resources);
-    }
-
-    public function deleteResource(int $resourceId): void
-    {
-        abort_unless($this->isAdmin(), 403);
-        $this->project->resources()->findOrFail($resourceId)->delete();
-        unset($this->resources);
-    }
-
-    private function projectItem(int $itemId): ResourceItem
-    {
-        return ResourceItem::visibleTo(auth()->user())
-            ->whereHas('resource', fn ($r) => $r->where('project_id', $this->project->id))
-            ->findOrFail($itemId);
     }
 
     public function render()

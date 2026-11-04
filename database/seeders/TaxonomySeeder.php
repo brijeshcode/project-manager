@@ -18,6 +18,10 @@ class TaxonomySeeder extends Seeder
         'Backend' => ['#6366f1', 'server'],
         'Documentation' => ['#10b981', 'book-open'],
         'Question' => ['#8b5cf6', 'circle-help'],
+        // environments, used mainly on Resources
+        'Production' => ['#ef4444', 'rocket'],
+        'Staging' => ['#eab308', 'server'],
+        'Development' => ['#10b981', 'code'],
     ];
 
     public function run(): void

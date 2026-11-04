@@ -32,6 +32,12 @@ class Activity extends Model
             'unassigned' => "unassigned {$this->old}",
             'label_added' => "added the label {$this->new}",
             'label_removed' => "removed the label {$this->old}",
+            'created' => 'created this resource',
+            'viewed' => 'viewed the value',
+            'edited' => 'edited the '.($this->field ?? 'resource'),
+            'viewer_added' => "gave {$this->new} access",
+            'viewer_removed' => "removed access for {$this->old}",
+            'deleted' => 'deleted this resource',
             'converted' => "converted this from a subtask of {$this->old}",
             default => $this->field === 'sprint_id'
                 ? match (true) {

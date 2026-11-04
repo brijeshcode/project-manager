@@ -47,20 +47,20 @@ function ttSetup(): array
 
 it('seeds default types and labels once, keeping later edits', function () {
     expect(TaskType::orderBy('position')->pluck('name')->all())->toBe(['Task', 'Issue', 'Feature', 'Bug', 'Change']);
-    expect(Label::orderBy('id')->pluck('name')->all())->toBe(['Urgent', 'Blocked', 'Needs review', 'Design', 'Frontend', 'Backend', 'Documentation', 'Question']);
+    expect(Label::orderBy('id')->pluck('name')->all())->toBe(['Urgent', 'Blocked', 'Needs review', 'Design', 'Frontend', 'Backend', 'Documentation', 'Question', 'Production', 'Staging', 'Development']);
     expect(TaskType::where('name', 'Bug')->first())->color->toBe('#ef4444')->icon->toBe('bug')->is_system->toBeTrue();
     expect(Label::where('name', 'Urgent')->value('icon'))->not->toBeNull();
 
     TaskType::where('name', 'Bug')->update(['color' => '#000000']);
     $this->seed(TaxonomySeeder::class);
-    expect(TaskType::count())->toBe(5)->and(Label::count())->toBe(8)->and(TaskType::where('name', 'Bug')->value('color'))->toBe('#000000');
+    expect(TaskType::count())->toBe(5)->and(Label::count())->toBe(11)->and(TaskType::where('name', 'Bug')->value('color'))->toBe('#000000');
 });
 
 it('is part of the main database seeder', function () {
     TaskType::query()->delete();
     Label::query()->delete();
     $this->seed();
-    expect(TaskType::count())->toBe(5)->and(Label::count())->toBe(8);
+    expect(TaskType::count())->toBe(5)->and(Label::count())->toBe(11);
 });
 
 // ── default type, task page, activity ────────────────────────────────────────
@@ -177,7 +177,7 @@ it('blocks every management action for other roles', function () {
     $attempt(TypesPage::class, 'confirmDelete', [$type->id]);
     $attempt(LabelsPage::class, 'create', []);
     $attempt(LabelsPage::class, 'confirmDelete', [$label->id]);
-    expect(Label::count())->toBe(8)->and(TaskType::count())->toBe(5);
+    expect(Label::count())->toBe(11)->and(TaskType::count())->toBe(5);
 });
 
 it('has no inline create-label input any more', function () {

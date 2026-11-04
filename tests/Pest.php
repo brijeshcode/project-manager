@@ -49,36 +49,6 @@ function something()
     // ..
 }
 
-/** Shared fixture for the Resource* feature tests. */
-function rpSetup(): array
-{
-    $client = \App\Models\Client::create(['name' => 'Acme', 'currency' => 'USD']);
-    $project = \App\Models\Project::create(['client_id' => $client->id, 'name' => 'Site', 'buffer_percent' => 0, 'start_date' => now(), 'status' => 'active']);
-    $resource = $project->resources()->create(['title' => 'Creds']);
-    $hidden = $project->resources()->create(['title' => 'Secret']);
-
-    $admin = \App\Models\User::factory()->create();
-    $admin->assignRole('super_admin');
-    $staff = \App\Models\User::factory()->create();
-    $staff->assignRole('developer');
-    $outsider = \App\Models\User::factory()->create();
-    $outsider->assignRole('developer');
-    \App\Models\ProjectMember::create(['project_id' => $project->id, 'user_id' => $staff->id, 'role_on_project' => 'developer', 'access_scope' => \App\Enums\AccessScope::All, 'active' => true]);
-    $k = \App\Models\User::factory()->create(['client_id' => $client->id]);
-    $k->assignRole('client');
-
-    $mk = fn ($r, $l) => $r->items()->create(['type' => 'text', 'label' => $l, 'value' => 'x', 'created_by' => $admin->id]);
-    $a = $mk($resource, 'LabelA');
-    $b = $mk($resource, 'LabelB');
-    $c = $mk($resource, 'LabelC');
-    $mk($hidden, 'LabelH')->assignees()->attach($admin);
-    $a->assignees()->attach($staff);
-    $c->assignees()->attach($k);
-
-    return compact('client', 'project', 'resource', 'hidden', 'admin', 'staff', 'outsider', 'k', 'a', 'b', 'c');
-}
-
-
 /** Id of a project's board column by name (project, or a module/task's project). */
 function colId(\App\Models\Project|\App\Models\Module $on, string $name): int
 {

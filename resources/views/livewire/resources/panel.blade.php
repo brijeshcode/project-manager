@@ -1,117 +1,129 @@
 @php
-    $isAdmin = auth()->user()->hasRole('super_admin');
-    $isClient = auth()->user()->hasRole('client');
+    $user = auth()->user();
+    $isClient = $user->hasRole('client');
+    $canAdd = ! $isClient;
 @endphp
-<div class="space-y-4">
-    <h2 class="text-sm font-semibold text-slate-900">Resources</h2>
+<div class="space-y-4" data-test="resources-panel">
+    <div class="flex flex-wrap items-center gap-3">
+        <h2 class="font-display text-sm font-semibold text-slate-900">Resources</h2>
+        <div class="relative min-w-[12rem] flex-1 sm:max-w-xs">
+            <x-icon name="search" class="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+            <input type="search" wire:model.live.debounce.300ms="search" placeholder="Search resources…" aria-label="Search resources" class="input h-9 pl-8 text-sm" data-test="resource-search">
+        </div>
+        <select wire:model.live="labelFilter" aria-label="Filter by label" class="select h-9 w-auto text-sm" data-test="resource-label-filter">
+            <option value="">All labels</option>
+            @foreach ($this->filterLabels as $l)<option value="{{ $l->id }}">{{ $l->name }}</option>@endforeach
+        </select>
+        @if ($canAdd)
+            <button type="button" wire:click="openAdd" class="btn btn-primary ml-auto h-9 px-3 py-1 text-sm" data-test="add-resource"><x-icon name="plus" class="h-4 w-4" /> Add resource</button>
+        @endif
+    </div>
 
-    @error('assignees') <p class="field-error text-xs">{{ $message }}</p> @enderror
-
-    @forelse ($this->resources as $resource)
-        <x-ui.card wire:key="res-{{ $resource->id }}">
-            <div class="flex items-center justify-between">
-                <h3 class="font-semibold text-slate-900">{{ $resource->title }}</h3>
-                @if ($isAdmin)
-                    <button type="button" wire:click="deleteResource({{ $resource->id }})" wire:confirm="Delete this resource and all its items?" class="text-xs text-rose-600 hover:underline dark:text-rose-400">Delete</button>
-                @endif
+    @forelse ($this->resources as $r)
+        @php $canEdit = $r->canEdit($user); @endphp
+        <x-ui.card padding="p-0" wire:key="res-{{ $r->id }}" data-test="resource-row" data-id="{{ $r->id }}" @resources-changed.window="open && load(false)" x-data="{
+                open: false, busy: false, html: '', raw: '', log: '', note: '',
+                async load(spin = true) {
+                    this.busy = spin;
+                    const r = await $wire.reveal({{ $r->id }});
+                    this.html = r.html; this.raw = r.raw; this.log = r.log; this.busy = false;
+                },
+                async toggle() {
+                    if (this.open) { this.open = false; this.html = this.raw = this.log = ''; return; }
+                    this.open = true;
+                    await this.load();
+                },
+                async copy() {
+                    try { await navigator.clipboard.writeText(this.raw); } catch (e) {
+                        const t = document.createElement('textarea'); t.value = this.raw; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove();
+                    }
+                    this.note = 'Copied'; setTimeout(() => this.note = '', 1500);
+                },
+            }">
+            <div class="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5" @click="if (!$event.target.closest('[data-no-drag], [data-stop]')) toggle()">
+                <x-icon name="lock" class="h-4 w-4 shrink-0 text-slate-400" />
+                <button type="button" class="min-w-0 flex-1 basis-40 truncate text-left font-display text-sm font-semibold text-slate-900 hover:text-brand-600" :aria-expanded="open" data-test="resource-toggle">{{ $r->title }}</button>
+                <span class="flex flex-wrap gap-1">
+                    @foreach ($r->labels as $l)<x-ui.label-chip :label="$l" />@endforeach
+                </span>
+                @if ($r->creator)<x-ui.avatar :user="$r->creator" data-stop data-test="resource-creator" />@endif
+                <span class="w-24 text-xs text-slate-500" data-test="resource-date">{{ $r->created_at->format('M j, Y') }}</span>
+                <x-ui.assignees :users="$r->viewers" :candidates="$canEdit ? $this->candidates : null" method="toggleViewer" :id="$r->id" data-test="resource-viewers" />
+                <x-icon name="chevron-right" class="h-4 w-4 shrink-0 text-slate-400 transition" ::class="open && 'rotate-90'" />
             </div>
-            @if ($resource->description)
-                <p class="text-sm text-slate-500">{{ $resource->description }}</p>
-            @endif
-
-            <ul class="mt-3 space-y-3">
-                @foreach ($resource->items as $item)
-                    <li wire:key="item-{{ $item->id }}" class="rounded border border-slate-200 p-3 text-sm">
-                        <div class="flex items-center gap-2">
-                            <span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{{ $item->type }}</span>
-                            <span class="font-medium text-slate-900">{{ $item->label }}</span>
-                        </div>
-                        @if ($item->type === 'text')
-                            <p class="mt-1 whitespace-pre-wrap break-words text-slate-700">{{ $item->value }}</p>
-                        @elseif ($item->type === 'image')
-                            <img src="{{ route('resource-items.download', $item->id) }}" alt="{{ $item->original_name }}" class="mt-1 max-h-40 rounded">
-                        @elseif ($item->type === 'file')
-                            <a href="{{ route('resource-items.download', $item->id) }}" class="mt-1 inline-block link underline">{{ $item->original_name }}</a>
-                        @endif
-                        <p class="mt-1 text-xs text-slate-500">{{ $item->created_at?->format('M j, Y') }}@if (! $isClient || $item->created_by === auth()->id()) · {{ $isClient ? 'You' : $item->creator?->name }}@endif</p>
-                        <div class="mt-1 flex flex-wrap gap-1">
-                            @foreach ($item->assignees as $a)
-                                @if (! $isClient)
-                                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{{ $a->name }}</span>
-                                @elseif ($a->id === auth()->id())
-                                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs">You</span>
-                                @endif
-                            @endforeach
-                        </div>
-                        <div class="mt-2 space-y-1 border-t border-slate-100 pt-2">
-                            @foreach ($item->comments as $comment)
-                                <p wire:key="c-{{ $comment->id }}" class="text-xs text-slate-700">
-                                    <span class="font-medium">{{ $isClient ? ($comment->author_id === auth()->id() ? 'You' : 'Team') : $comment->author?->name }}</span>
-                                    <span class="text-slate-400">{{ $comment->created_at?->format('M j, g:i a') }}</span>
-                                    <span class="block whitespace-pre-wrap break-words">{{ $comment->body }}</span>
-                                </p>
-                            @endforeach
-                            <form wire:submit="addComment({{ $item->id }})" class="flex gap-2">
-                                <input type="text" wire:model="commentBody.{{ $item->id }}" placeholder="Add a comment…" class="input flex-1 text-sm h-8 py-1">
-                                <button type="submit" class="btn btn-secondary text-xs">Comment</button>
-                            </form>
-                            @error("commentBody.{$item->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
-                        </div>
-                        @if ($isAdmin)
-                            <details class="mt-2">
-                                <summary class="cursor-pointer text-xs text-slate-500">Edit / delete</summary>
-                                <form wire:submit="updateItem({{ $item->id }})" class="mt-1 space-y-1">
-                                    <input type="text" wire:model="editLabel.{{ $item->id }}" value="{{ $item->label }}" placeholder="{{ $item->label }}" class="input w-full text-sm">
-                                    @error("editLabel.{$item->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
-                                    @if ($item->type === 'text')
-                                        <textarea wire:model="editValue.{{ $item->id }}" rows="2" placeholder="New value" class="textarea w-full text-sm"></textarea>
-                                        @error("editValue.{$item->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
-                                    @endif
-                                    <button type="submit" class="btn btn-secondary text-xs">Save</button>
-                                    <button type="button" wire:click="deleteItem({{ $item->id }})" wire:confirm="Delete this item?" class="text-xs text-rose-600 hover:underline dark:text-rose-400">Delete item</button>
-                                </form>
-                            </details>
-                            <div class="mt-2 flex gap-2">
-                                <select multiple wire:model="assigneeIds.{{ $item->id }}" class="input text-sm">
-                                    @foreach ($this->candidates as $u)
-                                        <option value="{{ $u->id }}" @selected($item->assignees->contains('id', $u->id))>{{ $u->name }}</option>
-                                    @endforeach
-                                </select>
-                                <button type="button" class="btn btn-secondary text-xs"
-                                        wire:click="setAssignees({{ $item->id }}, $wire.assigneeIds[{{ $item->id }}] ?? {{ $item->assignees->pluck('id')->toJson() }})">Assign</button>
+            <div x-show="open" x-collapse style="display:none" class="border-t border-slate-100 dark:border-gray-700">
+                <div class="space-y-3 px-5 py-4">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <p class="mr-auto flex items-center gap-1 text-xs text-slate-500"><x-icon name="shield" class="h-3.5 w-3.5" /> Access to this value is logged</p>
+                        <span x-show="note" x-text="note" style="display:none" class="text-xs font-medium text-emerald-600" role="status"></span>
+                        <button type="button" @click="copy()" :disabled="busy" class="btn btn-secondary h-7 px-2.5 py-1 text-xs" data-test="resource-copy"><x-icon name="copy" class="h-3.5 w-3.5" /> Copy</button>
+                        @if ($canEdit)
+                            <button type="button" wire:click="startEdit({{ $r->id }})" class="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-gray-700" title="Edit" aria-label="Edit resource" data-test="resource-edit"><x-icon name="pencil" class="h-4 w-4" /></button>
+                            <div class="relative" x-data="{ menu: false }" @click.outside="menu = false" @keydown.escape="menu = false">
+                                <button type="button" @click="menu = !menu" class="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-gray-700" title="More actions" aria-label="More actions" aria-haspopup="menu" data-test="resource-menu"><x-icon name="ellipsis" class="h-4 w-4" /></button>
+                                <div x-show="menu" style="display:none" role="menu" class="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg dark:border-gray-600 dark:bg-gray-800">
+                                    <button type="button" role="menuitem" wire:click="deleteResource({{ $r->id }})" wire:confirm="Delete this resource and its files?" class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-rose-600 hover:bg-slate-50 dark:text-rose-400 dark:hover:bg-gray-700" data-test="resource-delete"><x-icon name="trash-2" class="h-4 w-4" /> Delete</button>
+                                </div>
                             </div>
                         @endif
-                    </li>
-                @endforeach
-            </ul>
-
-            <form wire:submit="addTextItem({{ $resource->id }})" class="mt-3 space-y-2">
-                <input type="text" wire:model="itemLabel.{{ $resource->id }}" placeholder="Label" class="input w-full text-sm">
-                @error("itemLabel.{$resource->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
-                <textarea wire:model="itemValue.{{ $resource->id }}" placeholder="Value" rows="2" class="textarea w-full text-sm"></textarea>
-                @error("itemValue.{$resource->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
-                <button type="submit" class="btn btn-secondary text-sm">+ Text item</button>
-            </form>
-
-            <div class="mt-3 space-y-2">
-                <input type="file" wire:model="upload.{{ $resource->id }}" class="text-sm">
-                @error("upload.{$resource->id}") <p class="field-error text-xs">{{ $message }}</p> @enderror
-                <button type="button" wire:click="addFileItem({{ $resource->id }}, 'image')" class="btn btn-secondary text-sm">+ Image</button>
-                <button type="button" wire:click="addFileItem({{ $resource->id }}, 'file')" class="btn btn-secondary text-sm">+ File</button>
+                    </div>
+                    <p x-show="busy" class="text-xs text-slate-400">Loading…</p>
+                    <div wire:ignore class="md break-words rounded-lg bg-slate-50 px-4 py-3 text-sm dark:bg-gray-900/40" x-show="!busy" x-html="html" data-test="resource-value"></div>
+                    @if ($canEdit)
+                        <div class="border-t border-slate-100 pt-3 dark:border-gray-700">
+                            <p class="mb-2 flex items-center gap-1 text-xs font-semibold text-slate-700 dark:text-gray-200"><x-icon name="history" class="h-3.5 w-3.5" /> Access log</p>
+                            <div wire:ignore x-html="log"></div>
+                        </div>
+                    @endif
+                </div>
             </div>
         </x-ui.card>
     @empty
-        <p class="text-sm text-slate-500">No resources yet.</p>
+        <x-ui.empty-state title="{{ $search !== '' || $labelFilter !== '' ? 'No matching resources' : 'No resources yet' }}"
+                          message="{{ $canAdd ? 'Store credentials, links and notes here. Values are encrypted and every reveal is logged.' : 'Nothing has been shared with you yet.' }}" />
     @endforelse
 
-    @if ($isAdmin)
-        <x-ui.card>
-            <form wire:submit="addResource" class="space-y-2">
-                <input type="text" wire:model="newTitle" placeholder="New resource title" class="input w-full text-sm">
-                @error('newTitle') <p class="field-error text-xs">{{ $message }}</p> @enderror
-                <textarea wire:model="newDescription" placeholder="Description (optional)" rows="2" class="textarea w-full text-sm"></textarea>
-                <button type="submit" class="btn btn-secondary text-sm">+ Resource</button>
+    @if ($showForm)
+        <div class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 sm:p-8" role="dialog" aria-modal="true" aria-label="{{ $editingId ? 'Edit resource' : 'Add resource' }}" data-test="resource-form"
+             x-data @keydown.escape.window="$wire.cancelForm()">
+            <form wire:submit="save" class="card w-full max-w-2xl space-y-4 p-5">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-display text-base font-semibold text-slate-900">{{ $editingId ? 'Edit resource' : 'Add resource' }}</h3>
+                    <button type="button" wire:click="cancelForm" class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close"><x-icon name="x" class="h-4 w-4" /></button>
+                </div>
+                <div>
+                    <label for="res-title" class="label">Title</label>
+                    <input id="res-title" type="text" wire:model="form.title" class="input" placeholder="e.g. Production database" autofocus data-test="form-title">
+                    @error('form.title') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <p class="label">Value <span class="font-normal text-slate-400">(encrypted at rest; attach images or PDFs)</span></p>
+                    <x-ui.markdown-editor model="form.value" :rows="8" placeholder="Username, password, links, notes…" />
+                    @error('form.value') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <p class="label">Labels</p>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach ($this->labels as $l)
+                            <label class="inline-flex cursor-pointer items-center gap-1.5 text-xs"><input type="checkbox" wire:model="form.labels" value="{{ $l->id }}" class="rounded border-slate-300 text-brand-600" data-test="form-label-{{ $l->id }}"><x-ui.label-chip :label="$l" /></label>
+                        @endforeach
+                    </div>
+                </div>
+                <div>
+                    <p class="label">Who can view <span class="font-normal text-slate-400">(you, the creator, can always edit)</span></p>
+                    <div class="grid max-h-40 gap-1 overflow-y-auto sm:grid-cols-2">
+                        @foreach ($this->candidates as $c)
+                            @continue($c->id === auth()->id() && ! $editingId)
+                            <label class="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm text-slate-700 hover:bg-slate-100 dark:text-gray-200 dark:hover:bg-gray-700"><input type="checkbox" wire:model="form.viewers" value="{{ $c->id }}" class="rounded border-slate-300 text-brand-600" data-test="form-viewer-{{ $c->id }}"> {{ $c->name }}</label>
+                        @endforeach
+                    </div>
+                    @error('form.viewers.*') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-gray-700">
+                    <button type="button" wire:click="cancelForm" class="btn btn-ghost h-9 px-3 py-1 text-sm">Cancel</button>
+                    <button type="submit" class="btn btn-primary h-9 px-3 py-1 text-sm" data-test="form-save">{{ $editingId ? 'Save changes' : 'Add resource' }}</button>
+                </div>
             </form>
-        </x-ui.card>
+        </div>
     @endif
 </div>

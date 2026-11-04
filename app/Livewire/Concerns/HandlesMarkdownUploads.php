@@ -42,8 +42,10 @@ trait HandlesMarkdownUploads
         $name = str_replace(['[', ']', '(', ')'], '_', $this->upload->getClientOriginalName());
         $mime = (string) $this->upload->getMimeType();
         $size = $this->upload->getSize();
-        $path = $this->upload->store('attachments/'.now()->format('Y/m'), 'local');
-        $a = $target->attachments()->create(['user_id' => auth()->id(), 'path' => $path, 'name' => $name, 'mime' => $mime, 'size' => $size]);
+        // Targets that keep secrets (resources) get their file bytes encrypted at rest; the download route decrypts.
+        $a = method_exists($target, 'attachEncrypted')
+            ? $target->attachEncrypted(file_get_contents($this->upload->getRealPath()), $name, $mime, auth()->id())
+            : $target->attachments()->create(['user_id' => auth()->id(), 'path' => $this->upload->store('attachments/'.now()->format('Y/m'), 'local'), 'name' => $name, 'mime' => $mime, 'size' => $size]);
         $this->reset('upload');
 
         return ['name' => $a->name, 'url' => $a->url(), 'image' => $a->isInlineImage()];
