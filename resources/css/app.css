@@ -192,3 +192,11 @@
     .board-drag { transform: none; }
     .ui-tip { transition: none; }
 }
+
+/* board task slide-over */
+.task-embed { container-type: inline-size; }
+.task-grid { grid-template-columns: minmax(0, 1fr); }
+@container (min-width: 600px) { .task-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
+.task-panel { animation: panel-in .2s cubic-bezier(.2, 0, 0, 1); }
+@keyframes panel-in { from { transform: translateX(2rem); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .task-panel { animation: none; } }

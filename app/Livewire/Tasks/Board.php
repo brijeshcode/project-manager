@@ -14,12 +14,13 @@ use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class Board extends Component
 {
-    use TogglesTaskAssignee;
+    use TogglesTaskAssignee { toggleTaskAssignee as private toggleAssignee; }
 
     public Project $project;
 
@@ -66,16 +67,53 @@ class Board extends Component
     public string $newColumnStage = 'active';
     public array $deleteTarget = [];   // column id => column id its tasks move to
 
+    /** Task shown in the slide-over panel (?task=ID); only ever set to a task the user may open (see openTask). */
+    #[Url(as: 'task', history: true)]
+    public ?int $taskId = null;
+
     public function mount(Project $project): void
     {
         $this->authorize('view', $project);
         $this->project = $project;
+        $this->taskId = $this->openableTask($this->taskId)?->id;
         $this->updatedFilterModule();
         if (! in_array($this->scope, ['sprint', 'all'], true)) {
             // default: the active sprint; without one, everything so the board is not empty
             $this->scope = $this->activeSprint ? 'sprint' : 'all';
             $this->fellBack = $this->scope === 'all';
         }
+    }
+
+    /** Same visibility as the task page: visible to the user, in this project, and viewable by policy. */
+    private function openableTask(?int $id): ?Task
+    {
+        $task = $id ? Task::visibleTo(auth()->user())->whereIn('module_id', $this->project->modules()->select('id'))->find($id) : null;
+
+        return $task && auth()->user()->can('view', $task) ? $task : null;
+    }
+
+    public function openTask(int $id): void
+    {
+        $this->taskId = $this->openableTask($id)?->id;
+    }
+
+    public function closeTask(): void
+    {
+        $this->taskId = null;
+        $this->dispatch('task-panel-closed');
+    }
+
+    /** An edit made inside the panel: refetch the cards. */
+    #[On('task-panel-updated')]
+    public function panelUpdated(): void
+    {
+        unset($this->columns);
+    }
+
+    public function toggleTaskAssignee(int $taskId, int $userId): void
+    {
+        $this->toggleAssignee($taskId, $userId);
+        $this->taskId === $taskId && $this->dispatch('board-task-changed');
     }
 
     public function updatedFilterModule(): void
@@ -187,10 +225,12 @@ class Board extends Component
         // The browser already shows the result: skip the re-render (no flash) when a same-stage move of a lone module's cards left nothing to correct.
         if (! $mixed && $order && $oldStage === BoardColumn::find($column)?->stage) {
             $this->skipRender();
+            $this->taskId === $taskId && $this->dispatch('board-task-changed');
 
             return;
         }
         unset($this->columns);
+        $this->taskId === $taskId && $this->dispatch('board-task-changed');
     }
 
     // ── manage columns (project editors) ─────────────────────────────────────
@@ -285,6 +325,7 @@ class Board extends Component
             'allLabels' => Label::orderBy('name')->get(),
             'stages'    => BoardTemplates::STAGES,
             'canManage' => $canManage,
+            'panelTask' => $this->openableTask($this->taskId),
         ]);
     }
 }

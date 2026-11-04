@@ -473,7 +473,7 @@ it('board drag still moves tasks while scoped to a sprint', function () {
 it('adds a Sprint tab after Modules and falls back for unknown tabs', function () {
     $s = spSetup();
     $c = Livewire::actingAs($s['admin'])->test(Show::class, ['project' => $s['project']]);
-    expect(array_keys($c->viewData('tabs')))->toBe(['details', 'modules', 'sprint', 'resources', 'board', 'economics']);
+    expect(array_keys($c->viewData('tabs')))->toBe(['details', 'modules', 'sprint', 'board', 'resources', 'economics']);
     $c->set('tab', 'sprint')->assertSeeLivewire(Panel::class);
     $c->set('tab', 'bogus')->assertSet('tab', 'bogus')->assertViewHas('active', 'details');
 });

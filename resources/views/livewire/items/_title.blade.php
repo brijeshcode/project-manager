@@ -13,6 +13,6 @@
                 <x-icon name="pencil" class="h-5 w-5" />
             </button>
         @endif
-        <h1 class="min-w-0 break-words font-display text-2xl font-bold tracking-tight text-slate-900" data-test="item-title">{{ $heading }}</h1>
+        <h1 id="item-title" class="min-w-0 break-words font-display text-2xl font-bold tracking-tight text-slate-900" data-test="item-title">{{ $heading }}</h1>
     </div>
 @endif

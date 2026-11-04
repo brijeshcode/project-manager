@@ -51,8 +51,20 @@ class Show extends Component
 
     public string $completedAt = '';
 
-    public function mount(Task $task): void
+    /** Shown in the board slide-over: no breadcrumb, and changes are announced so the board card follows. */
+    #[Locked]
+    public bool $embedded = false;
+
+    private bool $hydrated = false;
+
+    public function hydrate(): void
     {
+        $this->hydrated = true;
+    }
+
+    public function mount(Task $task, bool $embedded = false): void
+    {
+        $this->embedded = $embedded;
         $user = auth()->user();
         // same visibility as lists/board: drafts of others and out-of-section tasks are 404
         abort_unless(Task::visibleTo($user)->whereKey($task->id)->exists(), 404);
@@ -171,6 +183,10 @@ class Show extends Component
         Subtask::reorder($ids, $this->task->id);
     }
 
+    /** The board moved or re-assigned this task: just re-render. */
+    #[On('board-task-changed')]
+    public function boardChanged(): void {}
+
     #[On('checklist-changed')]
     public function refreshProgress(): void {}
 
@@ -185,6 +201,9 @@ class Show extends Component
     {
         $project = $this->itemProject();
         $this->task->unsetRelation('checklistItems')->unsetRelation('subtasks')->unsetRelation('column')->unsetRelation('type')->unsetRelation('sprint');
+        if ($this->embedded && $this->hydrated) {
+            $this->dispatch('task-panel-updated');
+        }
         $subtasks = $this->task->subtasks()->withCount('comments')->with('assignees')->get();
 
         return view('livewire.tasks.show', $this->panelData() + [

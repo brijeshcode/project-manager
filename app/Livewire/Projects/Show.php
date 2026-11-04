@@ -328,7 +328,7 @@ class Show extends Component
             default => $open,
         };
 
-        $tabs = ['details' => 'Details', 'modules' => 'Modules', 'sprint' => 'Sprint', 'resources' => 'Resources', 'board' => 'Board']
+        $tabs = ['details' => 'Details', 'modules' => 'Modules', 'sprint' => 'Sprint', 'board' => 'Board', 'resources' => 'Resources']
             + (auth()->user()->can('manage-money') ? ['economics' => 'Economics'] : []);
 
         return view('livewire.projects.show', [

@@ -12,7 +12,16 @@
     $stripe = [0 => 'bg-slate-300 dark:bg-gray-500', 1 => 'bg-amber-400', 2 => 'bg-rose-500'];
 @endphp
 {{-- The board fills the viewport below its own top edge (fit()); every column scrolls on its own. Grouped swimlanes flow down the page instead. --}}
-<div x-data="{ h: 0, fit() { this.h = Math.max(440, window.innerHeight - this.$el.getBoundingClientRect().top - 16) } }" x-init="fit()" @resize.window.debounce.100ms="fit()"
+<div x-data="{ h: 0, lastId: null, fit() { this.h = Math.max(440, window.innerHeight - this.$el.getBoundingClientRect().top - 16) },
+        // a card click opens the slide-over; the pencil, assignees, other links and buttons keep their own action, and the click that ends a drag is ignored
+        openCard(e, id) {
+            if (Date.now() - (window.__boardDropAt || 0) < 400) return;
+            const t = e.target;
+            if (t.closest('[data-no-drag], button, input, select, textarea, label') || (t.closest('a') && !t.closest('[data-test=card-link]'))) return;
+            e.preventDefault();
+            this.lastId = id;
+            $wire.openTask(id).then(() => this.$nextTick(() => document.querySelector('[data-test=task-panel]')?.focus({ preventScroll: true })));
+        } }" x-init="fit()" @task-panel-closed.window="$nextTick(() => [...document.querySelectorAll('li[data-task-id]')].find(e => e.dataset.taskId == lastId)?.focus({ preventScroll: true }))" @resize.window.debounce.100ms="fit()"
      class="flex flex-col" @if(! $grouped) :style="{ height: h + 'px' }" @endif data-test="board">
     {{-- toolbar --}}
     <div class="mb-2 flex flex-wrap items-center gap-2" data-test="board-toolbar">
@@ -149,7 +158,7 @@
                                     $itemsDone = $items->where('is_done', true)->count();
                                     $tc = $task->type && preg_match('/^#[0-9a-fA-F]{6}$/', (string) $task->type->color) ? $task->type->color : '#6b7280';
                                 @endphp
-                                <li wire:key="task-{{ $task->id }}" data-task-id="{{ $task->id }}" data-test="board-card"
+                                <li wire:key="task-{{ $task->id }}" data-task-id="{{ $task->id }}" data-test="board-card" tabindex="0" @click="openCard($event, {{ $task->id }})" @keydown.enter.self="openCard($event, {{ $task->id }})"
                                     class="board-card group relative cursor-grab rounded-lg bg-[#ffffff] py-2 pl-3 pr-2 shadow-sm ring-1 ring-slate-900/5 dark:bg-gray-700 dark:ring-white/10">
                                     <span class="absolute inset-y-1.5 left-0 w-[3px] rounded-r {{ $stripe[$task->priority] ?? $stripe[0] }}" aria-hidden="true"></span>
                                     <div class="flex items-center gap-1.5">
@@ -163,7 +172,7 @@
                                             <x-icon name="pencil" class="h-3.5 w-3.5" />
                                         </a>
                                     </div>
-                                    <a href="{{ route('tasks.show', $task) }}" wire:navigate draggable="false" data-test="card-link" class="mt-1 line-clamp-2 break-words text-[13px] font-medium leading-snug text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
+                                    <a href="{{ route('tasks.show', $task) }}" draggable="false" data-test="card-link" class="mt-1 line-clamp-2 break-words text-[13px] font-medium leading-snug text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
                                     <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500" data-test="card-meta">
                                         <x-ui.deadline :date="$task->deadline" :done="$col->stage === 'done'" class="inline-flex items-center rounded bg-slate-100 px-1.5 py-px text-[11px] dark:bg-gray-600/60" data-test="card-deadline" />
                                         @if($subs->isNotEmpty())
@@ -193,4 +202,23 @@
         </div>
     @endforeach
     </div>
+    @if($panelTask)
+        {{-- Slide-over task panel (?task=ID): the board stays visible and usable beside it. Non-modal dialog; Escape (outside form fields) and the backdrop close it. --}}
+        <div @keydown.escape.window="if (!$event.defaultPrevented && !$event.target.closest('input, textarea, select')) $wire.closeTask()"
+             @click.window="if (!$event.target.closest('[data-test=task-panel], li[data-task-id], a, button, input, select, label, [data-test=assign-pop], [data-test^=filter-pop]') && $event.target.isConnected) $wire.closeTask()" x-data="{ copied: false }" data-test="task-panel-wrap">
+            {{-- light dim only: clicks go through to the board (another card swaps the panel); a click on empty space closes it --}}
+            <div class="pointer-events-none fixed inset-0 z-[55] bg-slate-900/10 dark:bg-black/30" aria-hidden="true" data-test="panel-backdrop"></div>
+            <section role="dialog" aria-labelledby="item-title" tabindex="-1" x-init="$el.focus({ preventScroll: true })" data-test="task-panel"
+                     class="task-panel fixed inset-y-0 right-0 z-[60] flex w-full flex-col bg-white shadow-2xl ring-1 ring-slate-900/10 outline-none sm:w-[42rem] dark:bg-gray-900 dark:ring-white/10">
+                <div class="flex shrink-0 items-center justify-end gap-1 border-b border-slate-200 px-3 py-2 dark:border-gray-700">
+                    <a href="{{ route('tasks.show', $panelTask) }}" wire:navigate class="btn btn-ghost h-8 gap-1 px-2 py-1 text-xs" title="Open full page" aria-label="Open full page" data-test="panel-full"><x-icon name="external-link" /> Open full page</a>
+                    <button type="button" @click="navigator.clipboard.writeText(location.href); copied = true; setTimeout(() => copied = false, 1500)" class="btn btn-ghost h-8 px-2 py-1" title="Copy link to this task" aria-label="Copy link to this task" data-test="panel-copy"><x-icon name="link" /><span x-show="copied" style="display:none" class="ml-1 text-xs text-emerald-600">Copied</span></button>
+                    <button type="button" wire:click="closeTask" class="btn btn-ghost h-8 px-2 py-1" title="Close" aria-label="Close" data-test="panel-close"><x-icon name="x" /></button>
+                </div>
+                <div class="task-embed min-h-0 flex-1 overflow-y-auto p-5">
+                    <livewire:tasks.show :task="$panelTask" :embedded="true" :key="'panel-'.$panelTask->id" />
+                </div>
+            </section>
+        </div>
+    @endif
 </div>

@@ -22,6 +22,7 @@ document.addEventListener('alpine:init', () => {
             filter: '[data-no-drag]', // assignee picker etc.: clicks work, no drag starts
             preventOnFilter: false,
             onEnd(evt) {
+                window.__boardDropAt = Date.now(); // the click ending a drag must not open the task panel
                 const count = (ul) => { const n = ul.closest('[data-col]')?.querySelector('[data-count]'); if (n) n.textContent = ul.querySelectorAll(':scope > li[data-task-id]').length; };
                 count(evt.from); count(evt.to); // counts update at once, the server does not need to re-render a same-stage move
                 if (!reduce) { evt.item.classList.add('board-dropped'); setTimeout(() => evt.item.classList.remove('board-dropped'), 250); }

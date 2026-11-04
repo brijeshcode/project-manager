@@ -6,7 +6,9 @@
         $initials = fn ($u) => collect(explode(' ', $u->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('');
     @endphp
 
+    @unless ($embedded)
     <x-ui.breadcrumb :items="[['Projects', route('projects.index')], [$project->name, route('projects.show', ['project' => $project, 'tab' => 'modules'])], [$module->name, route('modules.show', [$project, $module])], [$task->title, null]]" />
+    @endunless
 
     <div class="flex flex-col gap-3">
         @include('livewire.items._title', ['heading' => $task->title, 'canEdit' => $canEdit])
@@ -17,6 +19,7 @@
             @if ($task->status->value === 'draft') <x-ui.badge color="amber">Draft</x-ui.badge> @endif
             @if ($task->client_visible) <x-ui.badge color="brand">Visible to client</x-ui.badge> @endif
             <span class="text-sm text-slate-500">{{ $project->client->name }} &middot; {{ $project->name }} &middot; {{ $module->name }}</span>
+            @unless ($embedded)
             <span class="ml-auto flex flex-wrap items-center gap-2" x-data="{ copied: false }">
                 <button type="button" @click="navigator.clipboard.writeText(location.href.split('#')[0]); copied = true; setTimeout(() => copied = false, 1500)" class="btn btn-secondary h-8 px-2 py-1" title="Copy link to this task" aria-label="Copy link to this task" data-test="copy-link"><x-icon name="link" /><span x-show="copied" style="display:none" class="ml-1 text-xs text-emerald-600">Copied</span></button>
                 @if ($canCopy)
@@ -24,11 +27,12 @@
                     <a href="{{ route('tasks.create', ['module' => $module->id]) }}" wire:navigate class="btn btn-primary h-8 gap-1 px-3 py-1 text-xs" title="New task in this module" aria-label="New task in this module" data-test="new-task"><x-icon name="plus" /> New task</a>
                 @endif
             </span>
+            @endunless
         </div>
     </div>
 
-    <div class="mt-6 grid gap-6 lg:grid-cols-3">
-        <div class="min-w-0 space-y-6 lg:col-span-2">
+    <div @class(['mt-6 grid gap-6', 'lg:grid-cols-3' => ! $embedded, 'task-grid' => $embedded])>
+        <div @class(['min-w-0 space-y-6', 'lg:col-span-2' => ! $embedded])>
             @include('livewire.items._description', ['text' => $task->description, 'canEdit' => $canEdit])
 
             <livewire:checklist.panel :checklistable="$task" :key="'checklist-'.$task->id" />
