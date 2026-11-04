@@ -126,9 +126,9 @@ it('shows module label, subtask count, filters by module and groups by module', 
     }
 
     Livewire::actingAs(bcolPm())->test(Board::class, ['project' => $project])
-        ->assertSee('Alpha')->assertSee('1/2 done')->assertSee('One')->assertSee('Two')
+        ->assertSee('Alpha')->assertSee('1/2')->assertSee('One')->assertSee('Two')
         ->set('filterModule', $m2->id)->assertDontSee('One')->assertSee('Two')
-        ->set('filterModule', null)->set('grouped', true)->assertSee('Alpha')->assertSee('Beta')->assertSee('One');
+        ->set('moduleIds', [])->set('grouped', true)->assertSee('Alpha')->assertSee('Beta')->assertSee('One');
 });
 
 it('derives module status from stages on the software template', function (array $cols, string $expected) {

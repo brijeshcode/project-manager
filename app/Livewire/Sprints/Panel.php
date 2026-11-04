@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Sprints;
 
+use App\Livewire\Concerns\TogglesTaskAssignee;
 use App\Models\Label;
 use App\Models\Project;
 use App\Models\Sprint;
@@ -21,6 +22,8 @@ use Livewire\Component;
  */
 class Panel extends Component
 {
+    use TogglesTaskAssignee;
+
     public Project $project;
 
     #[Locked]
@@ -255,6 +258,7 @@ class Panel extends Component
             'pastTasks'   => $pastTasks,
             'progress'    => app(ProgressService::class),
             'users'       => $this->project->members()->orderBy('name')->get(),
+            'candidates'  => $this->assignable(),
             'types'       => TaskType::orderBy('position')->get(),
             'labels'      => Label::orderBy('name')->get(),
             'completing'  => $this->completeId ? $sprints->firstWhere('id', $this->completeId) : null,

@@ -6,5 +6,5 @@
     $hint = match (true) { $d['days'] === null => '', $done => 'Done', $d['days'] < 0 => abs($d['days']).' '.\Illuminate\Support\Str::plural('day', abs($d['days'])).' overdue', $d['days'] === 0 => 'Due today', $d['days'] === 1 => 'Due tomorrow', default => 'Due in '.$d['days'].' days' };
 @endphp
 @if ($date)
-    <span {{ $attributes->merge(['class' => $cls]) }} data-state="{{ $d['state'] }}" title="{{ $hint }}">{{ $date->format($format) }}</span>
+    <span {{ $attributes->merge(['class' => $cls]) }} data-state="{{ $d['state'] }}" data-tip="{{ $hint }}">{{ $date->format($format) }}</span>
 @endif

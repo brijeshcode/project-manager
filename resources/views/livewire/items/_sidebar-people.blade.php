@@ -1,8 +1,7 @@
 {{-- Assignees, labels, participants. $canEdit, $panel, $assignees, $labels, $candidates, $allLabels, $participants --}}
-@php($initials = fn ($u) => collect(explode(' ', $u->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode(''))
 <x-ui.side-section title="Assignees" name="assignees" :panel="$panel" :can="$canEdit">
     @forelse ($assignees as $u)
-        <div class="flex items-center gap-2 py-0.5"><span class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700">{{ $initials($u) }}</span>{{ $u->name }}</div>
+        <div class="flex items-center gap-2 py-0.5"><x-ui.avatar :user="$u" ring="" />{{ $u->name }}</div>
     @empty
         <p class="text-slate-400">No one assigned</p>
     @endforelse

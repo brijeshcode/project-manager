@@ -443,7 +443,7 @@ it('board component can be scoped to a sprint and switched between Active sprint
     spTask($s, $s['m1'], 'Sprinted', 'active', ['sprint_id' => $a->id]);
     spTask($s, $s['m1'], 'Loose', 'active');
 
-    $all = Livewire::actingAs($s['admin'])->test(Board::class, ['project' => $s['project']]);
+    $all = Livewire::actingAs($s['admin'])->withQueryParams(['scope' => 'all'])->test(Board::class, ['project' => $s['project']]);
     $all->assertSee('Sprinted')->assertSee('Loose');
     $all->set('scope', 'sprint')->assertSee('Sprinted')->assertDontSee('Loose');
     $all->set('scope', 'all')->assertSee('Loose');

@@ -14,12 +14,14 @@ use App\Services\ProgressService;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use App\Livewire\Concerns\HandlesMarkdownUploads;
+use App\Livewire\Concerns\TogglesTaskAssignee;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Component;
 
 class Show extends Component
 {
     use HandlesMarkdownUploads;
+    use TogglesTaskAssignee;
 
     // ponytail: inline editors here are text-only; attach files on the module/task page
     protected function uploadTarget(): Model

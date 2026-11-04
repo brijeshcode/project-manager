@@ -2,9 +2,12 @@
 
 namespace App\Livewire\Tasks;
 
+use App\Livewire\Concerns\TogglesTaskAssignee;
 use App\Models\BoardColumn;
+use App\Models\Label;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskType;
 use App\Support\BoardTemplates;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
@@ -16,10 +19,33 @@ use Livewire\Component;
 
 class Board extends Component
 {
+    use TogglesTaskAssignee;
+
     public Project $project;
 
-    #[Url]
+    /** Legacy single-module link (?module=ID): folded into $moduleIds. */
+    #[Url(as: 'module')]
     public ?int $filterModule = null;
+
+    // Filters, all in the URL. Multi-select: a card must match every active filter, and any ONE chosen value within it.
+    #[Url(as: 'q')]
+    public string $search = '';
+
+    #[Url(as: 'modules')]
+    public array $moduleIds = [];
+
+    /** User ids, or 'none' for unassigned. */
+    #[Url(as: 'assignees')]
+    public array $assigneeIds = [];
+
+    #[Url(as: 'types')]
+    public array $typeIds = [];
+
+    #[Url(as: 'labels')]
+    public array $labelIds = [];
+
+    #[Url(as: 'prios')]
+    public array $prios = [];
 
     /** Shown inside the project page (its breadcrumb already says where we are): no own back link or title. */
     #[Locked]
@@ -27,8 +53,13 @@ class Board extends Component
 
     /** Board tab switch: all | sprint (the active sprint only). */
     #[Url(as: 'scope')]
-    public string $scope = 'all';
+    public string $scope = '';
 
+    /** No scope in the URL and no active sprint: showing all tasks instead (hint). */
+    #[Locked]
+    public bool $fellBack = false;
+
+    #[Url(as: 'group')]
     public bool $grouped = false;      // group by module: one swimlane per module
     public bool $managing = false;     // show the manage-columns panel
     public string $newColumnName = '';
@@ -39,6 +70,40 @@ class Board extends Component
     {
         $this->authorize('view', $project);
         $this->project = $project;
+        $this->updatedFilterModule();
+        if (! in_array($this->scope, ['sprint', 'all'], true)) {
+            // default: the active sprint; without one, everything so the board is not empty
+            $this->scope = $this->activeSprint ? 'sprint' : 'all';
+            $this->fellBack = $this->scope === 'all';
+        }
+    }
+
+    public function updatedFilterModule(): void
+    {
+        if ($this->filterModule) {
+            $this->moduleIds = [...$this->moduleIds, (string) $this->filterModule];
+            $this->filterModule = null;
+        }
+    }
+
+    private function ints(array $v): array
+    {
+        return array_values(array_unique(array_filter(array_map('intval', array_filter($v, 'is_scalar')), fn ($i) => $i > 0)));
+    }
+
+    /** Prefixed lists of the filter state, keyed like the removeFilter() keys. */
+    private const FILTERS = ['modules' => 'moduleIds', 'assignees' => 'assigneeIds', 'types' => 'typeIds', 'labels' => 'labelIds', 'prios' => 'prios'];
+
+    public function removeFilter(string $key, string $value): void
+    {
+        if ($prop = self::FILTERS[$key] ?? null) {
+            $this->$prop = array_values(array_filter($this->$prop, fn ($v) => (string) $v !== $value));
+        }
+    }
+
+    public function clearFilters(): void
+    {
+        $this->reset('search', 'filterModule', ...array_values(self::FILTERS));
     }
 
     /** Project columns in order. */
@@ -71,9 +136,21 @@ class Board extends Component
     {
         return Task::visibleTo(auth()->user())
             ->whereIn('module_id', $this->project->modules()->pluck('id'))
-            ->when($this->filterModule, fn ($q) => $q->where('module_id', $this->filterModule))
+            ->when($this->ints($this->moduleIds), fn ($q, $ids) => $q->whereIn('module_id', $ids))
+            ->when(trim($this->search) !== '', fn ($q) => $q->where('title', 'like', '%'.addcslashes(trim($this->search), '%_\\').'%'))
+            ->when($this->prios, fn ($q) => $q->whereIn('priority', array_map('intval', $this->prios)))
+            ->when($this->ints($this->typeIds), fn ($q, $ids) => $q->whereIn('task_type_id', $ids))
+            ->when($this->ints($this->labelIds), fn ($q, $ids) => $q->whereHas('labels', fn ($l) => $l->whereIn('labels.id', $ids)))
+            ->when($this->assigneeIds, function ($q) {
+                $ids = $this->ints($this->assigneeIds);
+                $none = in_array('none', $this->assigneeIds, true);
+                $q->where(function ($w) use ($ids, $none) {
+                    $ids && $w->whereHas('assignees', fn ($a) => $a->whereIn('users.id', $ids));
+                    $none && ($ids ? $w->orDoesntHave('assignees') : $w->doesntHave('assignees'));
+                });
+            })
             ->when($this->sprintFilter() !== null, fn ($q) => $q->where('sprint_id', $this->sprintFilter()))
-            ->with(['module', 'type', 'labels', 'subtasks.checklistItems'])
+            ->with(['module', 'type', 'labels', 'subtasks.checklistItems', 'checklistItems', 'assignees'])
             ->orderBy('position')
             ->orderBy('id')
             ->get()
@@ -103,8 +180,16 @@ class Board extends Component
             $position = $idx === false ? $position : $idx + 1;
         }
 
+        $oldStage = $task->column?->stage;
+        $mixed = $order && Task::whereIn('id', array_map('intval', $order))->where('module_id', '!=', $task->module_id)->exists();
         $task->moveTo($column, $position);
 
+        // The browser already shows the result: skip the re-render (no flash) when a same-stage move of a lone module's cards left nothing to correct.
+        if (! $mixed && $order && $oldStage === BoardColumn::find($column)?->stage) {
+            $this->skipRender();
+
+            return;
+        }
         unset($this->columns);
     }
 
@@ -189,12 +274,17 @@ class Board extends Component
     public function render()
     {
         $modules = $this->project->modules()->get();
+        $canManage = auth()->user()->can('update', $this->project);
 
         return view('livewire.tasks.board', [
             'modules'   => $modules,
-            'lanes'     => $this->grouped ? $modules->when($this->filterModule, fn ($m) => $m->where('id', $this->filterModule)) : collect([null]),
+            'lanes'     => $this->grouped ? $modules->when($this->ints($this->moduleIds), fn ($m, $ids) => $m->whereIn('id', $ids)) : collect([null]),
+            'candidates' => $canManage ? $this->assignable() : null,
+            'people'    => $this->project->members()->orderBy('name')->get(),
+            'types'     => TaskType::orderBy('position')->get(),
+            'allLabels' => Label::orderBy('name')->get(),
             'stages'    => BoardTemplates::STAGES,
-            'canManage' => auth()->user()->can('update', $this->project),
+            'canManage' => $canManage,
         ]);
     }
 }

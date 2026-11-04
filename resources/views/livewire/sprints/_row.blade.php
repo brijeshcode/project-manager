@@ -11,11 +11,7 @@
     <x-ui.type-badge :type="$task->type" />
     @foreach ($task->labels as $l)<x-ui.label-chip :label="$l" class="hidden md:inline-flex" />@endforeach
     <x-ui.priority :value="$task->priority" />
-    <span class="flex -space-x-1">
-        @foreach ($task->assignees as $u)
-            <span title="{{ $u->name }}" class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700 ring-2 ring-white">{{ collect(explode(' ', $u->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') }}</span>
-        @endforeach
-    </span>
+    <x-ui.assignees :users="$task->assignees" :candidates="($canManage ?? false) ? $candidates : null" method="toggleTaskAssignee" :id="$task->id" />
     <span class="w-14 text-right text-xs tabular-nums text-slate-500">{{ $task->hours() ? rtrim(rtrim(number_format($task->hours(), 1), '0'), '.').'h' : '' }}</span>
     <span class="w-14 text-xs"><x-ui.deadline :date="$task->deadline" :done="$done" /></span>
     <x-ui.stage-badge :column="$task->column" />

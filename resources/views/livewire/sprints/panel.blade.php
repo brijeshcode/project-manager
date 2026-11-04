@@ -62,7 +62,7 @@
                                 @if ($isOpen)
                                     <ul class="divide-y divide-slate-100 border-t border-slate-100 dark:divide-gray-700 dark:border-gray-700" data-test="past-tasks">
                                         @forelse ($pt as $task)
-                                            @include('livewire.sprints._row', ['task' => $task, 'draggable' => false])
+                                            @include('livewire.sprints._row', ['task' => $task, 'draggable' => false, 'canManage' => false])
                                         @empty
                                             <li class="px-4 py-3 text-sm text-slate-400">No finished tasks in this sprint.</li>
                                         @endforelse

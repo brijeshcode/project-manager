@@ -52,11 +52,7 @@
                             <input type="checkbox" @checked($s->is_done) @disabled(! $canEdit) wire:click="toggleSubtask({{ $s->id }})" class="rounded border-slate-300 text-brand-600" aria-label="Done">
                             <a href="{{ route('subtasks.show', $s) }}" wire:navigate @class(['min-w-0 flex-1 truncate text-sm font-medium hover:text-brand-600', 'text-slate-800' => ! $s->is_done, 'text-slate-400 line-through' => $s->is_done])>{{ $s->title }}</a>
                             @if ($s->comments_count) <span class="text-xs text-slate-400">{{ $s->comments_count }} {{ Str::plural('comment', $s->comments_count) }}</span> @endif
-                            <span class="flex -space-x-1">
-                                @foreach ($s->assignees as $u)
-                                    <span title="{{ $u->name }}" class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700 ring-2 ring-white">{{ $initials($u) }}</span>
-                                @endforeach
-                            </span>
+                            <x-ui.assignees :users="$s->assignees" />
                         </li>
                     @empty
                         <li class="px-5 py-3 text-sm text-slate-400">No subtasks yet.</li>

@@ -56,11 +56,7 @@
                             <a href="{{ route('tasks.show', $task) }}" wire:navigate class="min-w-0 flex-1 basis-40 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
                             <x-ui.type-badge :type="$task->type" />
                             <x-ui.priority :value="$task->priority" />
-                            <span class="flex -space-x-1">
-                                @foreach ($task->assignees as $u)
-                                    <span title="{{ $u->name }}" class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700 ring-2 ring-white">{{ $initials($u) }}</span>
-                                @endforeach
-                            </span>
+                            <x-ui.assignees :users="$task->assignees" />
                             @foreach ($task->labels as $l)
                                 <x-ui.label-chip :label="$l" class="hidden sm:inline-flex" />
                             @endforeach

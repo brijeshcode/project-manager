@@ -22,33 +22,7 @@
                             @endif
                             <x-ui.badge :color="\App\Models\Module::STATUS_COLORS[$mStatus]" data-test="module-status">{{ \App\Models\Module::STATUS_LABELS[$mStatus] }}</x-ui.badge>
                             <span class="w-24 text-xs" data-test="module-deadline">@if ($module->deadline)<x-ui.deadline :date="$module->deadline" :done="$mStatus === 'completed'" format="M j, Y" />@else<span class="text-slate-500">No deadline</span>@endif</span>
-                            <div class="relative" x-data="{ pop: false }" @click.outside="pop = false" @keydown.escape="pop = false" data-test="module-assignees">
-                                @if ($canManage)
-                                    <button type="button" @click="pop = !pop" class="flex items-center" title="Assign people" aria-label="Assign people" data-test="module-assign">
-                                        @if ($module->assignees->isEmpty()) <span class="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-slate-300 text-slate-400"><x-icon name="plus" class="h-3 w-3" /></span> @else <span class="flex -space-x-1" data-test="module-avatars">
-                                @foreach ($module->assignees as $u)
-                                    <span title="{{ $u->name }}" class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700 ring-2 ring-white">{{ collect(explode(' ', $u->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') }}</span>
-                                @endforeach
-                            </span> @endif
-                                    </button>
-                                    <div x-show="pop" style="display:none" class="absolute left-0 z-20 mt-1 max-h-60 w-52 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-                                        @forelse ($candidates as $c)
-                                            <label class="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-slate-100 dark:hover:bg-gray-700">
-                                                <input type="checkbox" class="rounded border-slate-300 text-brand-600" @checked($module->assignees->contains('id', $c->id)) wire:change="toggleModuleAssignee({{ $module->id }}, {{ $c->id }})" data-test="assign-{{ $c->id }}">
-                                                {{ $c->name }}
-                                            </label>
-                                        @empty
-                                            <p class="text-xs text-slate-400">No active members.</p>
-                                        @endforelse
-                                    </div>
-                                @else
-                                    <span class="flex -space-x-1" data-test="module-avatars">
-                                @foreach ($module->assignees as $u)
-                                    <span title="{{ $u->name }}" class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700 ring-2 ring-white">{{ collect(explode(' ', $u->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') }}</span>
-                                @endforeach
-                            </span>
-                                @endif
-                            </div>
+                            <x-ui.assignees :users="$module->assignees" :candidates="$canManage ? $candidates : null" method="toggleModuleAssignee" :id="$module->id" data-test="module-assignees" />
                             <span class="flex flex-wrap gap-1">
                                 @foreach ($module->labels as $l)
                                     <x-ui.label-chip :label="$l" />
@@ -117,11 +91,7 @@
                                             <x-icon name="chevron-right" class="h-4 w-4 text-slate-400 transition" ::class="open && 'rotate-90'" />
                                         </button>
                                         <a href="{{ route('tasks.show', $task) }}" wire:navigate data-test="task-link" class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
-                                        <span class="flex -space-x-1">
-                                            @foreach ($task->assignees as $u)
-                                                <span title="{{ $u->name }}" class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[10px] font-semibold text-brand-700 ring-2 ring-white">{{ collect(explode(' ', $u->name))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') }}</span>
-                                            @endforeach
-                                        </span>
+                                        <x-ui.assignees :users="$task->assignees" :candidates="$canManage ? $candidates : null" method="toggleTaskAssignee" :id="$task->id" />
                                         @foreach ($task->labels as $l)
                                             <x-ui.label-chip :label="$l" class="hidden sm:inline-flex" />
                                         @endforeach

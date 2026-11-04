@@ -6,12 +6,25 @@ import Sortable from 'sortablejs';
  * On drop it calls Board::taskMoved(taskId, columnId, position) on the nearest Livewire component.
  * Cards only move between columns of the same lane (data-lane), never across modules.
  */
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 document.addEventListener('alpine:init', () => {
     window.Alpine.directive('board-drag', (el, _, { cleanup }) => {
         const sortable = Sortable.create(el, {
             group: 'board-' + el.dataset.lane,
-            animation: 150,
+            animation: reduce ? 0 : 200,
+            easing: 'cubic-bezier(0.2, 0, 0, 1)',
+            ghostClass: 'board-ghost',
+            chosenClass: 'board-chosen',
+            fallbackClass: 'board-drag',
+            forceFallback: true, // a real DOM clone follows the pointer: styleable and never clipped by the scrolling columns
+            fallbackOnBody: true,
+            filter: '[data-no-drag]', // assignee picker etc.: clicks work, no drag starts
+            preventOnFilter: false,
             onEnd(evt) {
+                const count = (ul) => { const n = ul.closest('[data-col]')?.querySelector('[data-count]'); if (n) n.textContent = ul.querySelectorAll(':scope > li[data-task-id]').length; };
+                count(evt.from); count(evt.to); // counts update at once, the server does not need to re-render a same-stage move
+                if (!reduce) { evt.item.classList.add('board-dropped'); setTimeout(() => evt.item.classList.remove('board-dropped'), 250); }
                 const id = evt.to.closest('[wire\\:id]')?.getAttribute('wire:id');
                 window.Livewire.find(id)?.call(
                     'taskMoved',
