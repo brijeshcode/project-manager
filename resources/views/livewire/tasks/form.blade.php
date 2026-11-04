@@ -109,14 +109,28 @@
                     @error('estimate_hours') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
                 @if ($canMoney)
-                    <div>
-                        <label class="label" for="budget_amount">Value @if ($scope === 'out') <span class="font-normal text-slate-400">(add-on)</span> @endif</label>
-                        @if ($hourlyModule)
-                            <p class="mt-2 text-xs text-slate-500">Hours &times; the module's hourly rate; nothing to type.</p>
+                    @php $formMode = $billing_mode ?: $moduleMode; @endphp
+                    <div x-data="{ differently: {{ $billing_mode !== '' ? 'true' : 'false' }} }">
+                        @if ($formMode === 'hourly')
+                            <p class="label">Value</p>
+                            <p class="mt-2 text-xs text-slate-500" data-test="hourly-note">Billed hours &times; the hourly rate, from the time logged; nothing to type.</p>
+                            <label class="label mt-3" for="hourly_rate">Hourly rate <span class="font-normal text-slate-400">(empty = the module's)</span></label>
+                            <input id="hourly_rate" type="text" wire:model="hourly_rate" class="input" data-test="rate-input">
+                            @error('hourly_rate') <p class="field-error" data-test="rate-error">{{ $message }}</p> @enderror
                         @else
-                            <input id="budget_amount" type="number" step="0.01" min="0" wire:model="budget_amount" placeholder="Empty = unpriced" class="input" data-test="amount-input">
+                            <label class="label" for="budget_amount">Budget amount <span class="font-normal text-slate-400">(empty = unpriced)</span></label>
+                            <input id="budget_amount" type="number" step="0.01" min="0" wire:model="budget_amount" class="input" data-test="amount-input">
+                            @error('budget_amount') <p class="field-error" data-test="amount-error">{{ $message }}</p> @enderror
                         @endif
-                        @error('budget_amount') <p class="field-error" data-test="amount-error">{{ $message }}</p> @enderror
+                        <button type="button" x-show="!differently" @click="differently = true" class="mt-2 text-xs font-medium text-brand-600 hover:text-brand-700" data-test="billed-differently">Billed differently…</button>
+                        <div x-show="differently" style="display:none" class="mt-2">
+                            <label class="label" for="billing_mode">Billed differently</label>
+                            <select id="billing_mode" wire:model.live="billing_mode" class="select" data-test="billing-override">
+                                <option value="">Same as module ({{ ucfirst($moduleMode) }})</option>
+                                <option value="fixed">Fixed</option>
+                                <option value="hourly">Hourly</option>
+                            </select>
+                        </div>
                     </div>
                 @endif
             </div>

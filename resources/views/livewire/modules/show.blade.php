@@ -49,29 +49,34 @@
                 <ul class="divide-y divide-slate-100" x-data x-sortable data-sort-method="reorderTasks" data-test="task-rows">
                     @forelse ($tasks as $task)
                         @php $done = $task->column?->stage === 'done'; @endphp
-                        <li wire:key="task-{{ $task->id }}" data-id="{{ $task->id }}" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-white px-3 py-3 dark:bg-transparent" data-test="task-row">
-                            @if ($canManage)
-                                <span class="drag-handle cursor-grab text-slate-300 hover:text-slate-500" title="Drag to reorder" aria-label="Drag to reorder"><x-icon name="grip-vertical" /></span>
-                            @endif
-                            <x-ui.task-code :task="$task" />
-                            <a href="{{ route('tasks.show', $task) }}" wire:navigate class="min-w-0 flex-1 basis-40 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
-                            <x-ui.type-badge :type="$task->type" />
-                            <x-ui.priority :value="$task->priority" />
-                            <x-ui.assignees :users="$task->assignees" />
-                            @foreach ($task->labels as $l)
-                                <x-ui.label-chip :label="$l" class="hidden sm:inline-flex" />
-                            @endforeach
-                            <x-ui.deadline :date="$task->deadline" :done="$done" class="text-xs" />
-                            @if ($money)
-                                @if ($task->isAddon())
-                                    <x-ui.badge :color="$task->addon_accepted_at ? 'green' : 'amber'" data-test="row-addon">{{ $task->addon_accepted_at ? 'Add-on' : 'Proposed add-on' }}</x-ui.badge>
-                                @elseif (! $hourly && $task->budget_amount === null)
-                                    <x-ui.badge color="amber" data-test="row-unpriced">Unpriced</x-ui.badge>
+                        {{-- Two lines per task: what it is and where it stands on top, details underneath, so nothing wraps awkwardly --}}
+                        <li wire:key="task-{{ $task->id }}" data-id="{{ $task->id }}" class="bg-white px-3 py-2.5 dark:bg-transparent" data-test="task-row">
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:flex-nowrap">
+                                @if ($canManage)
+                                    <span class="drag-handle shrink-0 cursor-grab text-slate-300 hover:text-slate-500" title="Drag to reorder" aria-label="Drag to reorder"><x-icon name="grip-vertical" /></span>
                                 @endif
-                                @if ($task->budget_amount !== null)<span class="text-xs tabular-nums text-slate-600" data-test="row-value">{{ \App\Support\Money::format(\App\Support\Money::toCents((string) $task->budget_amount), $project->currency) }}</span>@endif
-                            @endif
-                            <x-ui.stage-badge :column="$task->column" />
-                            <x-ui.progress :pct="$progressService->forTask($task)" class="w-32" data-test="task-bar" />
+                                <x-ui.task-code :task="$task" class="shrink-0" />
+                                <a href="{{ route('tasks.show', $task) }}" wire:navigate class="min-w-[8rem] flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
+                                {{-- stage + bar stay together; on a phone they drop under the title as one unit --}}
+                                <span class="ml-auto flex shrink-0 items-center gap-3">
+                                    <x-ui.stage-badge :column="$task->column" />
+                                    <x-ui.progress :pct="$progressService->forTask($task)" class="w-28 shrink-0 sm:w-36" data-test="task-bar" />
+                                </span>
+                            </div>
+                            <div @class(['mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1', 'pl-7' => $canManage])>
+                                <x-ui.type-badge :type="$task->type" />
+                                <x-ui.priority :value="$task->priority" />
+                                <x-ui.assignees :users="$task->assignees" />
+                                @foreach ($task->labels as $l)
+                                    <x-ui.label-chip :label="$l" />
+                                @endforeach
+                                <span class="ml-auto flex items-center gap-3">
+                                    <x-ui.deadline :date="$task->deadline" :done="$done" class="text-xs" />
+                                    @if ($money)
+                                        @include('livewire.items._task-value', ['task' => $task, 'currency' => $project->currency])
+                                    @endif
+                                </span>
+                            </div>
                         </li>
                     @empty
                         <li class="px-5 py-3 text-sm text-slate-400">No tasks in this module yet.</li>
@@ -135,14 +140,19 @@
                     <x-ui.side-section title="Budget" name="budget" :panel="$panel" :can="$canManage">
                         @include('livewire.modules._budget-panel')
                         <x-slot:editor>
-                            <div class="space-y-1.5">
-                                @if ($hourly)
-                                    <input type="number" step="0.01" min="0" wire:model="hours" placeholder="Budget hours" class="input h-8 text-sm">
-                                    <input type="text" wire:model="rate" placeholder="Hourly rate ({{ $project->currency }})" class="input h-8 text-sm">
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="text-xs text-slate-500" for="billing-mode">Billing</label>
+                                    <select id="billing-mode" wire:model.live="billingMode" class="select h-9 text-sm" data-test="billing-mode"><option value="fixed">Fixed</option><option value="hourly">Hourly</option></select>
+                                </div>
+                                @if ($billingMode === 'hourly')
+                                    <div><label class="text-xs text-slate-500" for="budget-hours">Budget hours</label><input id="budget-hours" type="number" step="0.01" min="0" wire:model.live.debounce.300ms="hours" class="input h-8 text-sm" data-test="hours-input"></div>
+                                    <div><label class="text-xs text-slate-500" for="hourly-rate">Hourly rate ({{ $project->currency }})</label><input id="hourly-rate" type="text" wire:model.live.debounce.300ms="rate" class="input h-8 text-sm" data-test="rate-input"></div>
+                                    <p class="text-xs text-slate-500" data-test="hourly-formula">{{ rtrim(rtrim(number_format((float) $hours, 2), '0'), '.') ?: '0' }} h &times; {{ $rate === '' ? '0' : $rate }} = {{ number_format((float) $hours * (float) str_replace(',', '', $rate), 2) }}</p>
                                 @else
-                                    <input type="text" wire:model="amount" placeholder="Fixed amount ({{ $project->currency }})" class="input h-8 text-sm">
+                                    <div><label class="text-xs text-slate-500" for="budget-amount">Budget amount ({{ $project->currency }})</label><input id="budget-amount" type="text" wire:model="amount" class="input h-8 text-sm" data-test="amount-input"></div>
                                 @endif
-                                <input type="text" wire:model="budgetReason" placeholder="Reason (required when changing a value)" class="input h-8 text-sm">
+                                <div><label class="text-xs text-slate-500" for="budget-reason">Reason</label><input id="budget-reason" type="text" wire:model="budgetReason" placeholder="Required when changing a value" class="input h-8 text-sm" data-test="reason-input"></div>
                             </div>
                             @foreach (['hours', 'rate', 'amount', 'budgetReason'] as $f)
                                 @error($f) <p class="field-error">{{ $message }}</p> @enderror

@@ -51,6 +51,9 @@
                 @endcan
                 <x-ui.card><div class="text-sm text-slate-500 dark:text-gray-400">Modules</div><div class="text-xl font-semibold">{{ $modules->count() }}</div></x-ui.card>
             </div>
+            @can('manage-money')
+                <p class="text-sm text-slate-500 dark:text-gray-400" data-test="allocated-line">Allocated to modules: {{ \App\Support\Money::format($project->allocatedToModules(), $project->currency) }} of Final {{ \App\Support\Money::format(\App\Support\Money::toCents($project->final_budget), $project->currency) }}</p>
+            @endcan
 
             @php $dStatus = $project->deadlineStatus(); @endphp
             <x-ui.card>

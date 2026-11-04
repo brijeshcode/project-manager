@@ -130,18 +130,17 @@ class Show extends Component
         $b = $this->budget[$moduleId];
         $amt = fn ($v) => ($v ?? '') === '' ? null : Money::toInput(Money::toCents(str_replace(',', '', $v)));
         try {
-            $module->updateBudget([
-                'budget_hours'        => ($b['hours'] ?? '') === '' ? null : $b['hours'],
-                'hourly_rate'   => $amt($b['rate'] ?? null),
-                'budget_amount' => $amt($b['amount'] ?? null),
-                'deadline'            => ($b['deadline'] ?? '') ?: null,
-            ], auth()->user(), (string) ($b['reason'] ?? ''));
+            // the module's own mode decides the fields (switch the mode on the module page)
+            $module->updateBudget(($module->billingMode() === 'hourly'
+                ? ['budget_hours' => ($b['hours'] ?? '') === '' ? null : $b['hours'], 'hourly_rate' => $amt($b['rate'] ?? null)]
+                : ['budget_amount' => $amt($b['amount'] ?? null)])
+                + ['deadline' => ($b['deadline'] ?? '') ?: null], auth()->user(), (string) ($b['reason'] ?? ''));
         } catch (\Illuminate\Validation\ValidationException $e) {
             $this->addError("budget.$moduleId.reason", $e->errors()['reason'][0] ?? 'Reason required.');
 
             return;
         } catch (\App\Exceptions\OverBudget $e) {
-            // the module page has the three ways out (raise, add-on, rebalance); here we only refuse and point to it
+            // the module page has the one way out (raise the amount); here we only refuse and point to it
             $this->budgetBlocked[$moduleId] = $e->getMessage();
 
             return;

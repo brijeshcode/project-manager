@@ -18,12 +18,8 @@
             <x-ui.priority :value="$task->priority" data-test="priority-badge" />
             @if ($task->status->value === 'draft') <x-ui.badge color="amber">Draft</x-ui.badge> @endif
             @if ($task->client_visible) <x-ui.badge color="brand">Visible to client</x-ui.badge> @endif
-            @if ($canMoney)
-                @if ($task->isAddon())
-                    <x-ui.badge :color="$task->addon_accepted_at ? 'green' : 'amber'" data-test="addon-badge">{{ $task->addon_accepted_at ? 'Accepted add-on' : 'Proposed add-on' }} {{ $task->code() }}</x-ui.badge>
-                @elseif (! $mb->hourly() && $task->budget_amount === null)
-                    <x-ui.badge color="amber" data-test="unpriced">Unpriced</x-ui.badge>
-                @endif
+            @if ($canMoney && $task->budget_amount === null)
+                <x-ui.badge color="amber" data-test="unpriced">Unpriced</x-ui.badge>
             @endif
             <span class="text-sm text-slate-500">{{ $project->client->name }} &middot; {{ $project->name }} &middot; {{ $module->name }}</span>
             @unless ($embedded)
@@ -172,45 +168,19 @@
                         @if ($canMoney)
                             @php $over = $est > 0 && $logged > $est; $bad = $est > 0 && $logged > $est * 1.25; @endphp
                             <p @class(['text-xs', 'text-slate-500' => ! $over, 'font-medium text-amber-600 dark:text-amber-400' => $over && ! $bad, 'font-medium text-rose-600 dark:text-rose-400' => $bad]) data-test="logged-vs-estimate">Logged {{ rtrim(rtrim(number_format($logged, 2), '0'), '.') ?: '0' }} h of {{ rtrim(rtrim(number_format($est, 2), '0'), '.') ?: '0' }} h estimate @if ($over) &middot; over by {{ rtrim(rtrim(number_format($logged - $est, 2), '0'), '.') }} h @endif</p>
-                            <p class="mt-1" data-test="task-value">
-                                @if ($mb->hourly())
-                                    {{ \App\Support\Money::format($mb->valueCents($task), $project->currency) }} <span class="text-xs text-slate-500">({{ rtrim(rtrim(number_format($est, 2), '0'), '.') }} h &times; {{ $module->hourly_rate ?? 'no rate' }})</span>
-                                @elseif ($task->budget_amount === null)
-                                    <span class="text-amber-600 dark:text-amber-400">Unpriced</span>
-                                @else
-                                    {{ \App\Support\Money::format(\App\Support\Money::toCents((string) $task->budget_amount), $project->currency) }}
-                                @endif
-                            </p>
                         @endif
                         <x-slot:editor>
                             <div class="space-y-1.5">
-                                <select wire:model.live="scope" class="select h-8 text-sm"><option value="in">In scope</option><option value="out">Out of scope (add-on)</option></select>
+                                <select wire:model.live="scope" class="select h-8 text-sm"><option value="in">In scope</option><option value="out">Out of scope</option></select>
                                 <input type="number" step="0.5" min="0" wire:model="estimate" placeholder="Hours" class="input h-8 text-sm">
                                 @error('estimate') <p class="field-error">{{ $message }}</p> @enderror
-                                @if ($canMoney && ! $mb->hourly())
-                                    <input type="number" step="0.01" min="0" wire:model="budget_amount" placeholder="Value ({{ $project->currency }}), empty = unpriced" aria-label="Budget amount" class="input h-8 text-sm" data-test="amount-input">
-                                @elseif ($canMoney)
-                                    <p class="text-xs text-slate-500">The value is hours &times; the module's hourly rate.</p>
-                                @endif
-                                @error('budget_amount') <p class="field-error" data-test="amount-error">{{ $message }}</p> @enderror
                             </div>
                         </x-slot:editor>
                     </x-ui.side-section>
-                    @if ($panel === 'estimate')
-                        @include('livewire.items._over-budget', ['bv' => $bv])
-                    @endif
                 @endif
 
-                @if ($canMoney && $task->isAddon())
-                    <x-ui.side-section title="Add-on" name="addon">
-                        @if ($task->addon_accepted_at)
-                            <p data-test="addon-status">Accepted {{ $task->addon_accepted_at->format('M j, Y') }}. It counts in the module budget and the project's add-ons.</p>
-                        @else
-                            <p class="text-xs text-slate-500" data-test="addon-status">Proposed: not counted in the module's budget until the client confirms.</p>
-                            <button type="button" wire:click="acceptAddon" wire:confirm="Has the client confirmed this add-on? Accepting raises {{ $module->name }}'s budget by its value ({{ $mb->format($mb->units($task)) }}) and cannot be undone." class="btn btn-primary mt-2 h-8 px-2.5 py-1 text-xs" data-test="accept-addon">Accept add-on</button>
-                            @error('addon') <p class="field-error">{{ $message }}</p> @enderror
-                        @endif
-                    </x-ui.side-section>
+                @if ($canMoney)
+                    @include('livewire.tasks._billing')
                 @endif
 
                 <x-ui.side-section title="Client visible" name="visibility" :panel="$panel" :can="$canEdit">

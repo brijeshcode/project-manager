@@ -57,7 +57,7 @@ it('logs one change row per changed field', function () {
     $m->updateBudget(['budget_hours' => 15, 'hourly_rate' => '50.00'], $u, 'Scope grew');
 
     $rows = ModuleBudgetChange::where('module_id', $m->id)->where('reason', 'Scope grew')->get();
-    expect($rows)->toHaveCount(1)
+    expect($rows)->toHaveCount(2) // budget_hours + the derived budget_amount
         ->and($rows[0]->field)->toBe('budget_hours')
         ->and((float) $rows[0]->old)->toBe(10.0)
         ->and((float) $rows[0]->new)->toBe(15.0)

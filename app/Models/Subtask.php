@@ -71,6 +71,7 @@ class Subtask extends Model
             foreach (['comments' => 'commentable', 'attachments' => 'attachable', 'checklistItems' => 'checklistable', 'timeEntries' => 'timeable'] as $rel => $morph) {
                 $this->{$rel}()->reorder()->update(["{$morph}_type" => $task->getMorphClass(), "{$morph}_id" => $task->id]);
             }
+            $task->recalculateValue(); // its time entries moved over without model events
             $task->logActivity('converted', null, $parent->code().' '.$parent->title);
             $this->delete();
 

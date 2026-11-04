@@ -14,8 +14,7 @@
     <x-ui.priority :value="$task->priority" />
     <x-ui.assignees :users="$task->assignees" :candidates="($canManage ?? false) ? $candidates : null" method="toggleTaskAssignee" :id="$task->id" />
     @can('manage-money')
-        @php $mb = new \App\Services\ModuleBudget($task->module); @endphp
-        <span class="w-20 text-right text-xs tabular-nums {{ $mb->priced($task) ? 'text-slate-600' : 'text-amber-600 dark:text-amber-400' }}" data-test="row-value">{{ $mb->priced($task) ? \App\Support\Money::format($mb->valueCents($task), $task->module->project->currency) : 'unpriced' }}</span>
+        @include('livewire.items._task-value', ['task' => $task, 'currency' => $task->module->project->currency])
     @endcan
     <span class="w-14 text-right text-xs tabular-nums text-slate-500">{{ $task->hours() ? rtrim(rtrim(number_format($task->hours(), 1), '0'), '.').'h' : '' }}</span>
     <span class="w-14 text-xs"><x-ui.deadline :date="$task->deadline" :done="$done" /></span>

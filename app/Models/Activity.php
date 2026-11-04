@@ -32,7 +32,6 @@ class Activity extends Model
             'unassigned' => "unassigned {$this->old}",
             'label_added' => "added the label {$this->new}",
             'label_removed' => "removed the label {$this->old}",
-            'addon_accepted' => 'accepted this add-on',
             'created' => 'created this resource',
             'viewed' => 'viewed the value',
             'edited' => 'edited the '.($this->field ?? 'resource'),

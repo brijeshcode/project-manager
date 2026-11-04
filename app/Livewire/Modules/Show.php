@@ -21,9 +21,6 @@ class Show extends Component
 {
     use HandlesBudgetBlock, ItemPage;
 
-    /** The distribute helper's preview is open. */
-    public bool $distributing = false;
-
     #[Locked]
     public Project $project;
 
@@ -41,6 +38,8 @@ class Show extends Component
     public int $priority = 1;
 
     /** Budget inputs (major units), owner only. */
+    public string $billingMode = 'fixed';
+
     public string $hours = '';
 
     public string $rate = '';
@@ -85,6 +84,7 @@ class Show extends Component
         $this->deadlineReason = '';
         $this->clientVisible = $m->client_visible;
         $this->priority = $m->priority;
+        $this->billingMode = $m->billingMode();
         $this->hours = $m->budget_hours === null ? '' : (string) $m->budget_hours;
         $this->rate = $m->hourly_rate ?? '';
         $this->amount = $m->budget_amount ?? '';
@@ -106,23 +106,28 @@ class Show extends Component
             abort_unless(auth()->user()->can('manage-money'), 403);
             $money = fn ($a, $v, $fail) => preg_match('/^\d{1,7}(\.\d{1,2})?$/', str_replace(',', '', (string) $v)) || $fail('Too large.');
             $this->validate([
+                'billingMode' => 'required|in:fixed,hourly',
                 'hours' => ['bail', 'nullable', 'regex:/^\d{1,5}(\.\d{1,2})?$/'],
                 'rate' => ['bail', 'nullable', 'regex:/^[\d,]{1,11}(\.\d{1,2})?$/', $money],
                 'amount' => ['bail', 'nullable', 'regex:/^[\d,]{1,11}(\.\d{1,2})?$/', $money],
                 'budgetReason' => 'nullable|string|max:1000',
             ]);
             $amt = fn ($v) => $v === '' ? null : Money::toInput(Money::toCents(str_replace(',', '', $v)));
+            $hourly = $this->billingMode === 'hourly';
+            if ($hourly && ($this->hours === '') !== ($this->rate === '')) {
+                $this->addError($this->hours === '' ? 'hours' : 'rate', 'Hours and rate go together: fill in both.');
+
+                return;
+            }
             try {
-                $m->updateBudget([
-                    'budget_hours' => $this->hours === '' ? null : $this->hours,
-                    'hourly_rate' => $amt($this->rate),
-                    'budget_amount' => $amt($this->amount),
-                ], auth()->user(), $this->budgetReason);
+                $m->updateBudget(['billing_mode' => $this->billingMode] + ($hourly
+                    ? ['budget_hours' => $this->hours === '' ? null : $this->hours, 'hourly_rate' => $amt($this->rate)]
+                    : ['budget_amount' => $amt($this->amount)]), auth()->user(), $this->budgetReason);
             } catch (ValidationException $e) {
                 $this->addError('budgetReason', $e->errors()['reason'][0] ?? 'Reason required.');
             } catch (OverBudget $e) {
-                $this->blockFrom($e, ['kind' => 'module', 'newUnits' => 0, 'title' => $m->name]);
-                $this->addError($e->module->project->client->billing_mode === \App\Enums\BillingMode::Hourly ? 'hours' : 'amount', $e->getMessage());
+                $this->blockFrom($e, ['kind' => 'module', 'title' => $m->name]);
+                $this->addError('amount', $e->getMessage());
             }
         }
     }
@@ -138,21 +143,6 @@ class Show extends Component
     {
         $this->module->refresh();
         $this->closePanel();
-    }
-
-    public function openDistribute(): void
-    {
-        abort_unless(auth()->user()->can('manage-money'), 403);
-        $this->authorize('update', $this->project);
-        $this->distributing = true;
-    }
-
-    public function applyDistribute(): void
-    {
-        abort_unless(auth()->user()->can('manage-money'), 403);
-        $this->authorize('update', $this->project);
-        (new ModuleBudget($this->module))->applyDistribute();
-        $this->distributing = false;
     }
 
     /** Drag-reorder of the task list: the module's one task order (also what the board shows within a column). */
@@ -201,7 +191,7 @@ class Show extends Component
             'status' => $this->module->status(),
             'mb' => auth()->user()->can('manage-money') ? new ModuleBudget($this->module) : null,
             'bv' => $this->blockView(),
-            'hourly' => $this->project->client->billing_mode === \App\Enums\BillingMode::Hourly,
+            'hourly' => $this->module->billingMode() === 'hourly',
         ]);
     }
 }

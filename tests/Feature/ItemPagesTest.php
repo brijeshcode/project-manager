@@ -315,6 +315,8 @@ it('opens a prefilled task create page from the Copy action, saving nothing unti
     $s = ipSetup();
     $this->actingAs($s['admin']);
     $label = Label::create(['name' => 'Bug', 'color' => '#f00']);
+    $s['module']->update(['billing_mode' => 'fixed']); // a typed amount needs a fixed task
+    $s['task']->refresh();
     $s['task']->update(['client_visible' => true, 'budget_amount' => 10, 'scope' => 'out']);
     $s['task']->syncLabels([$label->id]);
     $s['task']->syncAssignees([$s['member']->id]);

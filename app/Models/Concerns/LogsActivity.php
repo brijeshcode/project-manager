@@ -8,7 +8,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * Models list `$loggedFields`; every change to one of them on update is written to `activities`.
- * Set `$activityReason` before save to attach an optional reason (deadline changes); `$activityMute` skips fields once.
+ * Set `$activityReason` before save to attach an optional reason to that save's changes (deadline, billed hours); `$activityMute` skips fields once.
  */
 trait LogsActivity
 {
@@ -21,7 +21,7 @@ trait LogsActivity
         static::updated(function ($m) {
             foreach ($m->loggedFields as $f) {
                 if ($m->isDirty($f) && ! in_array($f, $m->activityMute, true)) {
-                    $m->logActivity('changed', $f, $m->activityValue($m->getOriginal($f), $f), $m->activityValue($m->getAttribute($f), $f), $f === 'deadline' ? $m->activityReason : null);
+                    $m->logActivity('changed', $f, $m->activityValue($m->getOriginal($f), $f), $m->activityValue($m->getAttribute($f), $f), $m->activityReason);
                 }
             }
             $m->activityReason = null;

@@ -51,6 +51,17 @@ class Show extends Component
 
     public string $budget_amount = '';
 
+    /** Billing panel: '' = bills like the module; shown only after "Billed differently". */
+    public string $billingOverride = '';
+
+    public bool $showOverride = false;
+
+    public string $taskRate = '';
+
+    public string $billedHours = '';
+
+    public string $billedReason = '';
+
     public ?int $typeId = null;
 
     public string $newSubtask = '';
@@ -112,6 +123,11 @@ class Show extends Component
         $this->scope = $t->scope->value;
         $this->estimate = (string) $t->estimate_hours;
         $this->budget_amount = $t->budget_amount === null ? '' : (string) $t->budget_amount;
+        $this->billingOverride = $t->billing_mode ?? '';
+        $this->showOverride = $t->billing_mode !== null;
+        $this->taskRate = $t->hourly_rate ?? '';
+        $this->billedHours = $t->billable_hours === null ? '' : (string) $t->billable_hours;
+        $this->billedReason = '';
         $this->startedAt = $t->started_at?->toDateString() ?? '';
         $this->completedAt = $t->completed_at?->toDateString() ?? '';
     }
@@ -125,6 +141,7 @@ class Show extends Component
             'priority' => $t->update($this->validate(['priority' => 'integer|in:0,1,2'])),
             'visibility' => $this->saveVisibility($t),
             'estimate' => $this->saveEstimate($t),
+            'billing' => $this->saveBilling($t),
             'dates' => $this->saveDates($t),
             default => null,
         };
@@ -153,22 +170,50 @@ class Show extends Component
     private function saveEstimate(Task $t): void
     {
         abort_unless($this->canCost, 403);
-        $this->validate(['scope' => 'required|in:in,out', 'estimate' => 'numeric|min:0|max:99999', 'budget_amount' => 'nullable|numeric|min:0|max:9999999.99']);
-        $data = ['scope' => $this->scope, 'estimate_hours' => (float) $this->estimate];
-        if ($this->canMoney) {
-            $data['budget_amount'] = $this->budget_amount === '' ? null : (float) $this->budget_amount;
-        }
-        // what the task would use of its module's budget after this save
-        $probe = $t->replicate()->forceFill($data)->setRelation('subtasks', $t->subtasks);
-        if ($probe->countsTowardBudget()) {
-            $mb = new ModuleBudget($t->module);
-            try {
-                $mb->guard($t, $mb->units($probe));
-            } catch (OverBudget $e) {
-                $this->blockFrom($e, ['kind' => 'task', 'taskId' => $t->id, 'newUnits' => $mb->units($probe), 'title' => $t->title]);
-                $this->addError('budget_amount', $e->getMessage()); // keeps the panel open
+        $this->validate(['scope' => 'required|in:in,out', 'estimate' => 'numeric|min:0|max:99999']);
+        $t->update(['scope' => $this->scope, 'estimate_hours' => (float) $this->estimate]);
+    }
+
+    /**
+     * Money panel: a fixed task's typed amount (blocked when it would put the module over), or an hourly task's billed
+     * hours / rate; plus the optional per-task override of the module's billing mode. Hourly values are never blocked.
+     */
+    private function saveBilling(Task $t): void
+    {
+        abort_unless($this->canMoney, 403);
+        $this->validate([
+            'billingOverride' => 'in:,fixed,hourly', 'taskRate' => ['nullable', 'regex:/^\d{1,7}(\.\d{1,2})?$/'],
+            'billedHours' => 'nullable|numeric|min:0|max:99999', 'budget_amount' => 'nullable|numeric|min:0|max:9999999.99', 'billedReason' => 'nullable|string|max:1000',
+        ]);
+        $module = $t->module;
+        $mode = $this->billingOverride ?: $module->billingMode();
+        $data = ['billing_mode' => $this->billingOverride && $this->billingOverride !== $module->billingMode() ? $this->billingOverride : null];
+        if ($mode === 'hourly') {
+            if ($module->billingMode() !== 'hourly' && $this->taskRate === '' && $module->hourly_rate === null) {
+                $this->addError('taskRate', "An hourly task needs a rate: type one here or set the module's hourly rate.");
 
                 return;
+            }
+            $hours = $this->billedHours === '' ? null : round((float) $this->billedHours, 2);
+            if ($hours !== ($t->billable_hours === null ? null : round((float) $t->billable_hours, 2)) && trim($this->billedReason) === '') {
+                $this->addError('billedReason', 'A reason is required when changing the billed hours.');
+
+                return;
+            }
+            $data += ['hourly_rate' => $this->taskRate === '' ? null : $this->taskRate, 'billable_hours' => $hours];
+            $t->activityReason = $this->billedReason;
+        } else {
+            $data += ['hourly_rate' => null, 'billable_hours' => null, 'budget_amount' => $this->budget_amount === '' ? null : (float) $this->budget_amount];
+            if ($t->countsTowardBudget() && $data['budget_amount'] !== null) {
+                $mb = new ModuleBudget($module);
+                try {
+                    $mb->guard($t, Money::toCents((string) $data['budget_amount']));
+                } catch (OverBudget $e) {
+                    $this->blockFrom($e, ['kind' => 'task', 'taskId' => $t->id, 'title' => $t->title]);
+                    $this->addError('budget_amount', $e->getMessage()); // keeps the panel open
+
+                    return;
+                }
             }
         }
         $t->update($data);
@@ -177,21 +222,8 @@ class Show extends Component
 
     protected function retryBlocked(): void
     {
-        $this->saveEstimate($this->task);
+        $this->saveBilling($this->task);
         $this->getErrorBag()->any() || $this->closePanel();
-    }
-
-    /** The client confirmed the add-on: raises the module budget by its value and counts it from now on. */
-    public function acceptAddon(): void
-    {
-        abort_unless($this->canMoney, 403);
-        $this->authorize('update', $this->task->module->project);
-        try {
-            $this->task->acceptAddon(auth()->user());
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            $this->addError('addon', $e->errors()['addon'][0]);
-        }
-        $this->task->refresh();
     }
 
     public function moveColumn(int $columnId): void
@@ -264,7 +296,7 @@ class Show extends Component
             'pct' => app(ProgressService::class)->forTask($this->task),
             'bv' => $this->blockView(),
             'mb' => $this->canMoney ? new ModuleBudget($this->task->module) : null,
-            'logged' => $this->canMoney ? round((float) $this->task->timeEntries()->sum('hours') + (float) $this->task->subtasks->sum(fn ($s) => $s->timeEntries()->sum('hours')), 2) : 0,
+            'logged' => $this->canMoney ? $this->task->loggedHours() : 0,
         ]);
     }
 }

@@ -29,6 +29,14 @@ class TimeEntry extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        // an hourly task's value follows the logged hours (never blocked: the module panel shows any overspend)
+        $sync = fn (self $e) => ($t = $e->timeable instanceof Subtask ? $e->timeable->task : $e->timeable) instanceof Task && Task::find($t->id)?->recalculateValue();
+        static::saved($sync);
+        static::deleted($sync);
+    }
+
     public function timeable(): MorphTo
     {
         return $this->morphTo();

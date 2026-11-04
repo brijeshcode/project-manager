@@ -329,7 +329,7 @@ it('edits every module field in place and logs the changes, deadline reason opti
 
 it('keeps the required reason on budget changes and logs them once', function () {
     $s = modSetup();
-    $s['client']->update(['billing_mode' => 'hourly']);
+    $s['module']->update(['billing_mode' => 'hourly']);
     $s['module']->updateBudget(['budget_hours' => '10', 'hourly_rate' => '50.00'], $s['admin'], '');
 
     modPage($s)->call('openPanel', 'budget')->set('hours', '20')->call('savePanel')->assertHasErrors('budgetReason')->assertSet('panel', 'budget');
@@ -337,7 +337,7 @@ it('keeps the required reason on budget changes and logs them once', function ()
 
     modPage($s)->call('openPanel', 'budget')->set('hours', '20')->set('budgetReason', 'Scope grew')->call('savePanel')->assertHasNoErrors()->assertSet('panel', null);
     expect($s['module']->fresh()->budget_hours)->toBe('20.00');
-    expect($s['module']->budgetChanges()->where('reason', 'Scope grew')->count())->toBe(1);
+    expect($s['module']->budgetChanges()->where('reason', 'Scope grew')->where('field', 'budget_hours')->count())->toBe(1);
 
     $s['module']->updateBudget(['deadline' => '2031-01-01'], $s['admin'], '');
     expect($s['module']->activities()->where('field', 'deadline')->count())->toBe(0); // the budget row covers it

@@ -13,6 +13,7 @@ return new class extends Migration
         });
 
         Schema::table('modules', function (Blueprint $t) {
+            $t->string('billing_mode')->nullable();   // fixed|hourly; null = the client's mode at creation
             $t->decimal('budget_hours', 8, 2)->nullable();
             $t->decimal('hourly_rate', 14, 2)->nullable();
             $t->decimal('budget_amount', 14, 2)->nullable();

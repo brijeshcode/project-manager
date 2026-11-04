@@ -49,9 +49,10 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * The budget model on a fixed-price client (Globex / Fleet Tracker): module caps, priced and unpriced tasks,
-     * one accepted and one proposed add-on, and a completed sprint whose done tasks became ONE billable line.
-     * Idempotent: skipped once the Maps module has a budget.
+     * The budget model on Globex / Fleet Tracker: Maps is a FIXED module (typed task amounts, plus one task billed hourly
+     * at its own rate), Reports is an HOURLY module (tasks valued by billed hours, one with hand-adjusted hours, plus one
+     * task billed fixed), typed project initial budget and add-ons, and a completed sprint whose done tasks became ONE
+     * billable line. Idempotent: skipped once the Maps module has a budget.
      */
     private function seedBudgets(): void
     {
@@ -64,20 +65,26 @@ class DemoSeeder extends Seeder
         }
         auth()->setUser($admin);
         $done = $project->columns->firstWhere('stage', 'done');
+        $project->update(['initial_budget' => '10000', 'addons_amount' => '800']); // typed: final = 10,800
         $maps->updateBudget(['budget_amount' => '6000'], $admin, '');
-        $reports->updateBudget(['budget_amount' => '4000'], $admin, '');
+        $reports->updateBudget(['billing_mode' => 'hourly', 'budget_hours' => '80', 'hourly_rate' => '50'], $admin, 'Billed by the hour');
+        $log = fn (Task $t, float $h) => $t->timeEntries()->create(['user_id' => $admin->id, 'hours' => $h, 'worked_on' => today()->subDays(3)]);
 
-        // Maps: one priced task, one unpriced (so the distribute helper has something to do); Reports: fully priced
+        // Maps (fixed): two typed amounts and a task billed hourly at its own rate (10 h x 80 = 800)
         [$map, $fence] = $maps->tasks()->orderBy('position')->get();
         $map->update(['budget_amount' => '3000', 'board_column_id' => $done->id]);
-        [$mileage, $score] = $reports->tasks()->orderBy('position')->get();
-        $mileage->update(['budget_amount' => '1500', 'board_column_id' => $done->id]);
-        $score->update(['budget_amount' => '1500']);
+        $fence->update(['budget_amount' => '1500']);
+        $export = Task::create(['module_id' => $maps->id, 'creator_id' => $admin->id, 'title' => 'Fleet export API', 'status' => 'published', 'estimate_hours' => 10, 'billing_mode' => 'hourly', 'hourly_rate' => '80', 'client_visible' => true]);
+        $log($export, 10);
 
-        // an accepted add-on (raises Maps to 6,800) and a proposed one (not counted yet)
-        $export = Task::create(['module_id' => $maps->id, 'creator_id' => $admin->id, 'title' => 'Fleet export API', 'status' => 'published', 'scope' => 'out', 'estimate_hours' => 10, 'budget_amount' => '800', 'client_visible' => true]);
-        $export->acceptAddon($admin);
-        Task::create(['module_id' => $reports->id, 'creator_id' => $admin->id, 'title' => 'Driver mobile alerts', 'status' => 'published', 'scope' => 'out', 'estimate_hours' => 14, 'budget_amount' => '1200', 'client_visible' => true]);
+        // Reports (hourly, 80 h x 50 = 4,000): billed hours x rate; one task has its billed hours adjusted down for the client
+        [$mileage, $score] = $reports->tasks()->orderBy('position')->get();
+        $mileage->update(['board_column_id' => $done->id]);
+        $log($mileage, 12);
+        $log($score, 20);
+        $score->activityReason = 'Client agreed to pay for 16 h';
+        $score->update(['billable_hours' => 16]);
+        Task::create(['module_id' => $reports->id, 'creator_id' => $admin->id, 'title' => 'Driver mobile alerts', 'status' => 'published', 'estimate_hours' => 14, 'billing_mode' => 'fixed', 'budget_amount' => '1200', 'client_visible' => true]);
 
         // a completed sprint: its two done tasks are one billable line
         $start = now()->subDays(20)->startOfDay();

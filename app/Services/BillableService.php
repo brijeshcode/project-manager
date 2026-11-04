@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Enums\BillingMode;
 use App\Enums\TaskStatus;
 use App\Models\BillableLine;
 use App\Models\Client;
@@ -20,7 +19,7 @@ class BillableService
      * A task is never in two lines: when a sprint completes its pending per-task lines are replaced by the sprint
      * line, and a task that already has an invoiced line stays out of the sprint line. Invoiced lines are never
      * touched (a sprint line is frozen once invoiced; a task done in that sprint LATER, i.e. not named in the frozen
-     * line, bills on its own). Proposed (unaccepted) add-ons are not billed.
+     * line, bills on its own).
      */
     public function syncCompletedWork(Client $client): void
     {
@@ -29,19 +28,16 @@ class BillableService
             ->where('status', TaskStatus::Published->value)
             ->whereHas('column', fn ($q) => $q->where('stage', 'done'))
             ->with(['module.project', 'subtasks', 'sprint'])
-            ->get()
-            ->reject(fn (Task $t) => $t->isAddon() && ! $t->addon_accepted_at);
+            ->get();
 
-        $hourly = $client->billing_mode === BillingMode::Hourly;
-
-        DB::transaction(function () use ($tasks, $hourly, $client) {
+        DB::transaction(function () use ($tasks, $client) {
             $sprintLines = BillableLine::where('client_id', $client->id)->where('source_type', Sprint::class)->orderBy('id')->lockForUpdate()->get()->keyBy('source_id');
             $invoicedTaskIds = BillableLine::where('client_id', $client->id)->where('source_type', Task::class)->whereNotNull('invoice_id')->pluck('source_id');
             // tasks that go into a sprint line: done in a completed sprint whose line is not invoiced yet, and not invoiced on their own
             $inSprint = $tasks->filter(fn (Task $t) => $t->sprint?->status === 'completed' && ! $sprintLines->get($t->sprint_id)?->invoice_id && ! $invoicedTaskIds->contains($t->id));
             $frozen = $tasks->filter(fn (Task $t) => $t->sprint?->status === 'completed' && $sprintLines->get($t->sprint_id)?->invoice_id);
             $lateOnly = $frozen->reject(fn (Task $t) => preg_match('/\b'.preg_quote($t->code(), '/').'\b/', $sprintLines->get($t->sprint_id)->description));
-            $this->syncSprintLines($client, $inSprint, $hourly, $sprintLines);
+            $this->syncSprintLines($client, $inSprint, $sprintLines);
             $tasks = $tasks->filter(fn (Task $t) => $t->sprint?->status !== 'completed' || $lateOnly->contains($t) || $invoicedTaskIds->contains($t->id));
 
             // read inside the transaction; lockForUpdate is a no-op on sqlite (no unique index, per ruling)
@@ -49,7 +45,7 @@ class BillableService
                 ->orderBy('id')->lockForUpdate()->get()->groupBy('source_id');
             $keep = [];
             foreach ($tasks as $task) {
-                $cents = $this->amountCents($task, $hourly);
+                $cents = $this->amountCents($task);
                 if ($cents === null) {
                     continue;
                 }
@@ -75,11 +71,11 @@ class BillableService
     }
 
     /** One pending line per completed sprint holding the value of its done tasks; a sprint with nothing billable has none. */
-    private function syncSprintLines(Client $client, Collection $inSprint, bool $hourly, Collection $existing): void
+    private function syncSprintLines(Client $client, Collection $inSprint, Collection $existing): void
     {
         $keep = [];
         foreach ($inSprint->groupBy('sprint_id') as $sprintId => $group) {
-            $priced = $group->map(fn (Task $t) => [$t, $this->amountCents($t, $hourly)])->filter(fn ($p) => $p[1] !== null)->values();
+            $priced = $group->map(fn (Task $t) => [$t, $this->amountCents($t)])->filter(fn ($p) => $p[1] !== null)->values();
             if ($priced->isEmpty()) {
                 continue;
             }
@@ -103,16 +99,9 @@ class BillableService
         return BillableLine::pending()->where('client_id', $client->id)->orderBy('id')->get();
     }
 
-    /** A task's value in cents: hours x rate for an hourly client (when the module has a rate), else its stored amount. */
-    private function amountCents(Task $task, bool $hourly): ?int
+    /** A task's value in cents: always its stored amount (typed when fixed, derived from billed hours when hourly); null = unpriced. */
+    private function amountCents(Task $task): ?int
     {
-        $rate = $task->module->hourly_rate;
-        if ($hourly && $rate !== null) {
-            $hours = $task->effectiveHours() + (float) $task->subtasks->sum('estimate_hours'); // subtasks eager-loaded, no N+1
-
-            return intdiv(Money::toCents(number_format($hours, 2, '.', '')) * Money::toCents($rate) + 50, 100);
-        }
-
         return $task->budget_amount !== null && $task->budget_amount > 0 ? Money::toCents((string) $task->budget_amount) : null;
     }
 }

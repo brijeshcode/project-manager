@@ -144,7 +144,8 @@ it('edits every task field from the sidebar panels and logs it', function () {
         ->call('openPanel', 'priority')->set('priority', 2)->call('savePanel')
         ->call('moveColumn', $col->id)
         ->call('openPanel', 'visibility')->set('clientVisible', false)->call('savePanel')
-        ->call('openPanel', 'estimate')->set('estimate', '6')->set('scope', 'out')->set('budget_amount', '120.50')->call('savePanel')->assertHasNoErrors()
+        ->call('openPanel', 'estimate')->set('estimate', '6')->set('scope', 'out')->call('savePanel')->assertHasNoErrors()
+        ->call('openPanel', 'billing')->set('budget_amount', '120.50')->call('savePanel')->assertHasNoErrors()
         ->call('openPanel', 'assignees')->set('assigneeIds', [$s['member']->id, $s['outsider']->id])->call('savePanel')
         ->call('openPanel', 'labels')->set('labelIds', [$label->id])->call('savePanel');
 
@@ -163,9 +164,10 @@ it('edits every task field from the sidebar panels and logs it', function () {
 
 it('validates task money, dates and title on the page', function () {
     $s = tpSetup();
-    tpPage($s)->call('openPanel', 'estimate')->set('budget_amount', '-5')->set('estimate', '-1')->call('savePanel')->assertHasErrors(['budget_amount', 'estimate'])->assertSet('panel', 'estimate');
+    tpPage($s)->call('openPanel', 'estimate')->set('estimate', '-1')->call('savePanel')->assertHasErrors('estimate')->assertSet('panel', 'estimate');
+    tpPage($s)->call('openPanel', 'billing')->set('budget_amount', '-5')->call('savePanel')->assertHasErrors('budget_amount')->assertSet('panel', 'billing');
     tpPage($s)->call('openPanel', 'deadline')->set('deadline', 'nope')->call('savePanel')->assertHasErrors('deadline');
-    tpPage($s)->call('openPanel', 'estimate')->set('scope', 'out')->set('budget_amount', '99999999')->call('savePanel')->assertHasErrors('budget_amount');
+    tpPage($s)->call('openPanel', 'billing')->set('budget_amount', '99999999')->call('savePanel')->assertHasErrors('budget_amount');
     tpPage($s)->call('editTitle')->set('title', '')->call('saveTitle')->assertHasErrors('title');
 });
 

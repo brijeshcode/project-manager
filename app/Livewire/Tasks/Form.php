@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Models\TaskType;
 use App\Models\User;
 use Illuminate\Validation\Rule;
+use App\Support\Money;
 use App\Livewire\Concerns\HandlesMarkdownUploads;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Attributes\Locked;
@@ -32,6 +33,8 @@ class Form extends Component
     public float  $estimate_hours  = 0.0;
     public string $scope           = 'in';
     public ?float $budget_amount           = null;
+    public string $billing_mode    = '';    // '' = bills like the module
+    public string $hourly_rate     = '';
     public bool   $client_visible  = false;
     public bool   $testing_enabled = false;
     public ?string $testing_add_type  = null;
@@ -64,6 +67,8 @@ class Form extends Component
             $this->estimate_hours   = $task->estimate_hours;
             $this->scope            = $task->scope->value;
             $this->budget_amount            = $task->budget_amount;
+            $this->billing_mode     = $task->billing_mode ?? '';
+            $this->hourly_rate      = $task->hourly_rate ?? '';
             $this->client_visible   = $task->client_visible;
             $this->testing_enabled  = $task->testing_enabled;
             $this->testing_add_type  = $task->testing_add_type;
@@ -77,15 +82,9 @@ class Form extends Component
             return;
         }
 
-        // creating: ?module= preselects the module, ?copy= prefills from another task, ?addon=1 an out-of-scope add-on
+        // creating: ?module= preselects the module, ?copy= prefills from another task
         $this->task_type_id = TaskType::default()?->id;
         $this->module_id = (int) request()->query('module', $this->moduleOptions()->flatten(1)->first()?->id ?? 0);
-        if (request()->query('addon') && auth()->user()->can('manage-money')) {
-            $this->scope = 'out';
-            $this->title = mb_substr((string) request()->query('title', ''), 0, 255);
-            $this->estimate_hours = (float) request()->query('hours', 0);
-            $this->budget_amount = request()->query('amount') === null ? null : (float) request()->query('amount');
-        }
         if ($id = request()->query('copy')) {
             $src = Task::visibleTo(auth()->user())->findOrFail($id);
             $this->authorize('update', $src->module->project);
@@ -100,6 +99,8 @@ class Form extends Component
             $this->estimate_hours = $src->estimate_hours;
             $this->scope          = $src->scope->value;
             $this->budget_amount          = $src->budget_amount;
+            $this->billing_mode   = $src->billing_mode ?? '';
+            $this->hourly_rate    = $src->hourly_rate ?? '';
             $this->client_visible = $src->client_visible;
             $this->testing_enabled   = $src->testing_enabled;
             $this->testing_add_type  = $src->testing_add_type;
@@ -145,6 +146,8 @@ class Form extends Component
             'estimate_hours'    => 'numeric|min:0',
             'scope'             => 'required|in:in,out',
             'budget_amount'             => 'nullable|numeric|min:0',
+            'billing_mode'      => 'in:,fixed,hourly',
+            'hourly_rate'       => ['nullable', 'regex:/^\d{1,7}(\.\d{1,2})?$/'],
             'client_visible'    => 'boolean',
             'testing_enabled'   => 'boolean',
             'testing_add_type'  => 'nullable|in:percent,fixed',
@@ -154,6 +157,8 @@ class Form extends Component
             'deadline'          => 'nullable|date',
         ]);
         $data['deadline'] = $data['deadline'] ?: null;
+        $data['billing_mode'] = $data['billing_mode'] ?: null;
+        $data['hourly_rate'] = $data['hourly_rate'] === '' ? null : $data['hourly_rate'];
         $data['task_type_id'] ??= TaskType::default()?->id;
 
         if ($this->taskId) {
@@ -162,7 +167,7 @@ class Form extends Component
             if (! auth()->user()->can('updateCostTime', $task)) {
                 unset($data['estimate_hours'], $data['budget_amount']);
             }
-            auth()->user()->can('manage-money') || ($data = array_diff_key($data, ['budget_amount' => 1]));
+            $this->stripMoney($data, $task);
             if (! $this->withinBudget($data, $task)) {
                 return;
             }
@@ -177,7 +182,7 @@ class Form extends Component
             if (! auth()->user()->hasAnyRole(['super_admin', 'project_manager'])) {
                 unset($data['estimate_hours'], $data['budget_amount']);
             }
-            auth()->user()->can('manage-money') || ($data = array_diff_key($data, ['budget_amount' => 1]));
+            $this->stripMoney($data, null);
             if (! $this->withinBudget($data, null)) {
                 return;
             }
@@ -192,24 +197,50 @@ class Form extends Component
         $this->redirect(route('tasks.show', $task), navigate: true);
     }
 
-    /** Hours/value this save would use of the module's budget; false (and the block shown) when over. */
+    /** Money fields are for users who manage money; the amount is only typed for a fixed task (hourly values are derived). */
+    private function stripMoney(array &$data, ?Task $task): void
+    {
+        $moduleMode = Module::find($data['module_id'])?->billingMode();
+        $mode = $data['billing_mode'] ?? $moduleMode;
+        if (($data['billing_mode'] ?? null) === $moduleMode) {
+            $data['billing_mode'] = null; // same as the module is stored as no override
+        }
+        if (! auth()->user()->can('manage-money')) {
+            $data = array_diff_key($data, ['budget_amount' => 1, 'billing_mode' => 1, 'hourly_rate' => 1]);
+        } elseif ($mode === 'hourly') {
+            unset($data['budget_amount']);
+        }
+    }
+
+    /** Fixed amounts only: false (and the block shown) when this save would put the module over; an hourly task needs a rate. */
     private function withinBudget(array $data, ?Task $existing): bool
     {
         $module = Module::with('project.client')->findOrFail($data['module_id']);
-        $mb = new ModuleBudget($module);
+        $mode = array_key_exists('billing_mode', $data) ? ($data['billing_mode'] ?: $module->billingMode()) : ($existing?->billingMode() ?? $module->billingMode());
+        if ($mode === 'hourly') {
+            if ($module->billingMode() !== 'hourly' && array_key_exists('billing_mode', $data) && ($data['hourly_rate'] ?? null) === null && $module->hourly_rate === null) {
+                $this->addError('hourly_rate', "An hourly task needs a rate: type one here or set the module's hourly rate.");
+
+                return false;
+            }
+
+            return true; // derived values are never blocked
+        }
+        if (! array_key_exists('budget_amount', $data) || $data['budget_amount'] === null) {
+            return true;
+        }
         $probe = ($existing ? $existing->replicate() : new Task)->forceFill($data);
-        $probe->setRelation('module', $module);
-        $probe->setRelation('subtasks', $existing ? $existing->subtasks : (($this->copyFrom && $this->copySubtasks ? Task::find($this->copyFrom)?->subtasks : null) ?? collect()));
         if ($existing && $existing->module_id !== (int) $data['module_id']) {
             $existing = null; // moved to another module: it is a new load there
         }
         if (! $probe->countsTowardBudget()) {
             return true;
         }
+        $mb = new ModuleBudget($module);
         try {
-            $mb->guard($existing, $mb->units($probe));
+            $mb->guard($existing, Money::toCents((string) $data['budget_amount']));
         } catch (OverBudget $e) {
-            $this->blockFrom($e, ['kind' => 'task', 'taskId' => $existing?->id, 'newUnits' => $mb->units($probe), 'title' => $data['title']]);
+            $this->blockFrom($e, ['kind' => 'task', 'taskId' => $existing?->id, 'title' => $data['title']]);
             $this->addError('budget_amount', $e->getMessage());
 
             return false;
@@ -237,7 +268,7 @@ class Form extends Component
             'types'     => TaskType::orderBy('position')->get(),
             'allUsers'  => User::orderBy('name')->get(),
             'canMoney'  => auth()->user()->can('manage-money'),
-            'hourlyModule' => ($m = Module::with('project.client')->find($this->module_id)) && (new ModuleBudget($m))->hourly(),
+            'moduleMode' => Module::with('project.client')->find($this->module_id)?->billingMode() ?? 'fixed',
             'bv'        => $this->blockView(),
         ]);
     }

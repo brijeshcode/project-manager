@@ -157,6 +157,12 @@
                             <dt class="text-slate-500">Carried-over value</dt><dd class="text-right font-medium" data-test="sum-carried-value">{{ \App\Support\Money::format(\App\Models\Sprint::value($sum['open']), $project->currency) }}</dd>
                         @endcan
                     </dl>
+                    @can('manage-money')
+                        @php $unpriced = $sum['done']->filter(fn ($t) => $t->budget_amount === null); @endphp
+                        @if ($unpriced->isNotEmpty())
+                            <p class="rounded-lg bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300" data-test="sum-unpriced">{{ $unpriced->count() }} done {{ Str::plural('task', $unpriced->count()) }} without a value will not be billed: {{ $unpriced->map(fn ($t) => $t->code())->implode(', ') }}</p>
+                        @endif
+                    @endcan
                     @if ($sum['open']->isNotEmpty())
                         <fieldset class="space-y-2 text-sm">
                             <legend class="label">Unfinished tasks</legend>

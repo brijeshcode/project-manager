@@ -31,15 +31,16 @@
                             <x-ui.progress :pct="$mPct" class="w-40" data-test="module-progress" />
                             <span class="w-14 text-right text-xs text-slate-400" data-test="module-task-count">{{ $module->tasks->count() }} {{ Str::plural('task', $module->tasks->count()) }}</span>
                             @can('manage-money')
-                                @php $mbs = (new \App\Services\ModuleBudget($module))->summary(); @endphp
+                                @php $mb = new \App\Services\ModuleBudget($module); $mbs = $mb->summary(); @endphp
                                 @if ($mbs['cap'] !== null)
-                                    <span @class(['text-xs tabular-nums', 'text-slate-500' => $mbs['remaining'] >= 0, 'font-medium text-rose-600 dark:text-rose-400' => $mbs['remaining'] < 0]) data-test="module-budget-line">Allocated {{ (new \App\Services\ModuleBudget($module))->format($mbs['allocated']) }} of {{ (new \App\Services\ModuleBudget($module))->format($mbs['cap']) }} &middot; {{ $mbs['remaining'] < 0 ? (new \App\Services\ModuleBudget($module))->format(-$mbs['remaining']).' over' : (new \App\Services\ModuleBudget($module))->format($mbs['remaining']).' left' }}</span>
+                                    <span @class(['text-xs tabular-nums', 'text-slate-500' => $mbs['remaining'] >= 0, 'font-medium text-rose-600 dark:text-rose-400' => $mbs['remaining'] < 0]) data-test="module-budget-line">Used {{ $mb->format($mbs['used']) }} of {{ $mb->format($mbs['cap']) }} &middot; {{ $mbs['remaining'] < 0 ? $mb->format(-$mbs['remaining']).' over' : $mb->format($mbs['remaining']).' left' }}</span>
+                                @else
+                                    <span class="text-xs text-slate-500">No budget</span>
                                 @endif
-                                <span class="text-xs text-slate-500">{{ $module->budgetAmount() === null ? 'No budget' : \App\Support\Money::format(\App\Support\Money::toCents($module->budgetAmount()), $project->currency) }}</span>
                             @endcan
                         </div>
                         @if (! empty($budgetBlocked[$module->id]))
-                            <div class="mx-5 mb-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-900 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200" role="alert" data-test="module-over-budget">{{ $budgetBlocked[$module->id] }} Nothing was saved. <a href="{{ route('modules.show', [$project, $module]) }}" wire:navigate class="font-medium underline">Open the module</a> to raise the budget, create an add-on or rebalance the tasks.</div>
+                            <div class="mx-5 mb-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-900 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200" role="alert" data-test="module-over-budget">{{ $budgetBlocked[$module->id] }} Nothing was saved. <a href="{{ route('modules.show', [$project, $module]) }}" wire:navigate class="font-medium underline">Open the module</a> to set the amount it needs.</div>
                         @endif
                         <div x-show="open" x-collapse style="display:none" class="border-t border-slate-100">
                         <div class="border-b border-slate-100 px-5 py-3.5" x-data="{ editingDesc: false }">
@@ -59,7 +60,7 @@
                                 <x-ui.markdown :text="$module->description" class="mt-1" />
                             @endif
                             @can('manage-money')
-                                @php $hourly = $project->client->billing_mode === \App\Enums\BillingMode::Hourly; @endphp
+                                @php $hourly = $module->billingMode() === 'hourly'; @endphp
                                 <div class="mt-2 text-xs text-slate-500" x-data="{ editingBudget: false }">
                                     <div x-show="!editingBudget" class="flex items-center gap-2">
                                         <span>Budget: {{ $module->budgetAmount() === null ? 'not set' : \App\Support\Money::format(\App\Support\Money::toCents($module->budgetAmount()), $project->currency) }}@if ($module->deadline) &middot; due {{ $module->deadline->toDateString() }}@endif</span>
@@ -67,13 +68,13 @@
                                     </div>
                                     <form x-show="editingBudget" style="display:none" wire:submit.prevent="saveBudget({{ $module->id }})" @submit="editingBudget = false" class="space-y-1.5">
                                         @if ($hourly)
-                                            <input type="number" step="0.01" min="0" wire:model="budget.{{ $module->id }}.hours" placeholder="Budget hours" class="input h-8 text-xs">
-                                            <input type="text" wire:model="budget.{{ $module->id }}.rate" placeholder="Hourly rate ({{ $project->currency }})" class="input h-8 text-xs">
+                                            <label class="block">Budget hours<input type="number" step="0.01" min="0" wire:model="budget.{{ $module->id }}.hours" class="input h-8 text-xs"></label>
+                                            <label class="block">Hourly rate ({{ $project->currency }})<input type="text" wire:model="budget.{{ $module->id }}.rate" class="input h-8 text-xs"></label>
                                         @else
-                                            <input type="text" wire:model="budget.{{ $module->id }}.amount" placeholder="Fixed amount ({{ $project->currency }})" class="input h-8 text-xs">
+                                            <label class="block">Budget amount ({{ $project->currency }})<input type="text" wire:model="budget.{{ $module->id }}.amount" class="input h-8 text-xs"></label>
                                         @endif
-                                        <input type="date" wire:model="budget.{{ $module->id }}.deadline" class="input h-8 text-xs">
-                                        <input type="text" wire:model="budget.{{ $module->id }}.reason" placeholder="Reason (required when changing an existing value)" class="input h-8 text-xs">
+                                        <label class="block">Deadline<input type="date" wire:model="budget.{{ $module->id }}.deadline" class="input h-8 text-xs"></label>
+                                        <label class="block">Reason<input type="text" wire:model="budget.{{ $module->id }}.reason" placeholder="Required when changing an existing value" class="input h-8 text-xs"></label>
                                         @foreach (['hours', 'rate', 'amount', 'deadline', 'reason'] as $f)
                                             @error("budget.{$module->id}.$f") <p class="field-error">{{ $message }}</p> @enderror
                                         @endforeach
@@ -101,11 +102,7 @@
                                         <a href="{{ route('tasks.show', $task) }}" wire:navigate data-test="task-link" class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
                                         <x-ui.assignees :users="$task->assignees" :candidates="$canManage ? $candidates : null" method="toggleTaskAssignee" :id="$task->id" />
                                         @can('manage-money')
-                                            @if ($task->isAddon())
-                                                <x-ui.badge :color="$task->addon_accepted_at ? 'green' : 'amber'">{{ $task->addon_accepted_at ? 'Add-on' : 'Proposed add-on' }}</x-ui.badge>
-                                            @elseif ($task->budget_amount === null && $project->client->billing_mode !== \App\Enums\BillingMode::Hourly)
-                                                <x-ui.badge color="amber" data-test="row-unpriced">Unpriced</x-ui.badge>
-                                            @endif
+                                            @include('livewire.items._task-value', ['task' => $task, 'currency' => $project->currency])
                                         @endcan
                                         @foreach ($task->labels as $l)
                                             <x-ui.label-chip :label="$l" class="hidden sm:inline-flex" />

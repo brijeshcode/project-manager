@@ -35,8 +35,9 @@ return new class extends Migration
             $table->decimal('budget_amount', 14, 2)->nullable();   // the task's value
             $table->decimal('exchange_rate', 18, 6)->nullable();   // project currency -> local
             $table->decimal('budget_amount_local', 14, 2)->nullable();
-            $table->timestamp('addon_accepted_at')->nullable();   // an out-of-scope task becomes a counted add-on when the client confirms
-            $table->foreignId('addon_accepted_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->string('billing_mode')->nullable();         // null = bills like its module; a task can be billed differently
+            $table->decimal('hourly_rate', 14, 2)->nullable();     // own rate for an hourly task (default: the module's)
+            $table->decimal('billable_hours', 8, 2)->nullable();    // hand-adjusted billed hours; null = the logged hours
             $table->boolean('client_visible')->default(false);
             $table->boolean('testing_enabled')->default(false);
             $table->string('testing_add_type')->nullable();      // 'percent'|'fixed'

@@ -1,83 +1,72 @@
-{{-- Module budget panel (manage-money only): Budget, Allocated, Remaining, Done value + the distribute helper. $module, $project, $mb, $hourly, $canManage, $distributing. --}}
+{{-- Module budget panel (manage-money only): headline budget, usage bar, then Used / Remaining / Done value. $module, $project, $mb, $hourly. --}}
 @php
     $s = $mb->summary();
-    $money = fn (int $cents) => \App\Support\Money::format($cents, $project->currency);
-    $unitFmt = fn (?int $u) => $u === null ? '—' : $mb->format($u);
     $localOf = fn (int $cents) => $mb->localCents($cents);
     $remaining = $s['remaining'];
+    $over = $remaining < 0;
+    $h = fn ($v) => rtrim(rtrim(number_format((float) $v, 2), '0'), '.');
+    $localCode = \App\Services\LocalCurrency::code();
+    $foreign = strtoupper($project->currency) !== $localCode;
+    $pct = $s['cap'] ? (int) min(100, round($s['used'] / $s['cap'] * 100)) : 0;
 @endphp
+<div class="mb-2 flex items-center gap-2">
+    <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-gray-700 dark:text-gray-300" data-test="bp-mode">{{ $hourly ? 'Hourly' : 'Fixed' }}</span>
+</div>
 @if ($s['cap'] === null)
     <p class="text-slate-400">Not set</p>
 @else
-    <dl class="space-y-2" data-test="budget-panel">
-        <div>
-            <dt class="text-xs text-slate-500">Budget</dt>
-            <dd data-test="bp-budget">
-                @if ($hourly)
-                    {{ $unitFmt($s['cap']) }} <span class="text-xs text-slate-500">@ {{ $module->hourly_rate ?? 'no rate' }} = {{ $money((int) \App\Support\Money::toCents($module->budgetAmount() ?? '0')) }}</span>
-                @else
-                    <x-ui.money-pair :cents="$s['cap']" :currency="$project->currency" :local="$localOf($s['cap'])" :missing="$localOf($s['cap']) === null ? 1 : 0" />
+    <div data-test="budget-panel">
+        {{-- Headline: the budget itself, local equivalent beside it --}}
+        <div data-test="bp-budget">
+            <div class="flex flex-wrap items-baseline gap-x-2">
+                <span class="font-display text-xl font-semibold text-slate-900 dark:text-white">{{ \App\Support\Money::format($s['cap'], $project->currency) }}</span>
+                @if ($foreign && ($l = $localOf($s['cap'])) !== null)
+                    <span class="text-sm text-slate-500 dark:text-gray-400">{{ \App\Support\Money::format($l, $localCode) }}</span>
                 @endif
-            </dd>
+            </div>
+            @if ($foreign && $localOf($s['cap']) === null)
+                <p class="text-xs text-slate-500">Local total unavailable, no exchange rate</p>
+            @endif
+            @if ($hourly)
+                <p class="text-xs text-slate-500" data-test="bp-formula">{{ $h($module->budget_hours) }} h &times; {{ $h($module->hourly_rate) }} = {{ number_format($s['cap'] / 100, 2) }}</p>
+            @endif
         </div>
-        <div>
-            <dt class="text-xs text-slate-500">Allocated <span class="text-slate-400">(counted tasks{{ $hourly ? ', hours' : '' }})</span></dt>
-            <dd data-test="bp-allocated">
-                @if ($hourly) {{ $unitFmt($s['allocated']) }}
-                @else <x-ui.money-pair :cents="$s['allocated']" :currency="$project->currency" :local="$localOf($s['allocated'])" :missing="$localOf($s['allocated']) === null ? 1 : 0" />
-                @endif
-            </dd>
+
+        {{-- Usage bar --}}
+        <div class="mt-3" title="{{ $pct }}% of the budget is used by task values">
+            <div class="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-gray-700">
+                <div @class(['h-full rounded-full', 'bg-blue-500' => ! $over, 'bg-rose-500' => $over]) style="width: {{ $over ? 100 : $pct }}%"></div>
+            </div>
+            <p class="mt-1 text-xs text-slate-500 dark:text-gray-400">{{ $pct }}% used</p>
         </div>
-        <div>
-            <dt class="text-xs text-slate-500">Remaining</dt>
-            <dd @class(['font-medium', 'text-rose-600 dark:text-rose-400' => $remaining < 0]) data-test="bp-remaining">
-                @if ($remaining < 0)
-                    {{ $unitFmt(-$remaining) }} over
-                @elseif ($hourly) {{ $unitFmt($remaining) }}
-                @else <x-ui.money-pair :cents="$remaining" :currency="$project->currency" :local="$localOf($remaining)" :missing="$localOf($remaining) === null ? 1 : 0" />
-                @endif
-            </dd>
-        </div>
-        <div>
-            <dt class="text-xs text-slate-500">Done value</dt>
-            <dd data-test="bp-done"><x-ui.money-pair :cents="$s['done']" :currency="$project->currency" :local="$localOf($s['done'])" :missing="$localOf($s['done']) === null ? 1 : 0" /></dd>
-        </div>
-    </dl>
+
+        {{-- Rows: label left, amount right with the local equivalent small beside it --}}
+        <dl class="mt-3 divide-y divide-slate-100 text-sm dark:divide-gray-700">
+            @foreach ([
+                ['Used', 'bp-used', $s['used']],
+                ['Remaining', 'bp-remaining', $remaining],
+                ['Done value', 'bp-done', $s['done']],
+            ] as [$label, $test, $cents])
+                <div class="flex items-baseline justify-between gap-3 py-2">
+                    <dt class="shrink-0 text-slate-500 dark:text-gray-400">{{ $label }}</dt>
+                    <dd @class(['min-w-0 text-right font-medium', 'text-slate-900 dark:text-white' => ! ($test === 'bp-remaining' && $over), 'text-rose-600 dark:text-rose-400' => $test === 'bp-remaining' && $over]) data-test="{{ $test }}">
+                        @if ($test === 'bp-remaining' && $over)
+                            {{ $mb->format(-$remaining) }} over
+                        @else
+                            <span>{{ \App\Support\Money::format($cents, $project->currency) }}</span>
+                            @if ($foreign && ($l = $localOf($cents)) !== null)
+                                <span class="block text-xs font-normal text-slate-500 dark:text-gray-400">{{ \App\Support\Money::format($l, $localCode) }}</span>
+                            @endif
+                        @endif
+                    </dd>
+                </div>
+            @endforeach
+        </dl>
+    </div>
+    @if ($over)
+        <p class="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400" data-test="bp-over">{{ $mb->format(-$remaining) }} over: reduce billed hours or raise the module amount.</p>
+    @endif
     @if ($s['unpriced'] > 0)
         <p class="mt-2 text-xs text-amber-600 dark:text-amber-400" data-test="bp-unpriced">{{ $s['unpriced'] }} {{ Str::plural('task', $s['unpriced']) }} unpriced</p>
-    @endif
-    @if ($s['proposed'] > 0)
-        <p class="mt-1 text-xs text-slate-500" data-test="bp-proposed">{{ $s['proposed'] }} proposed add-on{{ $s['proposed'] === 1 ? '' : 's' }} not counted yet</p>
-    @endif
-@endif
-
-@if ($canManage && $s['cap'] !== null)
-    @if ($hourly)
-        <p class="mt-2 text-xs text-slate-500" data-test="distribute-na">Hourly client: task values are hours &times; the hourly rate, so there is nothing to distribute or rebalance.</p>
-    @else
-        @php $dp = $mb->distributePreview(); @endphp
-        @if ($distributing)
-            <div class="mt-3 rounded-lg border border-slate-200 p-3 dark:border-gray-700" data-test="distribute-preview">
-                @if (! $dp['ok'])
-                    <p class="text-xs text-slate-500">{{ $dp['reason'] }}</p>
-                @else
-                    <p class="text-xs font-semibold text-slate-600">Share {{ $money($dp['remaining']) }} over unpriced tasks by hours</p>
-                    <table class="mt-1 w-full text-xs">
-                        <thead><tr class="text-left text-slate-500"><th class="py-0.5">Task</th><th class="text-right">Hours</th><th class="text-right">Amount</th></tr></thead>
-                        @foreach ($dp['rows'] as $r)
-                            <tr data-test="dp-row"><td class="truncate py-0.5">{{ $r['task']->code() }} {{ $r['task']->title }}</td><td class="text-right tabular-nums">{{ rtrim(rtrim(number_format($r['hours'], 2), '0'), '.') ?: '0' }}</td><td class="text-right font-semibold tabular-nums">{{ $money($r['cents']) }}</td></tr>
-                        @endforeach
-                    </table>
-                    <p class="mt-1 text-xs text-slate-500">Priced tasks are not touched. Nothing is saved until you confirm.</p>
-                @endif
-                <div class="mt-2 flex gap-2">
-                    @if ($dp['ok'])<button type="button" wire:click="applyDistribute" class="btn btn-primary h-7 px-2.5 py-1 text-xs" data-test="apply-distribute">Apply</button>@endif
-                    <button type="button" wire:click="$set('distributing', false)" class="btn btn-ghost h-7 px-2.5 py-1 text-xs">{{ $dp['ok'] ? 'Cancel' : 'Close' }}</button>
-                </div>
-            </div>
-        @else
-            <button type="button" wire:click="openDistribute" class="btn btn-secondary mt-3 h-8 px-2.5 py-1 text-xs" @disabled(! $dp['ok']) title="{{ $dp['ok'] ? '' : $dp['reason'] }}" data-test="distribute">Distribute remaining budget by hours</button>
-            @unless ($dp['ok'])<p class="mt-1 text-xs text-slate-500" data-test="distribute-why">{{ $dp['reason'] }}</p>@endunless
-        @endif
     @endif
 @endif

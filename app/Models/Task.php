@@ -16,10 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use App\Services\ModuleBudget;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class Task extends Model
 {
@@ -27,7 +25,7 @@ class Task extends Model
     use LogsActivity { activityValue as protected baseActivityValue; }
 
     /** Changes to these are written to the activity log. */
-    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'task_type_id', 'board_column_id', 'client_visible', 'estimate_hours', 'started_at', 'completed_at', 'sprint_id'];
+    public array $loggedFields = ['title', 'description', 'deadline', 'priority', 'task_type_id', 'board_column_id', 'client_visible', 'estimate_hours', 'started_at', 'completed_at', 'sprint_id', 'billing_mode', 'hourly_rate', 'billable_hours'];
 
     protected $attributes = [
         'is_idea'        => false,
@@ -54,8 +52,9 @@ class Task extends Model
         'budget_amount',
         'exchange_rate',
         'budget_amount_local',
-        'addon_accepted_at',
-        'addon_accepted_by',
+        'billing_mode',
+        'hourly_rate',
+        'billable_hours',
         'client_visible',
         'testing_enabled',
         'testing_add_type',
@@ -76,7 +75,6 @@ class Task extends Model
             'status'           => TaskStatus::class,
             'scope'            => TaskScope::class,
             'is_idea'          => 'boolean',
-            'addon_accepted_at' => 'datetime',
             'deadline'         => 'date',
             'started_at'       => 'date',
             'completed_at'     => 'date',
@@ -84,8 +82,20 @@ class Task extends Model
             'testing_enabled'  => 'boolean',
             'estimate_hours'   => 'float',
             'budget_amount'   => 'float',
+            'billable_hours'  => 'float',
+            'hourly_rate'     => 'decimal:2',
             'testing_add_value' => 'float',
         ];
+    }
+
+    /** Runs before the FreezesLocalAmounts hook, so a derived value also gets its local twin. */
+    protected static function booting(): void
+    {
+        static::saving(function (self $t) {
+            if ($t->billingMode() === 'hourly' && (! $t->exists || $t->isDirty(['billing_mode', 'hourly_rate', 'billable_hours', 'module_id', 'budget_amount']))) {
+                $t->budget_amount = $t->derivedValue();
+            }
+        });
     }
 
     protected static function booted(): void
@@ -115,10 +125,6 @@ class Task extends Model
                 $t->syncDatesWithColumn();
             }
         });
-
-        // an accepted add-on is part of the project totals: keep them calculated
-        static::saved(fn (self $t) => $t->addon_accepted_at && $t->module?->project?->recalculateBudget());
-        static::deleted(fn (self $t) => $t->addon_accepted_at && Module::find($t->module_id)?->project?->recalculateBudget());
 
         static::deleting(function (self $t) {
             $t->subtasks->each->delete();
@@ -197,7 +203,7 @@ class Task extends Model
     }
 
     /** Fields a copy carries over (never comments, attachments, activity, column or position). */
-    public const COPY_FIELDS = ['description', 'status', 'is_idea', 'priority', 'estimate_hours', 'scope', 'budget_amount', 'client_visible', 'testing_enabled', 'testing_add_type', 'testing_add_value', 'deadline', 'section', 'task_type_id'];
+    public const COPY_FIELDS = ['description', 'status', 'is_idea', 'priority', 'estimate_hours', 'scope', 'budget_amount', 'billing_mode', 'hourly_rate', 'client_visible', 'testing_enabled', 'testing_add_type', 'testing_add_value', 'deadline', 'section', 'task_type_id'];
 
     /** Copy into a module: new task in its first column, with labels, assignees and optionally subtasks. */
     public function copyTo(int $moduleId, User $by, bool $withSubtasks, ?string $title = null): static
@@ -368,53 +374,74 @@ class Task extends Model
         });
     }
 
-    /** Out-of-scope work with its own value: proposed until the client confirms, then accepted (see acceptAddon). */
-    public function isAddon(): bool
+    /** fixed | hourly: this task's own override, else its module's mode. */
+    public function billingMode(): string
     {
-        return $this->scope === TaskScope::Out;
+        return $this->billing_mode ?: ($this->module?->billingMode() ?? 'fixed');
     }
 
-    public function isAcceptedAddon(): bool
+    /** True when the task is billed differently from its module. */
+    public function billedDifferently(): bool
     {
-        return $this->isAddon() && $this->addon_accepted_at !== null;
+        return $this->billing_mode !== null && $this->billing_mode !== $this->module?->billingMode();
     }
 
-    /** Does this task use up its module's budget? Published, not an idea, and in scope (or an accepted add-on). */
+    /** The hourly rate that applies: the task's own, else its module's. */
+    public function rate(): ?string
+    {
+        return $this->hourly_rate ?? $this->module?->hourly_rate;
+    }
+
+    /** Hours logged on the task and its subtasks. */
+    public function loggedHours(): float
+    {
+        if (! $this->exists) {
+            return 0.0;
+        }
+        $sub = TimeEntry::where('timeable_type', (new Subtask)->getMorphClass())->whereIn('timeable_id', Subtask::where('task_id', $this->id)->select('id'))->sum('hours');
+
+        return round((float) $this->timeEntries()->sum('hours') + (float) $sub, 2);
+    }
+
+    /** Hours billed to the client: the hand-adjusted figure, else what was logged. */
+    public function billedHours(): float
+    {
+        return $this->billable_hours !== null ? (float) $this->billable_hours : $this->loggedHours();
+    }
+
+    /** An hourly task's value (major units): billed hours x rate, integer half-up; null while no rate applies. */
+    public function derivedValue(): ?string
+    {
+        $rate = $this->rate();
+        if ($rate === null) {
+            return null;
+        }
+
+        return Money::toInput(intdiv(Money::toCents(number_format($this->billedHours(), 2, '.', '')) * Money::toCents((string) $rate) + 50, 100));
+    }
+
+    /** Re-derive an hourly task's stored value (time logged, rate or mode changed); fixed amounts are never rewritten. */
+    public function recalculateValue(): void
+    {
+        if ($this->billingMode() !== 'hourly') {
+            return;
+        }
+        $v = $this->derivedValue();
+        if ($v === null ? $this->budget_amount !== null : $this->budget_amount === null || Money::toCents($v) !== Money::toCents((string) $this->budget_amount)) {
+            $this->forceFill(['budget_amount' => $v])->save();
+        }
+    }
+
+    /** Does this task use up its module's budget? Published and not an idea (scope does not matter). */
     public function countsTowardBudget(): bool
     {
-        return $this->status === TaskStatus::Published && ! $this->is_idea && ($this->scope === TaskScope::In || $this->addon_accepted_at !== null);
+        return $this->status === TaskStatus::Published && ! $this->is_idea;
     }
 
-    /** Tasks that use up the module budget: counted tasks plus accepted add-ons (proposed add-ons are exempt). */
+    /** Tasks that use up the module budget. */
     public function scopeBudgeted(Builder $query): Builder
     {
-        return $query->where('is_idea', false)->where('status', TaskStatus::Published->value)
-            ->where(fn ($q) => $q->where('scope', TaskScope::In->value)->orWhereNotNull('addon_accepted_at'));
-    }
-
-    /**
-     * The client confirmed this add-on: it raises its module's budget by its own value (logged with the reason
-     * "Add-on: KEY-n") and from then on counts as allocated. There is deliberately no un-accept.
-     */
-    public function acceptAddon(User $by): void
-    {
-        if (! $this->isAddon() || $this->addon_accepted_at) {
-            throw ValidationException::withMessages(['addon' => 'Only a proposed add-on can be accepted.']);
-        }
-        $mb = new ModuleBudget($this->module);
-        $value = $mb->units($this);
-        if ($value <= 0) {
-            throw ValidationException::withMessages(['addon' => 'Give the add-on a value before accepting it.']);
-        }
-        DB::transaction(function () use ($by, $mb, $value) {
-            $this->update(['addon_accepted_at' => now(), 'addon_accepted_by' => $by->id]);
-            $m = $this->module->fresh();
-            $attr = $mb->hourly() ? 'budget_hours' : 'budget_amount';
-            $new = ((new ModuleBudget($m))->cap() ?? 0) + $value;
-            $m->updateBudget([$attr => $mb->hourly() ? number_format($new / 100, 2, '.', '') : Money::toInput($new)], $by, 'Add-on: '.$this->code());
-            $this->logActivity('addon_accepted', null, null, $this->code());
-            $m->project->recalculateBudget();
-        });
+        return $query->where('is_idea', false)->where('status', TaskStatus::Published->value);
     }
 
     /** Tasks that count toward module status/progress: no ideas, drafts or out-of-scope work. */

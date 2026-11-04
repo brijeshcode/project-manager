@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Module;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\BillableService;
 use Database\Seeders\RoleSeeder;
@@ -50,11 +51,20 @@ it('creates one pending line for a done priced task, idempotently', function () 
         ->and($lines[0]->project_id)->toBe($m->project_id);
 });
 
-it('prices unpriced tasks by hours x rate for hourly clients', function () {
+function bsLog(Task $t, float $h): void
+{
+    TimeEntry::create(['timeable_type' => Task::class, 'timeable_id' => $t->id, 'user_id' => User::factory()->create()->id, 'hours' => $h, 'worked_on' => today()]);
+}
+
+it('an hourly task bills its value: logged hours x rate', function () {
     $m = bsModule('hourly', 5000);
-    bsTask($m, ['estimate_hours' => 2]);
+    $t = bsTask($m, ['estimate_hours' => 9]);
+    bsLog($t, 2);
     bsSync($m);
     expect(BillableLine::first()->amount_cents)->toBe(10000);
+    bsLog($t, 1); // more time: the pending line follows the value
+    bsSync($m);
+    expect(BillableLine::first()->amount_cents)->toBe(15000);
 });
 
 it('does not bill unpriced tasks for fixed clients', function () {
@@ -97,26 +107,20 @@ it('ignores drafts and other clients', function () {
     expect(BillableLine::count())->toBe(0);
 });
 
-it('hourly amount matches rate x totalEstimateHours with testing add-ons and subtasks', function () {
+it('hourly billing uses the adjusted billed hours', function () {
     $m = bsModule('hourly', 4500);
-    $pct = bsTask($m, ['estimate_hours' => 3, 'testing_enabled' => true, 'testing_add_type' => 'percent', 'testing_add_value' => 25, 'title' => 'P']);
-    $fix = bsTask($m, ['estimate_hours' => 2.5, 'testing_enabled' => true, 'testing_add_type' => 'fixed', 'testing_add_value' => 1.25, 'title' => 'F']);
-    foreach ([$pct, $fix] as $t) {
-        $t->subtasks()->create(['title' => 's1', 'estimate_hours' => 1.5, 'position' => 1]);
-        $t->subtasks()->create(['title' => 's2', 'estimate_hours' => 0.75, 'position' => 2]);
-    }
+    $t = bsTask($m);
+    bsLog($t, 4);
+    $t->update(['billable_hours' => 1.5]);
     bsSync($m);
-    foreach ([$pct, $fix] as $t) {
-        $expected = intdiv(\App\Support\Money::toCents(number_format($t->totalEstimateHours(), 2, '.', '')) * 4500 + 50, 100);
-        expect(BillableLine::where('source_id', $t->id)->first()->amount_cents)->toBe($expected);
-    }
+    expect(BillableLine::first()->amount_cents)->toBe(6750);
 });
 
-it('treats budget amount 0 as unpriced', function () {
+it('treats a value of 0 as unpriced: nothing is billed', function () {
     $h = bsModule('hourly', 5000);
-    bsTask($h, ['budget_amount' => 0, 'estimate_hours' => 2]);
+    bsTask($h, ['estimate_hours' => 2]); // no time logged: 0
     bsSync($h);
-    expect(BillableLine::first()->amount_cents)->toBe(10000);
+    expect(BillableLine::count())->toBe(0);
 
     $f = bsModule();
     bsTask($f, ['budget_amount' => 0, 'estimate_hours' => 2]);
@@ -124,20 +128,20 @@ it('treats budget amount 0 as unpriced', function () {
     expect(BillableLine::where('client_id', $f->project->client_id)->count())->toBe(0);
 });
 
-it('follows billing mode switches without touching invoiced lines', function () {
+it('a module mode switch never touches invoiced lines and keeps the stored values', function () {
     $m = bsModule('hourly', 5000);
     $a = bsTask($m, ['estimate_hours' => 2]);
     $b = bsTask($m, ['estimate_hours' => 1, 'title' => 'B']);
+    bsLog($a, 2);
+    bsLog($b, 1);
     bsSync($m);
     BillableLine::where('source_id', $b->id)->update(['invoice_id' => 3]);
-    $client = $m->project->client;
-    $client->update(['billing_mode' => 'fixed']);
-    app(BillableService::class)->syncCompletedWork($client->fresh());
-    expect(BillableLine::pluck('source_id')->all())->toBe([$b->id]);
-    $client->update(['billing_mode' => 'hourly']);
-    app(BillableService::class)->syncCompletedWork($client->fresh());
-    expect(BillableLine::where('source_id', $a->id)->count())->toBe(1)
-        ->and(BillableLine::where('source_id', $b->id)->count())->toBe(1);
+    $m->updateBudget(['billing_mode' => 'fixed'], User::factory()->create(), 'Now fixed');
+    bsSync($m);
+    expect(BillableLine::where('source_id', $a->id)->value('amount_cents'))->toBe(10000)->and(BillableLine::where('source_id', $b->id)->value('invoice_id'))->toBe(3);
+    bsLog($a, 5); // fixed now: the value no longer follows time
+    bsSync($m);
+    expect(BillableLine::where('source_id', $a->id)->value('amount_cents'))->toBe(10000);
 });
 
 it('deletes an uninvoiced line when the task amount becomes null', function () {

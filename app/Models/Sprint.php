@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -97,10 +98,10 @@ class Sprint extends Model
         return ['all' => $all, 'done' => $done, 'open' => $all->diff($done)->values()];
     }
 
-    /** Money (cents) of a set of tasks, each valued by its own module's rules (stored amount, or hours x rate for hourly clients). */
+    /** Money (cents) of a set of tasks: each task's stored value (typed when fixed, billed hours x rate when hourly). */
     public static function value(Collection $tasks): int
     {
-        return $tasks->sum(fn (Task $t) => (new \App\Services\ModuleBudget($t->module))->valueCents($t));
+        return $tasks->sum(fn (Task $t) => $t->budget_amount === null ? 0 : Money::toCents((string) $t->budget_amount));
     }
 
     /** planned -> active. Only one sprint per project may be active. */

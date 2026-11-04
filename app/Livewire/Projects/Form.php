@@ -36,6 +36,8 @@ class Form extends Component
     public ?string $aim           = null;
     public ?string $deadline      = null;
     public string $reason         = '';   // required when an existing deadline is changed
+    public string $initial_budget = '0';
+    public string $addons_amount  = '0';
     public string $template      = 'software';   // board columns copied at create; edited later on the Board tab
 
     public function mount(?Project $project = null): void
@@ -65,6 +67,8 @@ class Form extends Component
             $this->status         = $project->status;
             $this->aim            = $project->aim;
             $this->deadline       = $project->deadline?->toDateString();
+            $this->initial_budget = (string) $project->initial_budget;
+            $this->addons_amount  = (string) $project->addons_amount;
         }
     }
 
@@ -95,7 +99,12 @@ class Form extends Component
 
     public function save(): void
     {
+        $money = auth()->user()->can('manage-money');
+        // commas are stripped, so bound the digits that remain (max 9,999,999.99)
+        $bound = fn ($a, $v, $fail) => preg_match('/^\d{1,7}(\.\d{1,2})?$/', str_replace(',', '', (string) $v)) || $fail('Too large.');
         $data = $this->validate([
+            'initial_budget' => $money ? ['bail', 'required', 'regex:/^[\d,]{1,11}(\.\d{1,2})?$/', $bound] : 'nullable',
+            'addons_amount'  => $money ? ['bail', 'required', 'regex:/^[\d,]{1,11}(\.\d{1,2})?$/', $bound] : 'nullable',
             'aim'            => 'nullable|string|max:5000',
             'currency'       => ['nullable', Rule::in($this->currencyOptions())],
             'client_id'      => 'required|exists:clients,id',
@@ -112,6 +121,12 @@ class Form extends Component
 
         $data['key'] = strtoupper(trim((string) $this->key)) ?: ($this->projectId ? Project::find($this->projectId)->key : null);
         $data['aim'] = trim((string) $data['aim']) ?: null;
+        if ($money) {
+            $data['initial_budget'] = str_replace(',', '', $data['initial_budget']);
+            $data['addons_amount'] = str_replace(',', '', $data['addons_amount']);
+        } else {
+            unset($data['initial_budget'], $data['addons_amount']); // money is for users who manage money
+        }
         $data['currency'] = $data['currency'] ?: null; // null on create = the client's currency
         ['deadline' => $deadline, 'reason' => $reason] = $data;
         unset($data['deadline'], $data['reason']);
@@ -131,9 +146,18 @@ class Form extends Component
         $this->redirect(route('projects.index'), navigate: true);
     }
 
+    private function finalBudget(): string
+    {
+        $c = fn ($v) => preg_match('/^[\d,]{1,11}(\.\d{0,2})?$/', (string) $v) ? Money::toCents($v) : 0;
+
+        return Money::toInput($c($this->initial_budget) + $c($this->addons_amount));
+    }
+
     public function render()
     {
         return view('livewire.projects.form', [
+            'finalBudget' => $this->finalBudget(),
+            'canMoney' => auth()->user()->can('manage-money'),
             'clients' => Client::orderBy('name')->get(),
             'currencies' => $this->currencyOptions(),
             'templates' => array_keys(BoardTemplates::ALL),

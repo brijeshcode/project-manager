@@ -32,9 +32,9 @@ class Module extends Model
 
     public const STATUS_COLORS = ['pending' => 'slate', 'working' => 'brand', 'in_review' => 'amber', 'completed' => 'green', 'on_hold' => 'rose'];
 
-    protected $fillable = ['project_id', 'name', 'description', 'position', 'priority', 'status_override', 'client_visible', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
+    protected $fillable = ['project_id', 'name', 'description', 'position', 'priority', 'status_override', 'client_visible', 'billing_mode', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
 
-    public const BUDGET_FIELDS = ['budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
+    public const BUDGET_FIELDS = ['billing_mode', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
 
     protected function casts(): array
     {
@@ -66,16 +66,23 @@ class Module extends Model
         return $this->hasMany(ModuleBudgetChange::class);
     }
 
-    protected static function booted(): void
+    /** Runs before the FreezesLocalAmounts hook, so a derived amount also gets its local twin. */
+    protected static function booting(): void
     {
-        // the project's budget fields are calculated from its modules
-        static::saved(function (self $m) {
-            if ($m->wasRecentlyCreated || $m->wasChanged(['budget_amount', 'budget_hours', 'hourly_rate', 'project_id'])) {
-                Project::find($m->project_id)?->recalculateBudget(); // not the cached relation: the module may just have moved
-                $m->wasChanged('project_id') && Project::find($m->getOriginal('project_id'))?->recalculateBudget();
+        static::saving(function (self $m) {
+            $m->billing_mode ??= $m->project?->client?->billing_mode?->value ?? 'fixed';
+            if ($m->billing_mode === 'hourly') {
+                $m->budget_amount = $m->derivedAmount();
             }
         });
-        static::deleted(fn (self $m) => Project::find($m->project_id)?->recalculateBudget());
+    }
+
+    protected static function booted(): void
+    {
+        // tasks that bill by hours follow the module's mode and rate
+        static::saved(function (self $m) {
+            $m->wasChanged(['billing_mode', 'hourly_rate']) && $m->tasks()->get()->each->recalculateValue();
+        });
 
         static::deleting(function (self $m) {
             $m->comments()->delete();
@@ -161,23 +168,27 @@ class Module extends Model
         return $max ? \Illuminate\Support\Carbon::parse($max) : null;
     }
 
-    /** Hourly client: hours x rate; fixed client: the fixed amount. Null when not configured. */
-    public function budgetAmount(): ?string
+    /** fixed | hourly: the module's own mode (starts as its client's). */
+    public function billingMode(): string
     {
-        if ($this->project->client->billing_mode === BillingMode::Hourly) {
-            if ($this->budget_hours === null || $this->hourly_rate === null) {
-                return null;
-            }
-            $h = Money::toCents((string) $this->budget_hours);
-            $rate = Money::toCents($this->hourly_rate);
-            // absurd rows must not overflow int math (saveBudget bounds make this unreachable)
-            if ((float) $h * $rate > PHP_INT_MAX / 2) {
-                return null;
-            }
+        return $this->billing_mode ?: ($this->project?->client?->billing_mode?->value ?? 'fixed');
+    }
 
-            return Money::toInput(intdiv($h * $rate + 50, 100)); // hours x100, integer half-up
+    /** Hourly: the cap in major units = budget hours x rate (integer half-up); null until both are set. */
+    public function derivedAmount(?string $hours = null, ?string $rate = null): ?string
+    {
+        $hours ??= $this->budget_hours;
+        $rate ??= $this->hourly_rate;
+        if ($hours === null || $rate === null || (float) $hours * (float) $rate > 999999999999) {
+            return null; // absurd rows must not overflow the integer maths
         }
 
+        return Money::toInput(intdiv(Money::toCents((string) $hours) * Money::toCents((string) $rate) + 50, 100));
+    }
+
+    /** The money cap: the fixed amount, or hours x rate (kept in budget_amount) for an hourly module. */
+    public function budgetAmount(): ?string
+    {
         return $this->budget_amount;
     }
 
@@ -186,7 +197,13 @@ class Module extends Model
     {
         $norm = fn ($f, $v) => $v === null || $v === '' ? null
             : ($f === 'deadline' ? \Illuminate\Support\Carbon::parse($v)->toDateString()
-            : (in_array($f, ['budget_hours', 'hourly_rate', 'budget_amount', 'hourly_rate_local', 'budget_amount_local']) ? number_format((float) $v, 2, '.', '') : number_format((float) $v, 2, '.', '')));
+            : ($f === 'billing_mode' ? (string) $v : number_format((float) $v, 2, '.', '')));
+
+        // an hourly module's amount is always hours x rate: derive it so it is logged like any other change
+        $mode = $attrs['billing_mode'] ?? $this->billingMode();
+        if ($mode === 'hourly' && array_intersect(['billing_mode', 'budget_hours', 'hourly_rate'], array_keys($attrs))) {
+            $attrs['budget_amount'] = $this->derivedAmount($attrs['budget_hours'] ?? $this->budget_hours, $attrs['hourly_rate'] ?? $this->hourly_rate);
+        }
 
         $changes = [];
         foreach (array_intersect_key($attrs, array_flip(self::BUDGET_FIELDS)) as $f => $new) {
@@ -201,7 +218,7 @@ class Module extends Model
             throw ValidationException::withMessages(['reason' => 'A reason is required when changing an existing budget value.']);
         }
 
-        $this->guardCap($changes);
+        $this->guardCap($changes, $mode);
 
         DB::transaction(function () use ($changes, $by, $reason) {
             foreach ($changes as $f => [$old, $new]) {
@@ -214,19 +231,16 @@ class Module extends Model
         });
     }
 
-    /** Lowering the cap below what the tasks already use is refused (see ModuleBudget / OverBudget). */
-    private function guardCap(array $changes): void
+    /** Lowering a FIXED amount below what the tasks already use is refused (hourly amounts are derived and never block). */
+    private function guardCap(array $changes, string $mode): void
     {
-        $mb = new \App\Services\ModuleBudget($this);
-        $field = $mb->hourly() ? 'budget_hours' : 'budget_amount';
-        if (! isset($changes[$field]) || $changes[$field][1] === null) {
+        if ($mode !== 'fixed' || ! isset($changes['budget_amount']) || $changes['budget_amount'][1] === null) {
             return;
         }
-        $to = fn ($v) => $mb->hourly() ? (int) round((float) $v * 100) : Money::toCents($v);
-        [$old, $new] = [$changes[$field][0] === null ? null : $to($changes[$field][0]), $to($changes[$field][1])];
-        $allocated = $mb->allocated();
-        if ($new < $allocated && ($old === null || $new < $old)) {
-            throw new \App\Exceptions\OverBudget($this, $allocated - $new, $allocated, $new);
+        [$old, $new] = [$changes['budget_amount'][0] === null ? null : Money::toCents($changes['budget_amount'][0]), Money::toCents($changes['budget_amount'][1])];
+        $used = (new \App\Services\ModuleBudget($this))->used();
+        if ($new < $used && ($old === null || $new < $old)) {
+            throw new \App\Exceptions\OverBudget($this, $used - $new, $used, $new);
         }
     }
 

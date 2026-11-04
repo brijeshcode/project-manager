@@ -29,6 +29,8 @@ class Project extends Model
         'name',
         'description',
         'buffer_percent',
+        'initial_budget',
+        'addons_amount',
         'start_date',
         'status',
         'template',
@@ -77,24 +79,10 @@ class Project extends Model
         return $key;
     }
 
-    /**
-     * initial_budget / addons_amount / final_budget are CALCULATED, never typed: initial = Σ modules' budgets minus
-     * their accepted add-ons, addons = Σ accepted add-ons, final = initial + addons = Σ module budgets. The *_local
-     * twins are the project's own conversion of those amounts (FreezesLocalAmounts refreshes the rate whenever an
-     * amount changes), so initial_local + addons_local == final_local always. Called whenever a module budget
-     * changes, a module is created/deleted/moved, or an add-on is accepted.
-     */
-    public function recalculateBudget(): void
+    /** Σ of the modules' amounts in cents: informational next to the final budget, never a limit. */
+    public function allocatedToModules(): int
     {
-        $initial = $addons = 0;
-        foreach ($this->modules()->with('project.client')->get() as $m) {
-            $mb = new \App\Services\ModuleBudget($m);
-            $a = $m->tasks()->whereNotNull('addon_accepted_at')->where('scope', 'out')->with('subtasks')->get()->sum(fn ($t) => $mb->valueCents($t));
-            $total = $m->budgetAmount() === null ? 0 : Money::toCents($m->budgetAmount());
-            $initial += $total - $a;
-            $addons += $a;
-        }
-        $this->forceFill(['initial_budget' => Money::toInput($initial), 'addons_amount' => Money::toInput($addons)])->save();
+        return (int) $this->modules()->get()->sum(fn ($m) => $m->budget_amount === null ? 0 : Money::toCents((string) $m->budget_amount));
     }
 
     protected function localAmounts(): array

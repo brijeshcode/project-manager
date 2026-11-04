@@ -31,7 +31,7 @@
                 <span>
                     <span class="font-semibold text-slate-700">{{ $m->user?->name ?? 'System' }}</span>
                     @if ($item['kind'] === 'budget')
-                        changed the budget {{ str_replace('_', ' ', $m->field) }} from {{ $m->old ?? 'none' }} to {{ $m->new ?? 'none' }}
+                        changed the {{ str_replace('_', ' ', $m->field) }} from {{ $m->old ?? 'none' }} to {{ $m->new ?? 'none' }}
                     @else
                         {{ $m->summary() }}
                     @endif

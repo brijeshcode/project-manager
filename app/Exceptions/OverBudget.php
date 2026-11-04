@@ -6,9 +6,8 @@ use App\Models\Module;
 use App\Services\ModuleBudget;
 
 /**
- * An edit would push a module's task values (or hours) past its budget. Carries what the UI needs to offer the
- * three ways out: raise the budget, create an add-on, rebalance the other tasks. `over` and `needCap` are in the
- * module's budget units (cents, or hundredths of an hour for an hourly client).
+ * A manual edit of a fixed amount would push a module's task values past its amount. `over` and `needCap` are cents:
+ * needCap is the module amount that would make the edit fit (or, for a lowered module amount, the lowest allowed).
  */
 class OverBudget extends \RuntimeException
 {

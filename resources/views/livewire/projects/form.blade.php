@@ -65,15 +65,24 @@
                 @error('aim') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
-            <div class="grid gap-5 sm:grid-cols-3" data-test="calculated-budget">
-                @foreach ([['initial_budget', 'Initial budget'], ['addons_amount', 'Add-ons'], ['final_budget', 'Final budget']] as [$f, $l])
+            @if ($canMoney)
+                <div class="grid gap-5 sm:grid-cols-3" data-test="project-budget">
                     <div>
-                        <label class="label" for="{{ $f }}">{{ $l }} ({{ $currency }})</label>
-                        <input id="{{ $f }}" type="text" value="{{ $project ? \App\Support\Money::format(\App\Support\Money::toCents($project->$f), $project->currency) : '0.00' }}" readonly class="input bg-slate-50 dark:bg-gray-800" data-test="{{ $f }}">
+                        <label class="label" for="initial_budget">Initial budget ({{ $currency }})</label>
+                        <input id="initial_budget" type="text" inputmode="decimal" wire:model.live.debounce.300ms="initial_budget" class="input" data-test="initial_budget">
+                        @error('initial_budget') <p class="field-error">{{ $message }}</p> @enderror
                     </div>
-                @endforeach
-                <p class="text-xs text-slate-500 sm:col-span-3">Calculated from the project's modules: the initial budget is what the modules were budgeted at, add-ons are accepted add-on tasks, and the final budget is their sum. Set budgets on each module.</p>
-            </div>
+                    <div>
+                        <label class="label" for="addons_amount">Add-ons ({{ $currency }})</label>
+                        <input id="addons_amount" type="text" inputmode="decimal" wire:model.live.debounce.300ms="addons_amount" class="input" data-test="addons_amount">
+                        @error('addons_amount') <p class="field-error">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
+                        <label class="label" for="final_budget">Final budget ({{ $currency }})</label>
+                        <input id="final_budget" type="text" value="{{ $finalBudget }}" readonly class="input bg-slate-50 dark:bg-gray-800" data-test="final_budget">
+                    </div>
+                </div>
+            @endif
 
             <div class="grid gap-5 sm:grid-cols-3">
                 <div>
