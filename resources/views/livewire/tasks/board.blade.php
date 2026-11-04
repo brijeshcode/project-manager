@@ -9,7 +9,12 @@
     $active = collect($filterDefs)->flatMap(fn ($d, $k) => collect($this->{$d[1]})->map(fn ($v) => ['key' => $k, 'v' => (string) $v, 'name' => $d[0], 'label' => $d[2][$v] ?? $v]));
     $hasFilters = $active->isNotEmpty() || trim($search) !== '';
     $stageDot = ['not_started' => 'bg-slate-400', 'active' => 'bg-blue-500', 'review' => 'bg-amber-400', 'done' => 'bg-green-500'];
-    $stripe = [0 => 'bg-slate-300 dark:bg-gray-500', 1 => 'bg-amber-400', 2 => 'bg-rose-500'];
+    $cur = $project->currency;
+    $sym = \Illuminate\Support\Str::beforeLast(\App\Support\Money::format(0, $cur), '0.00');
+    // whole amounts drop the ".00"; board-drag.js formats the live totals the same way
+    $fmtMoney = fn (int $cents) => preg_replace('/\.00$/', '', \App\Support\Money::format($cents, $cur));
+    $fmtHours = fn (float $h) => rtrim(rtrim(number_format($h, 1, '.', ''), '0'), '.') . 'h';
+    $cardFields = ['type' => 'Type', 'priority' => 'Priority', 'module' => 'Module', 'code' => 'Code', 'deadline' => 'Deadline', 'checklist' => 'Checklist count', 'subtasks' => 'Subtask count', 'client' => 'Client-visible icon', 'labels' => 'Labels', 'assignees' => 'Assignees'] + ($canMoney ? ['value' => 'Value'] : []) + ['hours' => 'Hours'];
 @endphp
 {{-- The board fills the viewport below its own top edge (fit()); every column scrolls on its own. Grouped swimlanes flow down the page instead. --}}
 <div x-data="{ h: 0, lastId: null, fit() { this.h = Math.max(440, window.innerHeight - this.$el.getBoundingClientRect().top - 16) },
@@ -65,8 +70,22 @@
             </span>
             Group by module
         </button>
+        {{-- what cards show: purely client-side (board-options.js); the page hides fields via data-board-hide on <html> --}}
+        <div class="relative ml-auto" x-data="cardOpts" @click.outside="o = false" @keydown.escape="o = false" wire:key="card-options" data-test="card-options">
+            <button type="button" @click="o = !o" :aria-expanded="o" :class="o && '!ring-brand-500'" class="btn btn-secondary h-9 w-9 px-0 py-0" data-tip="Card options" aria-label="Card options" data-test="card-options-btn"><x-icon name="eye" /></button>
+            <div x-show="o" style="display:none" class="absolute right-0 z-30 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-800" data-test="card-options-pop">
+                <div class="flex items-center justify-between px-1.5 pb-1 pt-0.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Show on cards <button type="button" @click="reset()" class="font-medium normal-case tracking-normal text-brand-600 hover:underline" data-test="card-options-reset">Reset</button></div>
+                @foreach($cardFields as $key => $lbl)
+                    <label class="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm text-slate-700 hover:bg-slate-100 dark:text-gray-200 dark:hover:bg-gray-700">
+                        <input type="checkbox" :checked="shown('{{ $key }}')" @change="toggle('{{ $key }}')" class="rounded border-slate-300 text-brand-600" data-test="cardopt-{{ $key }}">
+                        {{ $lbl }}
+                    </label>
+                @endforeach
+                <p class="px-1.5 pt-1 text-[11px] text-slate-400">The title is always shown.</p>
+            </div>
+        </div>
         @if($canManage)
-            <button type="button" wire:click="$toggle('managing')" @class(['btn btn-secondary ml-auto h-9 w-9 px-0 py-0', '!ring-brand-500' => $managing]) data-tip="{{ $managing ? 'Done managing columns' : 'Manage columns' }}" aria-label="Manage columns" aria-pressed="{{ $managing ? 'true' : 'false' }}" data-test="manage-columns"><x-icon name="settings" /></button>
+            <button type="button" wire:click="$toggle('managing')" @class(['btn btn-secondary h-9 w-9 px-0 py-0', '!ring-brand-500' => $managing]) data-tip="{{ $managing ? 'Done managing columns' : 'Manage columns' }}" aria-label="Manage columns" aria-pressed="{{ $managing ? 'true' : 'false' }}" data-test="manage-columns"><x-icon name="settings" /></button>
         @endif
     </div>
 
@@ -104,6 +123,8 @@
                             <option value="{{ $key }}" @selected($col->stage === $key)>{{ $label }}</option>
                         @endforeach
                     </select>
+                    <input type="number" min="1" max="999" step="1" value="{{ $col->wip_limit }}" placeholder="No limit" class="input h-9 w-24 py-1 text-sm" aria-label="Column limit" title="Soft limit: the count turns amber at it and red over it" data-test="wip-limit"
+                           wire:change="setLimit({{ $col->id }}, $event.target.value)">
                     @unless($locked)
                         <button type="button" wire:click="moveColumn({{ $col->id }}, -1)" class="btn btn-secondary h-9 px-2 py-1 text-sm" aria-label="Move left">&larr;</button>
                         <button type="button" wire:click="moveColumn({{ $col->id }}, 1)" class="btn btn-secondary h-9 px-2 py-1 text-sm" aria-label="Move right">&rarr;</button>
@@ -116,6 +137,7 @@
                     @else
                         <span class="text-xs text-slate-400">{{ $loop->first ? 'First' : 'Last' }} column is locked</span>
                     @endunless
+                    @error("wipLimit.$col->id") <p class="field-error w-full">{{ $message }}</p> @enderror
                 </div>
             @endforeach
             <form wire:submit="addColumn" class="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3">
@@ -137,12 +159,25 @@
             @endif
             <div @class(['flex items-stretch gap-3 overflow-x-auto pb-2', 'h-full' => ! $lane, 'max-h-[28rem]' => $lane])>
                 @foreach($this->boardColumns as $col)
-                    @php $cards = ($this->columns->get($col->id) ?? collect())->when($lane, fn ($c) => $c->where('module_id', $lane->id)); @endphp
-                    <div data-col class="flex min-h-0 min-w-[16rem] max-w-80 flex-1 basis-64 shrink-0 flex-col rounded-xl bg-gray-100 dark:bg-gray-800/60" wire:key="col-{{ $lane?->id ?? 'all' }}-{{ $col->id }}" data-stage="{{ $col->stage }}">
-                        <div class="flex shrink-0 items-center gap-2 px-3 py-2">
-                            <span class="h-2 w-2 shrink-0 rounded-full {{ $stageDot[$col->stage] ?? 'bg-slate-400' }}" data-tip="{{ $stages[$col->stage] ?? $col->stage }}"></span>
-                            <h3 class="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wide text-slate-600">{{ $col->name }}</h3>
-                            <span data-count class="rounded-full bg-slate-200 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-slate-500">{{ $cards->count() }}</span>
+                    @php
+                        $cards = ($this->columns->get($col->id) ?? collect())->when($lane, fn ($c) => $c->where('module_id', $lane->id));
+                        // a column limit is about the whole column, so swimlanes (a slice of it) show a plain count
+                        $limit = $lane ? null : $col->wip_limit;
+                        $n = $cards->count();
+                        $state = ! $limit ? 'none' : ($n > $limit ? 'over' : ($n === $limit ? 'at' : 'under'));
+                        $sumCents = $canMoney ? $cards->sum(fn ($t) => $t->budget_amount ? \App\Support\Money::toCents((string) $t->budget_amount) : 0) : 0;
+                        $sumHours = (float) $cards->sum('estimate_hours');
+                        $totals = implode(' · ', array_filter([$sumCents > 0 ? $fmtMoney($sumCents) : null, $sumHours > 0 ? $fmtHours($sumHours) : null]));
+                    @endphp
+                    <div data-col class="flex min-h-0 min-w-[16rem] max-w-80 flex-1 basis-64 shrink-0 flex-col rounded-xl bg-gray-100 dark:bg-gray-800/60" wire:key="col-{{ $lane?->id ?? 'all' }}-{{ $col->id }}" data-stage="{{ $col->stage }}" data-sym="{{ $sym }}" @if($limit) data-limit="{{ $limit }}" @endif>
+                        <div class="shrink-0 px-3 py-2">
+                            <div class="flex items-center gap-2">
+                                <span class="h-2 w-2 shrink-0 rounded-full {{ $stageDot[$col->stage] ?? 'bg-slate-400' }}" data-tip="{{ $stages[$col->stage] ?? $col->stage }}"></span>
+                                <h3 class="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wide text-slate-600">{{ $col->name }}</h3>
+                                {{-- value + hours share the column-name line --}}
+                                <span data-totals data-test="column-totals" class="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-slate-500 empty:hidden dark:text-gray-400">{{ $totals }}</span>
+                                <span data-count data-state="{{ $state }}" @if($limit) data-tip="Column limit: {{ $limit }}" @endif class="board-count">{{ $limit ? "$n / $limit" : $n }}</span>
+                            </div>
                         </div>
 
                         {{-- x-board-drag wires SortableJS whenever Alpine initialises this element (morphs, tab switches, new columns) --}}
@@ -158,42 +193,53 @@
                                     $itemsDone = $items->where('is_done', true)->count();
                                     $tc = $task->type && preg_match('/^#[0-9a-fA-F]{6}$/', (string) $task->type->color) ? $task->type->color : '#6b7280';
                                 @endphp
-                                <li wire:key="task-{{ $task->id }}" data-task-id="{{ $task->id }}" data-test="board-card" tabindex="0" @click="openCard($event, {{ $task->id }})" @keydown.enter.self="openCard($event, {{ $task->id }})"
-                                    class="board-card group relative cursor-grab rounded-lg bg-[#ffffff] py-2 pl-3 pr-2 shadow-sm ring-1 ring-slate-900/5 dark:bg-gray-700 dark:ring-white/10">
-                                    <span class="absolute inset-y-1.5 left-0 w-[3px] rounded-r {{ $stripe[$task->priority] ?? $stripe[0] }}" aria-hidden="true"></span>
+                                @php $value = $canMoney && $task->budget_amount > 0 ? \App\Support\Money::toCents((string) $task->budget_amount) : 0; @endphp
+                                <li wire:key="task-{{ $task->id }}" data-task-id="{{ $task->id }}" data-hours="{{ (float) $task->estimate_hours }}" @if($canMoney) data-value="{{ $value }}" @endif data-test="board-card" tabindex="0" @click="openCard($event, {{ $task->id }})" @keydown.enter.self="openCard($event, {{ $task->id }})"
+                                    @class(['board-card group relative cursor-grab rounded-lg bg-[#ffffff] px-2.5 py-2 shadow-sm ring-1 ring-slate-900/5 hover:ring-slate-900/15 dark:bg-gray-700 dark:ring-white/10 dark:hover:ring-white/20', 'opacity-70 hover:opacity-100 focus-within:opacity-100' => $col->stage === 'done'])>
                                     <div class="flex items-center gap-1.5">
                                         @if($task->type)
-                                            <span class="inline-flex shrink-0" style="color: {{ $tc }}" data-tip="{{ $task->type->name }}" data-type="{{ $task->type->name }}" aria-label="{{ $task->type->name }}" role="img" tabindex="0"><x-ui.glyph :value="$task->type->icon ?: 'circle-dot'" class="h-3.5 w-3.5" /></span>
+                                            <span data-f="type" class="inline-flex shrink-0" style="color: {{ $tc }}" data-tip="{{ $task->type->name }}" data-type="{{ $task->type->name }}" aria-label="{{ $task->type->name }}" role="img" tabindex="0"><x-ui.glyph :value="$task->type->icon ?: 'circle-dot'" class="h-3.5 w-3.5" /></span>
                                         @endif
-                                        <x-ui.priority :value="$task->priority" :dot="true" />
-                                        <span class="min-w-0 truncate rounded bg-slate-100 px-1.5 py-px text-[10px] font-medium text-slate-600 dark:bg-gray-600 dark:text-gray-200" data-test="card-module">{{ $task->module->name }}</span>
-                                        <a href="{{ route('tasks.show', $task) }}" wire:navigate draggable="false" data-no-drag
-                                           class="ml-auto shrink-0 rounded p-0.5 text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-brand-600 focus-visible:opacity-100 group-hover:opacity-100 dark:hover:bg-gray-600" data-tip="Edit task" aria-label="Edit task" data-test="card-edit">
-                                            <x-icon name="pencil" class="h-3.5 w-3.5" />
-                                        </a>
+                                        <span data-f="priority" class="inline-flex"><x-ui.priority :value="$task->priority" :dot="true" /></span>
+                                        <span data-f="module" class="min-w-0 truncate rounded bg-slate-100 px-1.5 py-px text-[10px] font-medium text-slate-600 dark:bg-gray-600 dark:text-gray-200" data-test="card-module">{{ $task->module->name }}</span>
+                                        {{-- code and the edit pencil share one cell: the pencil replaces the code while the card is hovered --}}
+                                        <span class="ml-auto grid shrink-0 items-center justify-items-end">
+                                            <span data-f="code" class="col-start-1 row-start-1 transition-opacity group-hover:opacity-0 group-focus-within:opacity-0"><x-ui.task-code :task="$task" class="!text-[11px] tabular-nums" /></span>
+                                            <a href="{{ route('tasks.show', $task) }}" wire:navigate draggable="false" data-no-drag
+                                               class="col-start-1 row-start-1 rounded p-0.5 text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-brand-600 focus-visible:opacity-100 group-hover:opacity-100 dark:hover:bg-gray-600" data-tip="Edit task" aria-label="Edit task" data-test="card-edit">
+                                                <x-icon name="pencil" class="h-3.5 w-3.5" />
+                                            </a>
+                                        </span>
                                     </div>
-                                    <x-ui.task-code :task="$task" class="mt-1 block text-[11px]" />
-                                    <a href="{{ route('tasks.show', $task) }}" draggable="false" data-test="card-link" class="mt-0.5 line-clamp-2 break-words text-[13px] font-medium leading-snug text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
-                                    <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500" data-test="card-meta">
-                                        <x-ui.deadline :date="$task->deadline" :done="$col->stage === 'done'" class="inline-flex items-center rounded bg-slate-100 px-1.5 py-px text-[11px] dark:bg-gray-600/60" data-test="card-deadline" />
+                                    <a href="{{ route('tasks.show', $task) }}" draggable="false" data-test="card-link" class="mt-1 line-clamp-2 break-words text-[13px] font-medium leading-snug text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
+                                    <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500" data-test="card-meta">
+                                        <x-ui.deadline data-f="deadline" :date="$task->deadline" :done="$col->stage === 'done'" class="inline-flex items-center rounded bg-slate-100 px-1.5 py-px text-[11px] dark:bg-gray-600/60" data-test="card-deadline" />
                                         @if($subs->isNotEmpty())
-                                            <span class="inline-flex items-center gap-0.5" data-tip="Subtasks done" data-test="card-subtasks"><x-icon name="square-check-big" class="h-3 w-3" />{{ $subsDone }}/{{ $subs->count() }}</span>
+                                            <span data-f="subtasks" class="inline-flex items-center gap-0.5" data-tip="Subtasks done" data-test="card-subtasks"><x-icon name="square-check-big" class="h-3 w-3" />{{ $subsDone }}/{{ $subs->count() }}</span>
                                         @endif
                                         @if($items->isNotEmpty())
-                                            <span class="inline-flex items-center gap-0.5" data-tip="Checklist done" data-test="card-checklist"><x-icon name="list-checks" class="h-3 w-3" />{{ $itemsDone }}/{{ $items->count() }}</span>
+                                            <span data-f="checklist" class="inline-flex items-center gap-0.5" data-tip="Checklist done" data-test="card-checklist"><x-icon name="list-checks" class="h-3 w-3" />{{ $itemsDone }}/{{ $items->count() }}</span>
                                         @endif
-                                        @if($task->labels->isNotEmpty())
-                                            <span class="inline-flex items-center gap-1" data-test="card-labels">
-                                                @foreach($task->labels as $l)
-                                                    <span class="h-2 w-2 rounded-full" style="background: {{ preg_match('/^#[0-9a-fA-F]{6}$/', (string) $l->color) ? $l->color : '#6b7280' }}" data-tip="{{ $l->name }}" data-label="{{ $l->name }}" aria-label="Label {{ $l->name }}" role="img" tabindex="0"></span>
-                                                @endforeach
-                                            </span>
+                                        {{-- the value chip is only ever rendered for manage-money users --}}
+                                        @if($value > 0)
+                                            <span data-f="value" class="inline-flex max-w-full items-center whitespace-nowrap rounded bg-emerald-50 px-1.5 py-px font-medium tabular-nums text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" data-tip="Task value" data-test="card-value">{{ $fmtMoney($value) }}</span>
+                                        @endif
+                                        @if($task->estimate_hours > 0)
+                                            <span data-f="hours" class="inline-flex max-w-full items-center whitespace-nowrap rounded bg-slate-100 px-1.5 py-px font-medium tabular-nums dark:bg-gray-600/60" data-tip="Estimate" data-test="card-hours">{{ $fmtHours((float) $task->estimate_hours) }}</span>
                                         @endif
                                         @if($task->client_visible)
-                                            <span class="inline-flex text-sky-600 dark:text-sky-400" data-tip="Visible to the client" aria-label="Visible to the client" role="img" data-test="card-client"><x-icon name="globe" class="h-3.5 w-3.5" /></span>
+                                            <span data-f="client" class="inline-flex text-sky-600 dark:text-sky-400" data-tip="Visible to the client" aria-label="Visible to the client" role="img" data-test="card-client"><x-icon name="globe" class="h-3.5 w-3.5" /></span>
                                         @endif
-                                        <x-ui.assignees class="ml-auto" :users="$task->assignees" :candidates="$candidates" method="toggleTaskAssignee" :id="$task->id" size="xs" :max="3" ring="ring-2 ring-white dark:ring-gray-700" />
+                                        <span data-f="assignees" class="ml-auto"><x-ui.assignees :users="$task->assignees" :candidates="$candidates" method="toggleTaskAssignee" :id="$task->id" size="xs" :max="3" ring="ring-2 ring-white dark:ring-gray-700" /></span>
                                     </div>
+                                    {{-- labels get their own bottom-most line, as named chips, so they are readable --}}
+                                    @if($task->labels->isNotEmpty())
+                                        <div data-f="labels" class="mt-1.5 flex flex-wrap gap-1" data-test="card-labels">
+                                            @foreach($task->labels as $l)
+                                                <x-ui.label-chip :label="$l" class="!px-1.5 !py-px !text-[10px]" />
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </li>
                             @endforeach
                         </ul>

@@ -8,6 +8,29 @@ import Sortable from 'sortablejs';
  */
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+const fmtHours = (h) => String(Math.round(h * 10) / 10) + 'h';
+const fmtMoney = (sym, cents) => sym + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 });
+
+/** Recompute a column's count (with its limit state) and totals from its cards; mirrors the Blade header. */
+function refreshColumn(ul) {
+    const col = ul.closest('[data-col]');
+    if (!col) return;
+    const cards = [...ul.querySelectorAll(':scope > li[data-task-id]')];
+    const limit = parseInt(col.dataset.limit, 10) || 0;
+    const n = cards.length;
+    const count = col.querySelector('[data-count]');
+    if (count) {
+        count.textContent = limit ? n + ' / ' + limit : n;
+        count.dataset.state = !limit ? 'none' : n > limit ? 'over' : n === limit ? 'at' : 'under';
+    }
+    const totals = col.querySelector('[data-totals]');
+    if (totals) {
+        const sum = (k) => cards.reduce((t, c) => t + (parseFloat(c.dataset[k]) || 0), 0);
+        const cents = sum('value'), hours = sum('hours'); // data-value only exists for manage-money users, so their totals stay server-side only
+        totals.textContent = [cents > 0 ? fmtMoney(col.dataset.sym, cents) : '', hours > 0 ? fmtHours(hours) : ''].filter(Boolean).join(' · ');
+    }
+}
+
 document.addEventListener('alpine:init', () => {
     window.Alpine.directive('board-drag', (el, _, { cleanup }) => {
         const sortable = Sortable.create(el, {
@@ -23,8 +46,7 @@ document.addEventListener('alpine:init', () => {
             preventOnFilter: false,
             onEnd(evt) {
                 window.__boardDropAt = Date.now(); // the click ending a drag must not open the task panel
-                const count = (ul) => { const n = ul.closest('[data-col]')?.querySelector('[data-count]'); if (n) n.textContent = ul.querySelectorAll(':scope > li[data-task-id]').length; };
-                count(evt.from); count(evt.to); // counts update at once, the server does not need to re-render a same-stage move
+                refreshColumn(evt.from); refreshColumn(evt.to); // counts and totals update at once, the server does not need to re-render a same-stage move
                 if (!reduce) { evt.item.classList.add('board-dropped'); setTimeout(() => evt.item.classList.remove('board-dropped'), 250); }
                 const id = evt.to.closest('[wire\\:id]')?.getAttribute('wire:id');
                 window.Livewire.find(id)?.call(

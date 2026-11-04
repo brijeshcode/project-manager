@@ -563,6 +563,7 @@ See the [gateway docs](https://example.com/docs).", 'client_visible' => true]);
                         }
                     }
                 }
+                $n === 0 && $p === 0 && $this->seedColumnLimits($project);
             }
 
             // Money per client: one paid, one partly paid, one overdue and unpaid,
@@ -612,6 +613,16 @@ See the [gateway docs](https://example.com/docs).", 'client_visible' => true]);
             ] + $this->localFields(50000, $currency, $local, $rateFor));
 
             $n++;
+        }
+    }
+
+    /** Demo the column limits: the fullest column is over its limit, the next one sits exactly at it. */
+    private function seedColumnLimits(Project $project): void
+    {
+        $counts = $project->columns->map(fn ($c) => [$c, Task::where('board_column_id', $c->id)->count()])->sortByDesc(fn ($x) => $x[1])->values();
+        if ($counts->count() > 1 && $counts[0][1] > 1) {
+            $counts[0][0]->update(['wip_limit' => $counts[0][1] - 1]);
+            $counts[1][0]->update(['wip_limit' => $counts[1][1]]);
         }
     }
 

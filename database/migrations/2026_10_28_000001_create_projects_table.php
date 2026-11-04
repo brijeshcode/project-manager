@@ -36,6 +36,7 @@ return new class extends Migration
             $t->string('name');
             $t->string('stage');                                // not_started|active|review|done
             $t->unsignedInteger('position')->default(0);
+            $t->unsignedInteger('wip_limit')->nullable();       // soft limit: the count turns amber at it, red over it
             $t->timestamps();
         });
 

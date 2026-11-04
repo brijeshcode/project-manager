@@ -260,6 +260,25 @@ class Board extends Component
         unset($this->boardColumns);
     }
 
+    /** Blank = no limit. A limit is a warning (count colours), never a block. Locked first/last columns may have one too. */
+    public function setLimit(int $id, string $value): void
+    {
+        $this->authorize('update', $this->project);
+        $col = $this->project->columns()->findOrFail($id);
+        $this->resetErrorBag("wipLimit.$id");
+        $value = trim($value);
+        if ($value === '') {
+            $col->update(['wip_limit' => null]);
+        } elseif (preg_match('/^[0-9]{1,3}$/', $value) && (int) $value >= 1) {
+            $col->update(['wip_limit' => (int) $value]);
+        } else {
+            $this->addError("wipLimit.$id", 'Limit must be a whole number from 1 to 999, or blank.');
+
+            return;
+        }
+        unset($this->boardColumns);
+    }
+
     public function setStage(int $id, string $stage): void
     {
         $this->authorize('update', $this->project);
@@ -325,6 +344,7 @@ class Board extends Component
             'allLabels' => Label::orderBy('name')->get(),
             'stages'    => BoardTemplates::STAGES,
             'canManage' => $canManage,
+            'canMoney'  => auth()->user()->can('manage-money'),
             'panelTask' => $this->openableTask($this->taskId),
         ]);
     }

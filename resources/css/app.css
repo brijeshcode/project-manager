@@ -177,6 +177,15 @@
 /* Board: calm cards, per-column scroll, smooth drag */
 .board-column:not(:has(> li))::before { content: 'Drop tasks here'; display: block; border: 1px dashed #cbd5e1; border-radius: .5rem; padding: 1rem .5rem; text-align: center; font-size: .75rem; color: #94a3b8; }
 .dark .board-column:not(:has(> li))::before { border-color: #4b5563; color: #6b7280; }
+/* column count: plain, amber at the column limit, red over it */
+.board-count { border-radius: 9999px; background: #e2e8f0; padding: .125rem .375rem; font-size: 11px; font-weight: 600; line-height: 1; color: #64748b; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.board-count[data-state=at] { background: #fef3c7; color: #b45309; }
+.board-count[data-state=over] { background: #fee2e2; color: #b91c1c; }
+.dark .board-count { background: #374151; color: #9ca3af; }
+.dark .board-count[data-state=at] { background: rgb(245 158 11 / .2); color: #fbbf24; }
+.dark .board-count[data-state=over] { background: rgb(239 68 68 / .2); color: #f87171; }
+/* "Card options": <html data-board-hide="code deadline"> hides those fields on every card (board-options.js) */
+:is(html[data-board-hide~=type] [data-f=type],html[data-board-hide~=priority] [data-f=priority],html[data-board-hide~=module] [data-f=module],html[data-board-hide~=code] [data-f=code],html[data-board-hide~=deadline] [data-f=deadline],html[data-board-hide~=checklist] [data-f=checklist],html[data-board-hide~=subtasks] [data-f=subtasks],html[data-board-hide~=client] [data-f=client],html[data-board-hide~=labels] [data-f=labels],html[data-board-hide~=assignees] [data-f=assignees],html[data-board-hide~=value] [data-f=value],html[data-board-hide~=hours] [data-f=hours]) { display: none; }
 .board-card { transition: box-shadow .15s ease, background-color .15s ease; }
 .board-card:hover { box-shadow: 0 2px 8px rgb(15 23 42 / .12); }
 .dark .board-card:hover { box-shadow: 0 2px 8px rgb(0 0 0 / .5); }

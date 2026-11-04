@@ -11,5 +11,9 @@
             var s = localStorage.getItem('sidebar');
             if (s === 'full' || s === 'half' || s === 'mini') document.documentElement.dataset.sidebar = s;
         } catch (e) {}
+        try {
+            // board "Card options": fields to hide on cards (see board-options.js)
+            document.documentElement.dataset.boardHide = (localStorage.getItem('boardCardHide') || '').replace(/[^a-z ]/g, '');
+        } catch (e) {}
     })();
 </script>

@@ -208,7 +208,7 @@ it('renders priority, deadline chip, counts, label dots, client icon, edit link 
         ->toContain('data-label="Urgentx"')->toContain('data-test="card-client"')->toContain('data-test="card-edit"')
         ->toContain('data-test="card-link"')->toContain('draggable="false"')->toContain('line-clamp-2');
     $t->update(['deadline' => null]);
-    expect(brBoard($s)->html())->not->toContain('data-state=');
+    expect(brBoard($s)->html())->not->toContain('data-test="card-deadline"');
 });
 
 it('persists a board move', function () {
