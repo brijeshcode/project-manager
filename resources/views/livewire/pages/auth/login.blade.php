@@ -25,10 +25,13 @@ new #[Layout('layouts.guest')] class extends Component
 }; ?>
 
 <div>
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+    <h1 class="font-display text-3xl font-semibold tracking-tight text-slate-900 dark:text-white">Sign in</h1>
+    <p class="mt-2 text-sm text-slate-500 dark:text-gray-400">Use your work email to open your projects.</p>
 
-    <form wire:submit="login">
+    <!-- Session Status -->
+    <x-auth-session-status class="mt-6" :status="session('status')" />
+
+    <form wire:submit="login" class="mt-8">
         <!-- Email Address -->
         <div>
             <x-input-label for="email" :value="__('Email')" />
@@ -56,16 +59,14 @@ new #[Layout('layouts.guest')] class extends Component
             </label>
         </div>
 
-        <div class="flex items-center justify-end mt-4">
-            @if (Route::has('password.request'))
-                <a class="link text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500" href="{{ route('password.request') }}" wire:navigate>
-                    {{ __('Forgot your password?') }}
-                </a>
-            @endif
+        <x-primary-button class="mt-6 w-full !py-2.5">
+            {{ __('Sign in') }}
+        </x-primary-button>
 
-            <x-primary-button class="ms-3">
-                {{ __('Log in') }}
-            </x-primary-button>
-        </div>
+        @if (Route::has('password.request'))
+            <a class="link mt-4 block text-center text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500" href="{{ route('password.request') }}" wire:navigate>
+                {{ __('Forgot your password?') }}
+            </a>
+        @endif
     </form>
 </div>
