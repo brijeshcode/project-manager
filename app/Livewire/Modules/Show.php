@@ -32,6 +32,8 @@ class Show extends Component
 
     public bool $clientVisible = false;
 
+    public int $priority = 1;
+
     /** Budget inputs (major units), owner only. */
     public string $hours = '';
 
@@ -76,6 +78,7 @@ class Show extends Component
         $this->deadline = $m->deadline?->toDateString() ?? '';
         $this->deadlineReason = '';
         $this->clientVisible = $m->client_visible;
+        $this->priority = $m->priority;
         $this->hours = $m->budget_hours === null ? '' : (string) $m->budget_hours;
         $this->rate = $m->hourly_rate ?? '';
         $this->amount = $m->budget_amount ?? '';
@@ -89,6 +92,8 @@ class Show extends Component
             $this->validate(['deadline' => 'nullable|date', 'deadlineReason' => 'nullable|string|max:1000']);
             $m->activityReason = $this->deadlineReason;
             $m->update(['deadline' => $this->deadline ?: null]);
+        } elseif ($panel === 'priority') {
+            $m->update($this->validate(['priority' => 'integer|in:0,1,2']));
         } elseif ($panel === 'visibility') {
             $m->update(['client_visible' => $this->clientVisible]);
         } elseif ($panel === 'budget') {

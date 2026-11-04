@@ -85,14 +85,15 @@ class DemoSeeder extends Seeder
 
         $mi = 0;
         foreach ($modules as $moduleName => $taskCount) {
-            $module = Module::create(['project_id' => $project->id, 'name' => $moduleName, 'position' => ++$mi, 'deadline' => now()->addWeeks(2 + $mi)]);
+            // varied priorities; Reports is completed by override, Dashboard by having every task in a done column
+            $module = Module::create(['project_id' => $project->id, 'name' => $moduleName, 'position' => ++$mi, 'priority' => [2, 0, 1, 2, 1, 0, 1][$mi - 1], 'status_override' => $moduleName === 'Reports' ? 'completed' : null, 'deadline' => now()->addWeeks(2 + $mi)]);
 
             for ($t = 0; $t < $taskCount; $t++) {
                 $task = Task::create([
                     'module_id' => $module->id, 'creator_id' => $admin->id, 'title' => "$moduleName task ".($t + 1), 'description' => '',
                     'status' => 'published', 'is_idea' => false, 'priority' => 1 + ($t % 3),
                     'estimate_hours' => 4 + $t * 2, 'scope' => 'in', 'client_visible' => true,
-                    'board_column_id' => $cols[($mi + $t) % $cols->count()]->id, 'position' => $t + 1,
+                    'board_column_id' => ($moduleName === 'Dashboard' ? $cols->firstWhere('stage', 'done') : $cols[($mi + $t) % $cols->count()])->id, 'position' => $t + 1,
                     'deadline' => now()->addDays(5 + $t * 4 + $mi),
                 ]);
 
@@ -437,7 +438,7 @@ See the [gateway docs](https://example.com/docs).", 'client_visible' => true]);
                 $mi = 0;
                 foreach ($modules as $moduleName => $tasks) {
                     $module = Module::create([
-                        'project_id' => $project->id, 'name' => $moduleName, 'position' => ++$mi,
+                        'project_id' => $project->id, 'name' => $moduleName, 'position' => ++$mi, 'priority' => ($n + $mi) % 3,
                         'hourly_rate' => $mode === 'hourly' ? number_format(60 + $n * 15, 2, '.', '') : null,
                         'budget_hours' => $mode === 'hourly' ? 30 + $mi * 10 : null,
                         'deadline' => now()->addWeeks(2 + $mi),

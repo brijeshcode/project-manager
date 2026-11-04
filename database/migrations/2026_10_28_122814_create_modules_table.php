@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('project_id')->constrained()->cascadeOnDelete();
             $table->string('name');
             $table->unsignedInteger('position')->default(0);
+            $table->unsignedTinyInteger('priority')->default(1); // 0 Low, 1 Medium, 2 High (same as tasks)
             $table->string('status_override')->nullable(); // on_hold | completed; otherwise status is derived
             $table->boolean('client_visible')->default(false);
             $table->timestamps();

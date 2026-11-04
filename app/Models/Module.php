@@ -18,12 +18,13 @@ use Illuminate\Support\Facades\DB;
 
 class Module extends Model
 {
-    use FreezesLocalAmounts, HasAttachments, HasComments, HasLabels, LogsActivity;
+    use FreezesLocalAmounts, HasAttachments, HasComments, HasLabels;
+    use LogsActivity { activityValue as protected baseActivityValue; }
 
     /** Changes to these are written to the activity log. */
-    public array $loggedFields = ['name', 'description', 'status_override', 'deadline', 'client_visible'];
+    public array $loggedFields = ['name', 'description', 'status_override', 'deadline', 'client_visible', 'priority'];
 
-    protected $attributes = ['client_visible' => false];
+    protected $attributes = ['client_visible' => false, 'priority' => 1];
 
     public const OVERRIDES = ['on_hold', 'completed'];
 
@@ -31,13 +32,13 @@ class Module extends Model
 
     public const STATUS_COLORS = ['pending' => 'slate', 'working' => 'brand', 'in_review' => 'amber', 'completed' => 'green', 'on_hold' => 'rose'];
 
-    protected $fillable = ['project_id', 'name', 'description', 'position', 'status_override', 'client_visible', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
+    protected $fillable = ['project_id', 'name', 'description', 'position', 'priority', 'status_override', 'client_visible', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
 
     public const BUDGET_FIELDS = ['budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
 
     protected function casts(): array
     {
-        return ['budget_hours' => 'decimal:2', 'hourly_rate' => 'decimal:2', 'budget_amount' => 'decimal:2', 'hourly_rate_local' => 'decimal:2', 'budget_amount_local' => 'decimal:2', 'deadline' => 'date', 'client_visible' => 'boolean'];
+        return ['budget_hours' => 'decimal:2', 'hourly_rate' => 'decimal:2', 'budget_amount' => 'decimal:2', 'hourly_rate_local' => 'decimal:2', 'budget_amount_local' => 'decimal:2', 'deadline' => 'date', 'client_visible' => 'boolean', 'priority' => 'integer'];
     }
 
     protected function localAmounts(): array
@@ -48,6 +49,11 @@ class Module extends Model
     protected function moneyCurrency(): ?string
     {
         return $this->project?->currency;
+    }
+
+    protected function activityValue(mixed $v, ?string $field = null): ?string
+    {
+        return $field === 'priority' && $v !== null && $v !== '' ? (['Low', 'Medium', 'High'][(int) $v] ?? (string) $v) : $this->baseActivityValue($v, $field);
     }
 
     public function project(): BelongsTo

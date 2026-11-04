@@ -105,6 +105,13 @@
                     </x-slot:editor>
                 </x-ui.side-section>
 
+                <x-ui.side-section title="Priority" name="priority" :panel="$panel" :can="$canManage">
+                    <x-ui.priority :value="$module->priority" data-test="priority-badge" />
+                    <x-slot:editor>
+                        <select wire:model="priority" class="select h-8 text-sm"><option value="0">Low</option><option value="1">Medium</option><option value="2">High</option></select>
+                    </x-slot:editor>
+                </x-ui.side-section>
+
                 <x-ui.side-section title="Dates" name="dates">
                     <dl class="space-y-0.5" data-test="dates">
                         <div class="flex justify-between"><dt class="text-slate-500">Started</dt><dd data-test="module-started">{{ $startedAt?->format('M j, Y') ?? '—' }}</dd></div>

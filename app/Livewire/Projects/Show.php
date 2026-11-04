@@ -35,6 +35,20 @@ class Show extends Component
     #[Url]
     public string $tab = 'details';
 
+    /** Module list filter: all | sprint | backlog | completed. */
+    #[Url(as: 'filter')]
+    public string $filter = 'all';
+
+    /** Module list user filter: a user id, or '' for everyone. */
+    #[Url(as: 'user')]
+    public string $assignedTo = '';
+
+    // Step 3 definitions (statuses are derived). Step 4 (sprints) redefines Sprint/Backlog by sprint
+    // membership: swap inSprint() and its Backlog counterpart, nothing else reads these constants.
+    public const SPRINT_STATUSES = ['working', 'in_review'];
+
+    public const BACKLOG_STATUSES = ['pending', 'on_hold'];
+
     /** Keyed by module id. */
     public array $newTaskTitle = [];
 
@@ -155,6 +169,56 @@ class Show extends Component
         Task::reorder($this->project->modules()->findOrFail($moduleId)->id, $ids);
     }
 
+    /** Drag-reorder of module rows: the submitted modules swap into the slots they occupied, so a filtered view never disturbs the rest. */
+    public function reorderModules(array $ids): void
+    {
+        $this->authorize('update', $this->project);
+
+        $all = $this->project->modules()->orderBy('id')->pluck('id'); // position ties broken by id
+        $ids = collect($ids)->map(fn ($i) => (int) $i)->unique()->intersect($all)->values();
+        $queue = $ids->all();
+        $order = [];
+        foreach ($all as $id) {
+            $order[] = $ids->contains($id) ? array_shift($queue) : $id;
+        }
+        Module::reorder($order, $this->project->id);
+    }
+
+    public function setModulePriority(int $moduleId, int $priority): void
+    {
+        $this->authorize('update', $this->project);
+        abort_unless(in_array($priority, [0, 1, 2], true), 422);
+        $this->project->modules()->findOrFail($moduleId)->update(['priority' => $priority]);
+    }
+
+    /** Add/remove one assignee straight from the list (same logging as the module page sidebar). */
+    public function toggleModuleAssignee(int $moduleId, int $userId): void
+    {
+        $this->authorize('update', $this->project);
+
+        $module = $this->project->modules()->findOrFail($moduleId);
+        $current = $module->assignees()->pluck('users.id')->all();
+        if (in_array($userId, $current, true)) {
+            $ids = array_values(array_diff($current, [$userId]));
+        } else {
+            abort_unless($this->candidates()->contains('id', $userId), 403);
+            $ids = [...$current, $userId];
+        }
+        $module->syncAssignees($ids);
+    }
+
+    /** Active project members: who can be assigned. */
+    protected function candidates()
+    {
+        return $this->project->members()->wherePivot('active', true)->orderBy('name')->get();
+    }
+
+    /** Step 4 swaps this for "has tasks in the active sprint". */
+    protected function inSprint(string $status): bool
+    {
+        return in_array($status, self::SPRINT_STATUSES, true);
+    }
+
     public function addTask(int $moduleId): void
     {
         $this->authorize('update', $this->project);
@@ -257,6 +321,20 @@ class Show extends Component
             ])
             ->get();
 
+        $userId = (int) $this->assignedTo;
+        $filter = in_array($this->filter, ['all', 'sprint', 'backlog', 'completed'], true) ? $this->filter : 'all';
+        $rows = $modules->map(fn ($m) => ['m' => $m, 'status' => $m->status()])
+            ->filter(fn ($r) => ! $userId || $r['m']->assignees->contains('id', $userId) || $r['m']->tasks->contains(fn ($t) => $t->assignees->contains('id', $userId)))
+            ->values();
+        $done = $rows->filter(fn ($r) => $r['status'] === 'completed')->values();
+        $open = $rows->reject(fn ($r) => $r['status'] === 'completed')->values();
+        $main = match ($filter) {
+            'completed' => $done,
+            'sprint' => $open->filter(fn ($r) => $this->inSprint($r['status']))->values(),
+            'backlog' => $open->reject(fn ($r) => $this->inSprint($r['status']))->values(),
+            default => $open,
+        };
+
         $tabs = ['details' => 'Details', 'modules' => 'Modules', 'resources' => 'Resources', 'board' => 'Board']
             + (auth()->user()->can('manage-money') ? ['economics' => 'Economics'] : []);
 
@@ -265,6 +343,11 @@ class Show extends Component
             'active'   => isset($tabs[$this->tab]) ? $this->tab : 'details',
             'project'  => $this->project->load('client', 'members'),
             'modules'  => $modules,
+            'mainRows' => $main,
+            'doneRows' => $filter === 'all' ? $done : collect(),
+            'filter'   => $filter,
+            'candidates' => $this->candidates(),
+            'userOptions' => $this->project->members()->orderBy('name')->get(),
             'progress' => app(ProgressService::class),
         ]);
     }
