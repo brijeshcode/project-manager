@@ -36,7 +36,7 @@ class Index extends Component
                     ->whereRaw("invoices.number LIKE ? ESCAPE '!'", [$like])
                     ->orWhereHas('client', fn ($c) => $c->whereRaw("name LIKE ? ESCAPE '!'", [$like]))))
                 ->when(in_array($this->status, ['sent', 'draft', 'void']), fn ($q) => $q->where('invoices.status', $this->status))
-                ->orderByDesc('id'), 15),
+                ->orderByDesc('id'), \App\Support\Settings::pageSize()),
             'local' => LocalCurrency::code(),
             'owing' => \App\Support\DashboardMoney::owingClientIds(),
             'stats' => \App\Support\MoneyStats::invoices(),

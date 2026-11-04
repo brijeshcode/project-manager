@@ -46,6 +46,7 @@ Route::middleware(['auth', 'role:super_admin'])->group(function () {
 });
 
 // Task types and labels: super admin only (Gate manage-taxonomy)
+Route::middleware(['auth', 'can:manage-system'])->get('settings/system', \App\Livewire\Settings\System::class)->name('settings.system');
 Route::middleware(['auth', 'can:manage-taxonomy'])->prefix('settings')->name('settings.')->group(function () {
     Route::get('task-types', \App\Livewire\Settings\TaskTypes::class)->name('task-types');
     Route::get('labels', \App\Livewire\Settings\Labels::class)->name('labels');

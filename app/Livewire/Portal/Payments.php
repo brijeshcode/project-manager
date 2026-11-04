@@ -25,7 +25,7 @@ class Payments extends Component
                 'project' => fn ($q) => $q->where('client_id', $cid)->select('id', 'name', 'client_id'),
             ])
             ->latest('paid_on')->latest('id')
-            ->paginate(15, ['id', 'client_id', 'project_id', 'currency_id', 'amount_cents', 'paid_on', 'type', 'method']);
+            ->paginate(\App\Support\Settings::pageSize(), ['id', 'client_id', 'project_id', 'currency_id', 'amount_cents', 'paid_on', 'type', 'method']);
 
         return view('livewire.portal.payments', [
             'payments' => $payments,

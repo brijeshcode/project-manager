@@ -7,6 +7,7 @@ use App\Livewire\Concerns\DeletesClient;
 use App\Livewire\Concerns\WithListSearch;
 use App\Models\Client;
 use App\Services\ClientAccount;
+use App\Support\Settings;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -14,21 +15,23 @@ class Index extends Component
 {
     use DeletesClient, WithListSearch;
 
-    private const PER_PAGE = [15, 25, 50, 100];
-
     #[Url]
-    public int|string $perPage = 15;
+    public int|string $perPage = '';
 
     public function mount(): void
     {
         $this->authorize('viewAny', Client::class);
+        $this->perPage = $this->sizeOrDefault();
+    }
+
+    private function sizeOrDefault(): int
+    {
+        return in_array((int) $this->perPage, Settings::PAGE_SIZES, true) ? (int) $this->perPage : Settings::pageSize();
     }
 
     public function updatedPerPage(): void
     {
-        if (! in_array((int) $this->perPage, self::PER_PAGE, true)) {
-            $this->perPage = 15;
-        }
+        $this->perPage = $this->sizeOrDefault();
         $this->resetPage();
     }
 
@@ -47,7 +50,7 @@ class Index extends Component
     public function render()
     {
         $like = $this->likeTerm();
-        $perPage = in_array((int) $this->perPage, self::PER_PAGE, true) ? (int) $this->perPage : 15;
+        $perPage = $this->sizeOrDefault();
 
         $clients = $this->fitPage(
             Client::orderBy('name')

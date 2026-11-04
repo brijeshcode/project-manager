@@ -13,6 +13,10 @@ class Economics extends Component
     #[Locked]
     public int $projectId;
 
+    /** Shown inside the project page, whose breadcrumb already names the project. */
+    #[Locked]
+    public bool $embedded = false;
+
     public function mount(Project $project): void
     {
         $this->authorize('manage-money');

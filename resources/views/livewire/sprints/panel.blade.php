@@ -1,14 +1,8 @@
 <div data-test="sprint-panel">
     @php $fmt = fn ($h) => rtrim(rtrim(number_format($h, 1), '0'), '.').'h'; @endphp
 
-    {{-- toolbar: view switch, filters, new sprint --}}
+    {{-- toolbar: filters, new sprint --}}
     <div class="mb-4 flex flex-wrap items-center gap-3" data-test="sprint-toolbar">
-        <div class="inline-flex overflow-hidden rounded-lg border border-slate-200 text-sm dark:border-gray-700" role="group" aria-label="Sprint view">
-            @foreach (['plan' => 'Plan', 'board' => 'Board'] as $k => $lbl)
-                <button type="button" wire:click="$set('mode', '{{ $k }}')" aria-pressed="{{ ($planView ? 'plan' : 'board') === $k ? 'true' : 'false' }}" data-test="view-{{ $k }}" @class(['px-3 py-1.5 font-medium', 'bg-brand-600 text-white' => ($planView ? 'plan' : 'board') === $k, 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-transparent dark:text-gray-300' => ($planView ? 'plan' : 'board') !== $k])>{{ $lbl }}</button>
-            @endforeach
-        </div>
-        @if ($planView)
             <select wire:model.live="user" class="select h-9 w-40 text-sm" aria-label="Assigned to" data-test="sp-filter-user">
                 <option value="">Everyone</option>
                 @foreach ($users as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
@@ -21,13 +15,11 @@
                 <option value="">All labels</option>
                 @foreach ($labels as $l)<option value="{{ $l->id }}">{{ $l->name }}</option>@endforeach
             </select>
-        @endif
         @if ($canManage)
             <button type="button" wire:click="openCreate" class="btn btn-primary ml-auto gap-1" data-test="new-sprint"><x-icon name="plus" /> New sprint</button>
         @endif
     </div>
 
-    @if ($planView)
         <div class="space-y-5" data-test="plan-view">
             {{-- Active sprint --}}
             @if ($active)
@@ -82,30 +74,6 @@
                 </div>
             @endif
         </div>
-    @else
-        <div data-test="board-view">
-            @if ($active)
-                @php $doneN = $activeTasks->filter(fn ($t) => $t->column?->stage === 'done')->count(); @endphp
-                <x-ui.card class="mb-4" data-test="sprint-header">
-                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-                        <x-icon name="zap" class="h-5 w-5 text-brand-600" />
-                        <h2 class="font-display text-lg font-semibold text-slate-900">{{ $active->name }}</h2>
-                        <x-ui.sprint-dates :sprint="$active" />
-                        <span class="ml-auto text-xs text-slate-500">{{ $doneN }}/{{ $activeTasks->count() }} done &middot; {{ $activeTasks->count() }} {{ Str::plural('task', $activeTasks->count()) }} &middot; {{ $fmt(\App\Models\Sprint::hours($activeTasks)) }}</span>
-                        <x-ui.progress :pct="$activeTasks->isEmpty() ? 0 : $doneN / $activeTasks->count() * 100" class="w-40" />
-                    </div>
-                    @if ($active->goal)<p class="mt-2 text-sm text-slate-600" data-test="sprint-goal">{{ $active->goal }}</p>@endif
-                </x-ui.card>
-                <livewire:tasks.board :project="$project" :sprint-id="$active->id" :key="'sprint-board-'.$active->id" />
-            @else
-                <x-ui.empty-state title="No active sprint" message="The sprint board shows the tasks of the active sprint. Plan a sprint, add tasks and start it." data-test="no-active">
-                    @if ($canManage)
-                        <x-slot:action><button type="button" wire:click="openCreate" class="btn btn-primary gap-1" data-test="start-sprint-cta"><x-icon name="play" /> Start a sprint</button></x-slot:action>
-                    @endif
-                </x-ui.empty-state>
-            @endif
-        </div>
-    @endif
 
     {{-- sprint form: create / edit / start --}}
     @if ($formMode)

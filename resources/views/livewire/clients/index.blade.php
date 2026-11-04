@@ -24,7 +24,7 @@
         <div>
             <label for="per-page" class="label">Per Page</label>
             <select wire:model.live="perPage" id="per-page" class="select">
-                @foreach ([15, 25, 50, 100] as $n)
+                @foreach (\App\Support\Settings::PAGE_SIZES as $n)
                     <option value="{{ $n }}">{{ $n }}</option>
                 @endforeach
             </select>

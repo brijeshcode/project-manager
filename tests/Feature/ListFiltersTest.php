@@ -82,7 +82,7 @@ it('projects: search by name or client, status filter, % literal', function () {
         ->set('search', 'nothing')->assertSee('No matches');
 });
 
-it('projects: developer search only sees member projects; paginates 12', function () {
+it('projects: developer search only sees member projects; paginates 15', function () {
     $c = lfClient('Acme');
     $mine = Project::create(['client_id' => $c->id, 'name' => 'Mine App', 'status' => 'active']);
     Project::create(['client_id' => $c->id, 'name' => 'Other App', 'status' => 'active']);
@@ -93,10 +93,10 @@ it('projects: developer search only sees member projects; paginates 12', functio
         ->set('search', 'App')->assertSee('Mine App')->assertDontSee('Other App');
 
     $this->actingAs(User::factory()->create()->assignRole('super_admin'));
-    foreach (range(1, 12) as $i) { Project::create(['client_id' => $c->id, 'name' => sprintf('Proj %02d', $i), 'status' => 'active']); }
-    Livewire::test(ProjectsIndex::class)->assertOk()->assertSee('Mine App')->assertDontSee('Proj 12')
-        ->call('gotoPage', 2)->assertSee('Proj 12')->assertDontSee('Mine App')
-        ->call('gotoPage', 50)->assertOk()->assertSee('Proj 12');
+    foreach (range(1, 15) as $i) { Project::create(['client_id' => $c->id, 'name' => sprintf('Proj %02d', $i), 'status' => 'active']); }
+    Livewire::test(ProjectsIndex::class)->assertOk()->assertSee('Mine App')->assertDontSee('Proj 15')
+        ->call('gotoPage', 2)->assertSee('Proj 15')->assertDontSee('Mine App')
+        ->call('gotoPage', 50)->assertOk()->assertSee('Proj 15');
 });
 
 // ---- invoices

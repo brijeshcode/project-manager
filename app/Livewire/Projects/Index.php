@@ -28,7 +28,7 @@ class Index extends Component
             ->when($this->status !== '', fn ($q) => $q->where('projects.status', $this->status));
 
         return view('livewire.projects.index', [
-            'projects' => $this->fitPage($query, 12),
+            'projects' => $this->fitPage($query, \App\Support\Settings::pageSize()),
         ]);
     }
 }

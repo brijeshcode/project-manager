@@ -22,7 +22,7 @@ class Invoices extends Component
         $invoices = Invoice::where('client_id', auth()->user()->client_id)
             ->where('status', 'sent')
             ->latest('issued_on')->latest('id')
-            ->paginate(15, ['id', 'number', 'client_id', 'issued_on', 'due_on', 'currency_id', 'total_cents']);
+            ->paginate(\App\Support\Settings::pageSize(), ['id', 'number', 'client_id', 'issued_on', 'due_on', 'currency_id', 'total_cents']);
 
         return view('livewire.portal.invoices', ['invoices' => $invoices])->layout('layouts.app');
     }

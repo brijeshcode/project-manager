@@ -13,6 +13,7 @@ return new class extends Migration
             $t->id();
             $t->string('key')->unique();
             $t->text('value')->nullable();
+            $t->string('group')->default('general')->index();
             $t->timestamps();
         });
 

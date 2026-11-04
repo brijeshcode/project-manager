@@ -129,7 +129,7 @@ class Index extends Component
                 ->when($filtered, fn ($q) => $q->where('client_id', $filtered->id))
                 // client name only; never the free-text notes
                 ->when($like, fn ($q) => $q->whereHas('client', fn ($c) => $c->whereRaw("name LIKE ? ESCAPE '!'", [$like])))
-                ->orderByDesc('paid_on')->orderByDesc('id'), 15),
+                ->orderByDesc('paid_on')->orderByDesc('id'), \App\Support\Settings::pageSize()),
             'balanceClient' => $balanceClient,
             'balance'  => $balanceClient ? app(ClientAccount::class)->balanceCents($balanceClient) : null,
             'balanceLocal' => $balanceClient ? app(ClientAccount::class)->localBalanceCents($balanceClient) : null,

@@ -22,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
     {
         // Super admin bypasses every gate; return null to let others fall through.
         // task types and labels: super admin only (everyone else just assigns the existing ones)
+        $this->app->scoped('settings.cache', fn () => new \ArrayObject);
+        Gate::define('manage-system', fn ($user) => $user->hasRole('super_admin'));
         Gate::define('manage-taxonomy', fn ($user) => $user->hasRole('super_admin'));
         Gate::define('manage-money', fn ($user) => $user->hasRole('super_admin'));
         Gate::before(fn ($user, $ability) => $user->hasRole('super_admin') ? true : null);

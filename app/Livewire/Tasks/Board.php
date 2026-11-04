@@ -21,9 +21,9 @@ class Board extends Component
     #[Url]
     public ?int $filterModule = null;
 
-    /** Embedded in the Sprint tab: pinned to this sprint (set by the parent, not changeable from the browser). */
+    /** Shown inside the project page (its breadcrumb already says where we are): no own back link or title. */
     #[Locked]
-    public ?int $sprintId = null;
+    public bool $embedded = false;
 
     /** Board tab switch: all | sprint (the active sprint only). */
     #[Url(as: 'scope')]
@@ -54,10 +54,10 @@ class Board extends Component
         return $this->project->sprints()->active()->first();
     }
 
-    /** Sprint to restrict to: the pinned one, the active one under "Active sprint" (0 = none exists, so nothing matches), or null for all tasks. */
+    /** Sprint to restrict to: the active one under "Active sprint" (0 = none exists, so nothing matches), or null for all tasks. */
     private function sprintFilter(): ?int
     {
-        return $this->sprintId ?? ($this->scope === 'sprint' ? ($this->activeSprint?->id ?? 0) : null);
+        return $this->scope === 'sprint' ? ($this->activeSprint?->id ?? 0) : null;
     }
 
     /**

@@ -6,11 +6,11 @@
         $estimateVsActual = $project->estimateVsActual();
     @endphp
 
-    <div class="mb-6">
-        <a href="{{ route('projects.index') }}" wire:navigate class="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700">
-            &larr; Projects
-        </a>
-    </div>
+    <x-ui.breadcrumb :items="array_filter([
+        ['Projects', route('projects.index')],
+        [$project->name, $active === 'details' ? null : route('projects.show', $project)],
+        $active === 'details' ? null : [$tabs[$active], null],
+    ])" />
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -194,7 +194,7 @@
 
                 <div class="mb-4 flex flex-wrap items-center gap-3" data-test="module-filters">
                     <div class="inline-flex overflow-hidden rounded-lg border border-slate-200 text-sm dark:border-gray-700" role="group" aria-label="Module filter">
-                        @foreach (['sprint' => 'Sprint', 'backlog' => 'Backlog', 'completed' => 'Completed', 'all' => 'All'] as $k => $lbl)
+                        @foreach (['sprint' => 'In active sprint', 'backlog' => 'Not in sprint', 'completed' => 'Completed', 'all' => 'All'] as $k => $lbl)
                             <button type="button" wire:click="$set('filter', '{{ $k }}')" aria-pressed="{{ $filter === $k ? 'true' : 'false' }}" data-test="filter-{{ $k }}" @class(['px-3 py-1.5 font-medium', 'bg-brand-600 text-white' => $filter === $k, 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-transparent dark:text-gray-300' => $filter !== $k])>{{ $lbl }}</button>
                         @endforeach
                     </div>
@@ -203,6 +203,17 @@
                         @foreach ($userOptions as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
                     </select>
                 </div>
+
+                @php
+                    $help = match ($filter) {
+                        'sprint' => $activeSprint ? 'Showing modules that have at least one task in '.$activeSprint->name : 'No active sprint — start one in the Sprint tab',
+                        'backlog' => 'Showing modules that are not completed and have no task in the active sprint',
+                        'completed' => 'Showing completed modules',
+                        default => 'Showing all modules; completed ones are in the section at the bottom',
+                    };
+                    $helpUser = $assignedTo !== '' ? $userOptions->firstWhere('id', (int) $assignedTo) : null;
+                @endphp
+                <p class="-mt-2 mb-4 text-xs text-slate-500 dark:text-gray-400" data-test="filter-help">{{ $help }}@if ($helpUser). Only modules assigned to {{ $helpUser->name }}, or with a task assigned to them.@endif</p>
 
                 <div x-data x-sortable data-sort-method="reorderModules" data-sort-handle=".module-handle" data-test="module-rows">
                     @foreach ($mainRows as $r)
@@ -241,8 +252,8 @@
 @elseif ($active === 'resources')
     <div class="mt-6"><livewire:resources.panel :project="$project" /></div>
 @elseif ($active === 'board')
-    <div class="mt-6"><livewire:tasks.board :project="$project" :key="'board-'.$project->id" /></div>
+    <div class="mt-6"><livewire:tasks.board :project="$project" :embedded="true" :key="'board-'.$project->id" /></div>
 @elseif ($active === 'economics')
-    <div class="mt-6"><livewire:projects.economics :project="$project" :key="'econ-'.$project->id" /></div>
+    <div class="mt-6"><livewire:projects.economics :project="$project" :embedded="true" :key="'econ-'.$project->id" /></div>
 @endif
 </div>

@@ -1,19 +1,19 @@
 <div>
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-3">
-            @unless($sprintId)
+            @unless($embedded)
                 <a href="{{ route('projects.show', $project) }}" wire:navigate
-                   class="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700">
+                   class="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700" data-test="board-back">
                     &larr; Workspace
                 </a>
                 <span class="text-slate-300">/</span>
                 <span class="text-sm font-semibold text-slate-700">Board</span>
+            @endunless
                 <div class="inline-flex overflow-hidden rounded-lg border border-slate-200 text-sm dark:border-gray-700" role="group" aria-label="Board scope" data-test="board-scope">
                     @foreach(['sprint' => 'Active sprint', 'all' => 'All'] as $k => $lbl)
                         <button type="button" wire:click="$set('scope', '{{ $k }}')" aria-pressed="{{ $scope === $k ? 'true' : 'false' }}" data-test="scope-{{ $k }}" @class(['px-3 py-1.5 font-medium', 'bg-brand-600 text-white' => $scope === $k, 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-transparent dark:text-gray-300' => $scope !== $k])>{{ $lbl }}</button>
                     @endforeach
                 </div>
-            @endunless
         </div>
         <div class="flex flex-wrap items-center gap-3">
             <select wire:model.live="filterModule" class="select h-9 py-1 text-sm" aria-label="Filter by module">
@@ -28,11 +28,11 @@
                     {{ $managing ? 'Done' : 'Manage columns' }}
                 </button>
             @endif
-            @unless($sprintId)<span class="text-sm font-semibold text-slate-700">{{ $project->name }}</span>@endunless
+            @unless($embedded)<span class="text-sm font-semibold text-slate-700">{{ $project->name }}</span>@endunless
         </div>
     </div>
 
-    @if(! $sprintId && $scope === 'sprint' && ! $this->activeSprint)
+    @if($scope === 'sprint' && ! $this->activeSprint)
         <p class="mb-4 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-200" data-test="board-no-sprint">No active sprint. Start one in the Sprint tab, or switch to All.</p>
     @endif
 

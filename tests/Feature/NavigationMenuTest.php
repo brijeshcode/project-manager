@@ -17,7 +17,7 @@ it('shows the full menu to a super admin', function () {
 
     $r = actingAs($u)->get('/dashboard');
     $r->assertOk();
-    $r->assertSeeInOrder(['Dashboard', 'Clients', 'Projects', 'Invoices', 'Payments', 'Recurring', 'Bank accounts', 'Currencies', 'Settings', 'Profile']);
+    $r->assertSeeInOrder(['Dashboard', 'Clients', 'Projects', 'Invoices', 'Payments', 'Recurring', 'Settings', 'Currencies', 'Bank accounts', 'Task types', 'Labels', 'System', 'Profile']);
     $r->assertSee('Sign out')->assertSee('Dark mode')->assertSee($u->email);
 });
 

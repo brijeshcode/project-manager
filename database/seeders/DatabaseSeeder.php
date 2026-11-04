@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Support\Settings;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -16,6 +17,11 @@ class DatabaseSeeder extends Seeder
         // Ensure the six roles exist.
         $this->call(RoleSeeder::class);
         $this->call(TaxonomySeeder::class);
+
+        // Default system settings (never overwrites an edited value).
+        foreach (['page_size' => '15', 'sidebar_layout' => 'full'] as $k => $v) {
+            Settings::get($k) === null && Settings::set($k, $v, 'system');
+        }
 
         // Idempotent super-admin login for local testing.
         $admin = User::firstOrCreate(

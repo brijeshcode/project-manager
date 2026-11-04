@@ -296,8 +296,8 @@ it('filters by user, type and label, and keeps them in the URL', function () {
     $p->set('user', '')->set('type', (string) $bug->id)->assertViewHas('backlog', fn ($b) => spTitles($b) === ['Typed']);
     $p->set('type', '')->set('label', (string) $lab->id)->assertViewHas('backlog', fn ($b) => spTitles($b) === ['Labelled']);
     $p->assertSet('label', (string) $lab->id);
-    expect(Livewire::actingAs($s['admin'])->withQueryParams(['spUser' => (string) $s['dev']->id, 'view' => 'board'])->test(Panel::class, ['project' => $s['project']]))
-        ->user->toBe((string) $s['dev']->id)->mode->toBe('board');
+    expect(Livewire::actingAs($s['admin'])->withQueryParams(['spUser' => (string) $s['dev']->id])->test(Panel::class, ['project' => $s['project']]))
+        ->user->toBe((string) $s['dev']->id);
 });
 
 // ── drag and drop ─────────────────────────────────────────────────────────────
@@ -417,19 +417,24 @@ it('logs rollover moves per task', function () {
 
 // ── board ─────────────────────────────────────────────────────────────────────
 
-it('sprint view embeds the board for the active sprint only, under a sprint header', function () {
+it('sprint tab has no board view, and the active sprint header links to the Board tab with the Active sprint switch', function () {
     $s = spSetup();
     $a = spSprint($s, 'active', ['name' => 'Sprint Nine', 'goal' => 'Win the week']);
     spTask($s, $s['m1'], 'In the sprint', 'active', ['sprint_id' => $a->id]);
-    spTask($s, $s['m1'], 'Outside', 'active');
 
-    spPage($s)->set('mode', 'board')->assertSee('Sprint Nine')->assertSee('Win the week')->assertSee('In the sprint')->assertDontSee('Outside')
-        ->assertSeeHtml('data-test="sprint-header"');
+    $p = spPage($s)->assertSee('Sprint Nine')->assertSee('Win the week')->assertSee('Open sprint board')
+        ->assertDontSeeHtml('data-test="view-board"')->assertDontSeeHtml('data-test="board-view"')->assertDontSeeHtml('aria-label="Sprint view"');
+    $p->assertSeeHtml(e(route('projects.show', [$s['project'], 'tab' => 'board', 'scope' => 'sprint'])));
+    expect(property_exists(Panel::class, 'mode'))->toBeFalse();
 });
 
-it('sprint board view without an active sprint offers to start one', function () {
+it('the Board tab opened from that link has the Active sprint switch on', function () {
     $s = spSetup();
-    spPage($s)->set('mode', 'board')->assertSee('No active sprint')->assertSee('Start a sprint');
+    $a = spSprint($s, 'active');
+    spTask($s, $s['m1'], 'Sprinted', 'active', ['sprint_id' => $a->id]);
+    spTask($s, $s['m1'], 'Loose', 'active');
+    $this->actingAs($s['admin'])->get(route('projects.show', [$s['project'], 'tab' => 'board', 'scope' => 'sprint']))
+        ->assertOk()->assertSee('Sprinted')->assertDontSee('Loose');
 });
 
 it('board component can be scoped to a sprint and switched between Active sprint and All', function () {
@@ -443,8 +448,6 @@ it('board component can be scoped to a sprint and switched between Active sprint
     $all->set('scope', 'sprint')->assertSee('Sprinted')->assertDontSee('Loose');
     $all->set('scope', 'all')->assertSee('Loose');
 
-    $pinned = Livewire::actingAs($s['admin'])->test(Board::class, ['project' => $s['project'], 'sprintId' => $a->id]);
-    $pinned->assertSee('Sprinted')->assertDontSee('Loose')->assertDontSeeHtml('data-test="board-scope"');
 
     expect(Livewire::actingAs($s['admin'])->withQueryParams(['scope' => 'sprint'])->test(Board::class, ['project' => $s['project']])->get('scope'))->toBe('sprint');
 });
@@ -461,7 +464,7 @@ it('board drag still moves tasks while scoped to a sprint', function () {
     $a = spSprint($s, 'active');
     $t = spTask($s, $s['m1'], 'T', 'not_started', ['sprint_id' => $a->id]);
     $done = $s['project']->columns()->where('stage', 'done')->first();
-    Livewire::actingAs($s['admin'])->test(Board::class, ['project' => $s['project'], 'sprintId' => $a->id])->call('taskMoved', $t->id, $done->id, 1);
+    Livewire::actingAs($s['admin'])->test(Board::class, ['project' => $s['project'], 'scope' => 'sprint'])->call('taskMoved', $t->id, $done->id, 1);
     expect($t->fresh()->board_column_id)->toBe($done->id);
 });
 

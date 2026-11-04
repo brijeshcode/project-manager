@@ -144,3 +144,26 @@
 .md table { @apply w-full border-collapse text-sm; }
 .md th, .md td { @apply border border-slate-200 px-2 py-1 text-left; }
 .dark .md code, .dark .md pre { background-color: #374151; }
+
+/* Sidebar layouts (html[data-sidebar] = full | half | mini). Below lg the sidebar is always the slide-over drawer. */
+.sb-aside { transform: translateX(-100%); transition: transform .2s ease, width .2s ease, visibility .2s; }
+.sb-aside.sb-open { transform: none; }
+.sb-main { transition: padding-left .2s ease; }
+@media (prefers-reduced-motion: reduce) {
+    .sb-aside, .sb-main { transition: none; }
+}
+@media (min-width: 1024px) {
+    html:not([data-sidebar=mini]) .sb-aside { transform: none; }
+    html:not([data-sidebar=mini]) .sb-backdrop, html:not([data-sidebar=mini]) .sb-topbar { display: none; }
+    html[data-sidebar=full] .sb-main { padding-left: 16rem; }
+    html[data-sidebar=half] .sb-main { padding-left: 4rem; }
+    html[data-sidebar=half] .sb-aside { width: 4rem; }
+    html[data-sidebar=mini] .sb-aside:not(.sb-open) { visibility: hidden; }
+    html[data-sidebar=half] .sb-label, html[data-sidebar=half] .sb-toggle-head { display: none; }
+    html:not([data-sidebar=half]) .sb-toggle-foot { display: none; }
+    html[data-sidebar=half] .sb-brand { justify-content: center; padding-left: 0; padding-right: 0; }
+    html[data-sidebar=half] .sb-heading { height: 1px; margin: .5rem .75rem; padding: 0; overflow: hidden; font-size: 0; background: rgb(226 232 240); }
+    html[data-sidebar=half].dark .sb-heading { background: rgb(55 65 81); }
+    html[data-sidebar=half] .nav-item, html[data-sidebar=half] .sb-user { justify-content: center; padding-left: 0; padding-right: 0; }
+    html[data-sidebar=half] .sb-usermenu { width: 14rem; }
+}

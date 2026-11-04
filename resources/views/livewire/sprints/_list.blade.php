@@ -26,6 +26,7 @@
         @if ($canManage && $sprint)
             <div class="flex items-center gap-1">
                 @if ($sprint->isActive())
+                    <a href="{{ route('projects.show', [$project, 'tab' => 'board', 'scope' => 'sprint']) }}" wire:navigate class="btn btn-secondary h-8 gap-1 px-2.5 py-1 text-xs" data-test="open-sprint-board"><x-icon name="columns-3" /> Open sprint board</a>
                     <button type="button" wire:click="openComplete({{ $sprint->id }})" class="btn btn-secondary h-8 gap-1 px-2.5 py-1 text-xs" data-test="complete-sprint"><x-icon name="circle-check-big" /> Complete</button>
                 @elseif (! $active)
                     <button type="button" wire:click="openStart({{ $sprint->id }})" class="btn btn-primary h-8 gap-1 px-2.5 py-1 text-xs" data-test="start-sprint"><x-icon name="play" /> Start</button>

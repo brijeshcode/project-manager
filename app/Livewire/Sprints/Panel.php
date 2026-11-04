@@ -16,8 +16,8 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * The project's Sprint tab: a Plan view (Active sprint / Next sprints / Backlog, drag and drop) and a Board view
- * (the board restricted to the active sprint). Viewing needs project access, every change needs `update` on the project.
+ * The project's Sprint tab: a Plan view (Active sprint / Next sprints / Backlog, drag and drop); the active sprint board is the Board tab
+ * with its Active sprint switch. Viewing needs project access, every change needs `update` on the project.
  */
 class Panel extends Component
 {
@@ -25,9 +25,6 @@ class Panel extends Component
 
     #[Locked]
     public bool $canManage = false;
-
-    #[Url(as: 'view')]
-    public string $mode = 'plan';
 
     #[Url(as: 'spUser')]
     public string $user = '';
@@ -257,7 +254,6 @@ class Panel extends Component
             'past'        => $past,
             'pastTasks'   => $pastTasks,
             'progress'    => app(ProgressService::class),
-            'planView'    => $this->mode !== 'board',
             'users'       => $this->project->members()->orderBy('name')->get(),
             'types'       => TaskType::orderBy('position')->get(),
             'labels'      => Label::orderBy('name')->get(),
