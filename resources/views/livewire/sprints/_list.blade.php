@@ -20,6 +20,9 @@
         </div>
         <span class="text-xs text-slate-500" data-test="list-count">@if ($sprint?->isActive()){{ $doneN }}/{{ $rows->count() }} done &middot; @endif{{ $rows->count() }} {{ Str::plural('task', $rows->count()) }}</span>
         <span class="text-xs font-medium text-slate-700" data-test="list-hours">{{ $fmt(\App\Models\Sprint::hours($rows)) }}</span>
+        @can('manage-money')
+            <span class="text-xs tabular-nums text-slate-500" data-test="list-value">{{ \App\Support\Money::format(\App\Models\Sprint::value($rows), $project->currency) }}</span>
+        @endcan
         @if ($sprint?->isActive())
             <x-ui.progress :pct="$rows->isEmpty() ? 0 : $doneN / $rows->count() * 100" class="w-32" />
         @endif

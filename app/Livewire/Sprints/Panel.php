@@ -232,9 +232,10 @@ class Panel extends Component
             ->when($this->user !== '', fn ($q) => $q->whereHas('assignees', fn ($a) => $a->where('users.id', (int) $this->user)))
             ->when($this->type !== '', fn ($q) => $q->where('task_type_id', (int) $this->type))
             ->when($this->label !== '', fn ($q) => $q->whereHas('labels', fn ($l) => $l->where('labels.id', (int) $this->label)))
-            ->with(['module', 'type', 'labels', 'assignees', 'column', 'checklistItems', 'subtasks'])
+            ->with(['project', 'module.project.client', 'type', 'labels', 'assignees', 'column', 'checklistItems', 'subtasks'])
             ->get()
-            ->sortBy([fn ($a, $b) => $a->module->position <=> $b->module->position, ['position', 'asc'], ['id', 'asc']])
+            // done tasks sink to the bottom of their list so the next open task is always on top
+            ->sortBy([fn ($a, $b) => ($a->column?->stage === 'done') <=> ($b->column?->stage === 'done'), fn ($a, $b) => $a->module->position <=> $b->module->position, ['position', 'asc'], ['id', 'asc']])
             ->values();
     }
 
@@ -244,7 +245,7 @@ class Panel extends Component
         $tasks = $this->openTasks($sprints->whereIn('status', ['planned', 'active']));
         $past = $sprints->where('status', 'completed')->sortByDesc('ends_on')->values();
         $pastTasks = $past->isEmpty() ? collect() : Task::visibleTo(auth()->user())->counted()
-            ->whereIn('sprint_id', $past->pluck('id'))->with(['module', 'type', 'labels', 'assignees', 'column', 'subtasks'])
+            ->whereIn('sprint_id', $past->pluck('id'))->with(['project', 'module.project.client', 'type', 'labels', 'assignees', 'column', 'subtasks'])
             ->orderBy('position')->get()->groupBy('sprint_id');
         $active = $sprints->firstWhere('status', 'active');
 

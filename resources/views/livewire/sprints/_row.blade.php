@@ -7,11 +7,16 @@
         <span class="w-4"></span>
     @endif
     <span class="w-28 shrink-0 truncate text-xs font-medium text-brand-600" title="{{ $task->module->name }}" data-test="task-module">{{ $task->module->name }}</span>
+    <x-ui.task-code :task="$task" />
     <a href="{{ route('tasks.show', $task) }}" wire:navigate data-test="task-link" @class(['min-w-0 flex-1 basis-48 truncate text-sm font-medium hover:text-brand-600', 'text-slate-800' => ! $done, 'text-slate-400 line-through' => $done])>{{ $task->title }}</a>
     <x-ui.type-badge :type="$task->type" />
     @foreach ($task->labels as $l)<x-ui.label-chip :label="$l" class="hidden md:inline-flex" />@endforeach
     <x-ui.priority :value="$task->priority" />
     <x-ui.assignees :users="$task->assignees" :candidates="($canManage ?? false) ? $candidates : null" method="toggleTaskAssignee" :id="$task->id" />
+    @can('manage-money')
+        @php $mb = new \App\Services\ModuleBudget($task->module); @endphp
+        <span class="w-20 text-right text-xs tabular-nums {{ $mb->priced($task) ? 'text-slate-600' : 'text-amber-600 dark:text-amber-400' }}" data-test="row-value">{{ $mb->priced($task) ? \App\Support\Money::format($mb->valueCents($task), $task->module->project->currency) : 'unpriced' }}</span>
+    @endcan
     <span class="w-14 text-right text-xs tabular-nums text-slate-500">{{ $task->hours() ? rtrim(rtrim(number_format($task->hours(), 1), '0'), '.').'h' : '' }}</span>
     <span class="w-14 text-xs"><x-ui.deadline :date="$task->deadline" :done="$done" /></span>
     <x-ui.stage-badge :column="$task->column" />

@@ -108,11 +108,17 @@
                     <input id="estimate_hours" type="number" step="0.5" min="0" wire:model="estimate_hours" class="input">
                     @error('estimate_hours') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
-                <div>
-                    <label class="label" for="price">Price <span class="font-normal text-slate-400">(out of scope)</span></label>
-                    <input id="price" type="number" step="0.01" min="0" wire:model="price" class="input" {{ $scope !== 'out' ? 'disabled' : '' }}>
-                    @error('price') <p class="field-error">{{ $message }}</p> @enderror
-                </div>
+                @if ($canMoney)
+                    <div>
+                        <label class="label" for="budget_amount">Value @if ($scope === 'out') <span class="font-normal text-slate-400">(add-on)</span> @endif</label>
+                        @if ($hourlyModule)
+                            <p class="mt-2 text-xs text-slate-500">Hours &times; the module's hourly rate; nothing to type.</p>
+                        @else
+                            <input id="budget_amount" type="number" step="0.01" min="0" wire:model="budget_amount" placeholder="Empty = unpriced" class="input" data-test="amount-input">
+                        @endif
+                        @error('budget_amount') <p class="field-error" data-test="amount-error">{{ $message }}</p> @enderror
+                    </div>
+                @endif
             </div>
         </x-ui.card>
         @endif
@@ -180,6 +186,8 @@
                 <span class="text-sm font-medium text-slate-700">Also copy {{ $copyCount }} {{ Str::plural('subtask', $copyCount) }}</span>
             </label>
         @endif
+
+        @include('livewire.items._over-budget', ['bv' => $bv])
 
         <div class="flex items-center gap-3">
             <button type="submit" class="btn btn-primary">{{ $taskId ? 'Save changes' : 'Create task' }}</button>

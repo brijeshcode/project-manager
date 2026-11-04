@@ -59,11 +59,11 @@ class ProjectView extends Component
             ->orderBy('board_column_id')
             ->orderBy('position')
             ->get([
-                'id', 'module_id', 'creator_id', 'title', 'description',
+                'id', 'project_id', 'number', 'module_id', 'creator_id', 'title', 'description',
                 'status', 'priority', 'board_column_id', 'position',
                 'client_visible', 'client_approval', 'scope', 'section', 'deadline',
-                // Deliberately omits: price, estimate_hours, testing_*, cost fields
-            ]);
+                // Deliberately omits: budget amount, estimate_hours, testing_*, cost fields
+            ])->each->setRelation('project', $this->project);
     }
 
     /**

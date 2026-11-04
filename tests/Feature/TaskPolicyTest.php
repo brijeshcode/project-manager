@@ -258,7 +258,7 @@ it('super_admin can comment', function () {
 
 // ── Form: developer save does NOT change cost/time fields ─────────────────────
 
-it('developer assignee save does NOT change estimate_hours or price', function () {
+it('developer assignee save does NOT change estimate_hours or budget amount', function () {
     $project = policyProject();
     $module  = policyModule($project);
     $creator = policyMember($project, 'project_manager');
@@ -267,22 +267,22 @@ it('developer assignee save does NOT change estimate_hours or price', function (
     $task = policyTask($module, $creator, [
         'estimate_hours' => 8.0,
         'scope'          => TaskScope::Out,
-        'price'          => 100.0,
+        'budget_amount'          => 100.0,
     ]);
     $task->assignees()->attach($dev->id);
 
     Livewire::actingAs($dev)
         ->test(Form::class, ['task' => $task])
         ->set('estimate_hours', 99.0)
-        ->set('price', 999.0)
+        ->set('budget_amount', 999.0)
         ->call('save');
 
     $task->refresh();
     expect((float) $task->estimate_hours)->toBe(8.0);
-    expect((float) $task->price)->toBe(100.0);
+    expect((float) $task->budget_amount)->toBe(100.0);
 });
 
-it('project_manager save DOES change estimate_hours and price', function () {
+it('project_manager save changes estimate_hours but not the budget amount (money is owner only)', function () {
     $project = policyProject();
     $module  = policyModule($project);
     $pm      = policyMember($project, 'project_manager');
@@ -290,23 +290,23 @@ it('project_manager save DOES change estimate_hours and price', function () {
     $task = policyTask($module, $pm, [
         'estimate_hours' => 8.0,
         'scope'          => TaskScope::Out,
-        'price'          => 100.0,
+        'budget_amount'          => 100.0,
     ]);
 
     Livewire::actingAs($pm)
         ->test(Form::class, ['task' => $task])
         ->set('estimate_hours', 20.0)
-        ->set('price', 500.0)
+        ->set('budget_amount', 500.0)
         ->call('save');
 
     $task->refresh();
     expect((float) $task->estimate_hours)->toBe(20.0);
-    expect((float) $task->price)->toBe(500.0);
+    expect((float) $task->budget_amount)->toBe(100.0);
 });
 
-// ── Finding 2: developer CREATE does NOT persist estimate_hours / price ────────
+// ── Finding 2: developer CREATE does NOT persist estimate_hours / budget amount ────────
 
-it('developer creating a task has estimate_hours and price stripped', function () {
+it('developer creating a task has estimate_hours and budget amount stripped', function () {
     $project = policyProject();
     $module  = policyModule($project);
     $dev     = policyMember($project, 'developer');
@@ -318,17 +318,17 @@ it('developer creating a task has estimate_hours and price stripped', function (
         ->set('status', 'published')
         ->set('scope', 'in')
         ->set('estimate_hours', 99.0)
-        ->set('price', 999.0)
+        ->set('budget_amount', 999.0)
         ->call('save')
         ->assertHasNoErrors();
 
     $task = \App\Models\Task::where('title', 'Dev Task')->firstOrFail();
-    // estimate_hours defaults to 0.0 (model default), price stays null
+    // estimate_hours defaults to 0.0 (model default), budget amount stays null
     expect((float) $task->estimate_hours)->toBe(0.0);
-    expect($task->price)->toBeNull();
+    expect($task->budget_amount)->toBeNull();
 });
 
-it('project_manager creating a task CAN set estimate_hours and price', function () {
+it('project_manager creating a task CAN set estimate_hours but not a budget amount', function () {
     $project = policyProject();
     $module  = policyModule($project);
     $pm      = policyMember($project, 'project_manager');
@@ -340,13 +340,13 @@ it('project_manager creating a task CAN set estimate_hours and price', function 
         ->set('status', 'published')
         ->set('scope', 'in')
         ->set('estimate_hours', 8.0)
-        ->set('price', 200.0)
+        ->set('budget_amount', 200.0)
         ->call('save')
         ->assertHasNoErrors();
 
     $task = \App\Models\Task::where('title', 'PM Task')->firstOrFail();
     expect((float) $task->estimate_hours)->toBe(8.0);
-    expect((float) $task->price)->toBe(200.0);
+    expect($task->budget_amount)->toBeNull();
 });
 
 // ── Finding 3: unknown board column is rejected ────────────────────────────────

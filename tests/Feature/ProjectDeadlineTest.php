@@ -77,7 +77,7 @@ it('flags a project at risk when the estimate passes the deadline', function () 
 
 it('needs no reason on create but requires one when editing a deadline', function () {
     Livewire::actingAs($this->owner)->test(Form::class)->set('client_id', $this->client->id)->set('name', 'New')
-        ->set('initial_budget', '0')->set('addons_amount', '0')->set('deadline', today()->addMonth()->toDateString())->call('save')->assertHasNoErrors();
+        ->set('deadline', today()->addMonth()->toDateString())->call('save')->assertHasNoErrors();
     $new = Project::where('name', 'New')->first();
     expect($new->deadline->toDateString())->toBe(today()->addMonth()->toDateString())->and($new->deadlineChanges()->count())->toBe(1);
 

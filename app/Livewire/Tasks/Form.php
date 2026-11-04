@@ -2,7 +2,10 @@
 
 namespace App\Livewire\Tasks;
 
+use App\Exceptions\OverBudget;
+use App\Livewire\Concerns\HandlesBudgetBlock;
 use App\Models\Label;
+use App\Services\ModuleBudget;
 use App\Models\Module;
 use App\Models\Task;
 use App\Models\TaskType;
@@ -15,7 +18,7 @@ use Livewire\Component;
 
 class Form extends Component
 {
-    use HandlesMarkdownUploads;
+    use HandlesBudgetBlock, HandlesMarkdownUploads;
 
     public ?int $taskId = null;
 
@@ -28,7 +31,7 @@ class Form extends Component
     public ?int   $task_type_id    = null;
     public float  $estimate_hours  = 0.0;
     public string $scope           = 'in';
-    public ?float $price           = null;
+    public ?float $budget_amount           = null;
     public bool   $client_visible  = false;
     public bool   $testing_enabled = false;
     public ?string $testing_add_type  = null;
@@ -60,7 +63,7 @@ class Form extends Component
             $this->task_type_id     = $task->task_type_id;
             $this->estimate_hours   = $task->estimate_hours;
             $this->scope            = $task->scope->value;
-            $this->price            = $task->price;
+            $this->budget_amount            = $task->budget_amount;
             $this->client_visible   = $task->client_visible;
             $this->testing_enabled  = $task->testing_enabled;
             $this->testing_add_type  = $task->testing_add_type;
@@ -74,9 +77,15 @@ class Form extends Component
             return;
         }
 
-        // creating: ?module= preselects the module, ?copy= prefills from another task
+        // creating: ?module= preselects the module, ?copy= prefills from another task, ?addon=1 an out-of-scope add-on
         $this->task_type_id = TaskType::default()?->id;
         $this->module_id = (int) request()->query('module', $this->moduleOptions()->flatten(1)->first()?->id ?? 0);
+        if (request()->query('addon') && auth()->user()->can('manage-money')) {
+            $this->scope = 'out';
+            $this->title = mb_substr((string) request()->query('title', ''), 0, 255);
+            $this->estimate_hours = (float) request()->query('hours', 0);
+            $this->budget_amount = request()->query('amount') === null ? null : (float) request()->query('amount');
+        }
         if ($id = request()->query('copy')) {
             $src = Task::visibleTo(auth()->user())->findOrFail($id);
             $this->authorize('update', $src->module->project);
@@ -90,7 +99,7 @@ class Form extends Component
             $this->task_type_id   = $src->task_type_id;
             $this->estimate_hours = $src->estimate_hours;
             $this->scope          = $src->scope->value;
-            $this->price          = $src->price;
+            $this->budget_amount          = $src->budget_amount;
             $this->client_visible = $src->client_visible;
             $this->testing_enabled   = $src->testing_enabled;
             $this->testing_add_type  = $src->testing_add_type;
@@ -135,7 +144,7 @@ class Form extends Component
             'task_type_id'      => ['nullable', Rule::exists('task_types', 'id')],
             'estimate_hours'    => 'numeric|min:0',
             'scope'             => 'required|in:in,out',
-            'price'             => 'nullable|numeric|min:0',
+            'budget_amount'             => 'nullable|numeric|min:0',
             'client_visible'    => 'boolean',
             'testing_enabled'   => 'boolean',
             'testing_add_type'  => 'nullable|in:percent,fixed',
@@ -151,7 +160,11 @@ class Form extends Component
             $task = Task::findOrFail($this->taskId);
             $this->authorize('update', $task);
             if (! auth()->user()->can('updateCostTime', $task)) {
-                unset($data['estimate_hours'], $data['price']);
+                unset($data['estimate_hours'], $data['budget_amount']);
+            }
+            auth()->user()->can('manage-money') || ($data = array_diff_key($data, ['budget_amount' => 1]));
+            if (! $this->withinBudget($data, $task)) {
+                return;
             }
             $data['board_column_id'] ??= $task->board_column_id;
             $task->update($data);
@@ -162,7 +175,11 @@ class Form extends Component
             $this->authorize('update', $module->project);
             $data['creator_id'] = auth()->id();
             if (! auth()->user()->hasAnyRole(['super_admin', 'project_manager'])) {
-                unset($data['estimate_hours'], $data['price']);
+                unset($data['estimate_hours'], $data['budget_amount']);
+            }
+            auth()->user()->can('manage-money') || ($data = array_diff_key($data, ['budget_amount' => 1]));
+            if (! $this->withinBudget($data, null)) {
+                return;
             }
             $task = Task::create($data);
             $task->labels()->sync($this->labelIds);
@@ -173,6 +190,38 @@ class Form extends Component
         }
 
         $this->redirect(route('tasks.show', $task), navigate: true);
+    }
+
+    /** Hours/value this save would use of the module's budget; false (and the block shown) when over. */
+    private function withinBudget(array $data, ?Task $existing): bool
+    {
+        $module = Module::with('project.client')->findOrFail($data['module_id']);
+        $mb = new ModuleBudget($module);
+        $probe = ($existing ? $existing->replicate() : new Task)->forceFill($data);
+        $probe->setRelation('module', $module);
+        $probe->setRelation('subtasks', $existing ? $existing->subtasks : (($this->copyFrom && $this->copySubtasks ? Task::find($this->copyFrom)?->subtasks : null) ?? collect()));
+        if ($existing && $existing->module_id !== (int) $data['module_id']) {
+            $existing = null; // moved to another module: it is a new load there
+        }
+        if (! $probe->countsTowardBudget()) {
+            return true;
+        }
+        try {
+            $mb->guard($existing, $mb->units($probe));
+        } catch (OverBudget $e) {
+            $this->blockFrom($e, ['kind' => 'task', 'taskId' => $existing?->id, 'newUnits' => $mb->units($probe), 'title' => $data['title']]);
+            $this->addError('budget_amount', $e->getMessage());
+
+            return false;
+        }
+        $this->dismissBlock();
+
+        return true;
+    }
+
+    protected function retryBlocked(): void
+    {
+        $this->save();
     }
 
     public function render()
@@ -187,6 +236,9 @@ class Form extends Component
             'allLabels' => Label::orderBy('name')->get(),
             'types'     => TaskType::orderBy('position')->get(),
             'allUsers'  => User::orderBy('name')->get(),
+            'canMoney'  => auth()->user()->can('manage-money'),
+            'hourlyModule' => ($m = Module::with('project.client')->find($this->module_id)) && (new ModuleBudget($m))->hourly(),
+            'bv'        => $this->blockView(),
         ]);
     }
 }

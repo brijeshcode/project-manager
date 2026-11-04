@@ -16,7 +16,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use App\Services\ModuleBudget;
+use App\Support\Money;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class Task extends Model
 {
@@ -38,6 +41,7 @@ class Task extends Model
 
     protected $fillable = [
         'module_id',
+        'project_id',
         'creator_id',
         'task_type_id',
         'title',
@@ -47,9 +51,11 @@ class Task extends Model
         'priority',
         'estimate_hours',
         'scope',
-        'price',
+        'budget_amount',
         'exchange_rate',
-        'local_price',
+        'budget_amount_local',
+        'addon_accepted_at',
+        'addon_accepted_by',
         'client_visible',
         'testing_enabled',
         'testing_add_type',
@@ -70,13 +76,14 @@ class Task extends Model
             'status'           => TaskStatus::class,
             'scope'            => TaskScope::class,
             'is_idea'          => 'boolean',
+            'addon_accepted_at' => 'datetime',
             'deadline'         => 'date',
             'started_at'       => 'date',
             'completed_at'     => 'date',
             'client_visible'   => 'boolean',
             'testing_enabled'  => 'boolean',
             'estimate_hours'   => 'float',
-            'price'            => 'float',
+            'budget_amount'   => 'float',
             'testing_add_value' => 'float',
         ];
     }
@@ -85,6 +92,15 @@ class Task extends Model
     {
         // a new task starts in its project's first column unless told otherwise
         static::creating(function (self $t) {
+            // project_id follows the module; the number comes from the project's counter under a row lock:
+            // unique per project, never reused (deleting a task never lowers the counter), never changed
+            $t->project_id = Module::whereKey($t->module_id)->value('project_id');
+            $t->number = DB::transaction(function () use ($t) {
+                $p = Project::whereKey($t->project_id)->lockForUpdate()->firstOrFail();
+                $p->increment('task_counter');
+
+                return $p->task_counter;
+            });
             $t->task_type_id ??= TaskType::default()?->id;
             $t->board_column_id ??= Module::find($t->module_id)?->project?->columns()->value('id');
             // one order per module: a new task goes to the bottom
@@ -99,6 +115,10 @@ class Task extends Model
                 $t->syncDatesWithColumn();
             }
         });
+
+        // an accepted add-on is part of the project totals: keep them calculated
+        static::saved(fn (self $t) => $t->addon_accepted_at && $t->module?->project?->recalculateBudget());
+        static::deleted(fn (self $t) => $t->addon_accepted_at && Module::find($t->module_id)?->project?->recalculateBudget());
 
         static::deleting(function (self $t) {
             $t->subtasks->each->delete();
@@ -125,6 +145,29 @@ class Task extends Model
         }
     }
 
+    /** The task's project code, e.g. NWS-12. */
+    public function code(): string
+    {
+        return ($this->project ?? $this->module->project)->key.'-'.$this->number;
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    /** Tasks matching a typed code (NWS-12, nws-12, 12) or title text. */
+    public function scopeSearch(Builder $query, string $q): Builder
+    {
+        $q = trim($q);
+        $like = '%'.addcslashes($q, '%_\\').'%';
+        if (preg_match('/^(?:([A-Za-z0-9]{2,5})-)?(\d+)$/', $q, $m)) {
+            return $query->where(fn ($w) => $w->where(fn ($c) => $c->where('tasks.number', (int) $m[2])->when($m[1] !== '', fn ($c) => $c->whereHas('project', fn ($p) => $p->where('key', strtoupper($m[1])))))->orWhere('tasks.title', 'like', $like));
+        }
+
+        return $query->where('tasks.title', 'like', $like);
+    }
+
     /** Whole days from start to completion, null unless both dates exist. */
     public function daysTaken(): ?int
     {
@@ -133,7 +176,7 @@ class Task extends Model
 
     protected function localAmounts(): array
     {
-        return ['price' => ['local_price', 'major']];
+        return ['budget_amount' => ['budget_amount_local', 'major']];
     }
 
     protected function moneyCurrency(): ?string
@@ -154,7 +197,7 @@ class Task extends Model
     }
 
     /** Fields a copy carries over (never comments, attachments, activity, column or position). */
-    public const COPY_FIELDS = ['description', 'status', 'is_idea', 'priority', 'estimate_hours', 'scope', 'price', 'client_visible', 'testing_enabled', 'testing_add_type', 'testing_add_value', 'deadline', 'section', 'task_type_id'];
+    public const COPY_FIELDS = ['description', 'status', 'is_idea', 'priority', 'estimate_hours', 'scope', 'budget_amount', 'client_visible', 'testing_enabled', 'testing_add_type', 'testing_add_value', 'deadline', 'section', 'task_type_id'];
 
     /** Copy into a module: new task in its first column, with labels, assignees and optionally subtasks. */
     public function copyTo(int $moduleId, User $by, bool $withSubtasks, ?string $title = null): static
@@ -322,6 +365,55 @@ class Task extends Model
                 return in_array($id, $ordered, true) ? array_shift($queue) : $id;
             }, $all);
             static::renumber($new);
+        });
+    }
+
+    /** Out-of-scope work with its own value: proposed until the client confirms, then accepted (see acceptAddon). */
+    public function isAddon(): bool
+    {
+        return $this->scope === TaskScope::Out;
+    }
+
+    public function isAcceptedAddon(): bool
+    {
+        return $this->isAddon() && $this->addon_accepted_at !== null;
+    }
+
+    /** Does this task use up its module's budget? Published, not an idea, and in scope (or an accepted add-on). */
+    public function countsTowardBudget(): bool
+    {
+        return $this->status === TaskStatus::Published && ! $this->is_idea && ($this->scope === TaskScope::In || $this->addon_accepted_at !== null);
+    }
+
+    /** Tasks that use up the module budget: counted tasks plus accepted add-ons (proposed add-ons are exempt). */
+    public function scopeBudgeted(Builder $query): Builder
+    {
+        return $query->where('is_idea', false)->where('status', TaskStatus::Published->value)
+            ->where(fn ($q) => $q->where('scope', TaskScope::In->value)->orWhereNotNull('addon_accepted_at'));
+    }
+
+    /**
+     * The client confirmed this add-on: it raises its module's budget by its own value (logged with the reason
+     * "Add-on: KEY-n") and from then on counts as allocated. There is deliberately no un-accept.
+     */
+    public function acceptAddon(User $by): void
+    {
+        if (! $this->isAddon() || $this->addon_accepted_at) {
+            throw ValidationException::withMessages(['addon' => 'Only a proposed add-on can be accepted.']);
+        }
+        $mb = new ModuleBudget($this->module);
+        $value = $mb->units($this);
+        if ($value <= 0) {
+            throw ValidationException::withMessages(['addon' => 'Give the add-on a value before accepting it.']);
+        }
+        DB::transaction(function () use ($by, $mb, $value) {
+            $this->update(['addon_accepted_at' => now(), 'addon_accepted_by' => $by->id]);
+            $m = $this->module->fresh();
+            $attr = $mb->hourly() ? 'budget_hours' : 'budget_amount';
+            $new = ((new ModuleBudget($m))->cap() ?? 0) + $value;
+            $m->updateBudget([$attr => $mb->hourly() ? number_format($new / 100, 2, '.', '') : Money::toInput($new)], $by, 'Add-on: '.$this->code());
+            $this->logActivity('addon_accepted', null, null, $this->code());
+            $m->project->recalculateBudget();
         });
     }
 

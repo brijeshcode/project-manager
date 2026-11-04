@@ -28,6 +28,7 @@ class Form extends Component
     public int    $client_id      = 0;
     public string $currency       = '';   // defaults to the client's; the owner can change it
     public string $name           = '';
+    public string $key            = '';   // task code prefix; blank on create = derived from the name
     public string $description    = '';
     public float  $buffer_percent = 0;
     public ?string $start_date    = null;
@@ -36,8 +37,6 @@ class Form extends Component
     public ?string $deadline      = null;
     public string $reason         = '';   // required when an existing deadline is changed
     public string $template      = 'software';   // board columns copied at create; edited later on the Board tab
-    public string $initial_budget = '0';
-    public string $addons_amount  = '0';
 
     public function mount(?Project $project = null): void
     {
@@ -59,14 +58,13 @@ class Form extends Component
             $this->client_id      = $project->client_id;
             $this->currency       = strtoupper((string) $project->currency);
             $this->name           = $project->name;
+            $this->key            = $project->key;
             $this->description    = $project->description ?? '';
             $this->buffer_percent = (float) $project->buffer_percent;
             $this->start_date     = $project->start_date?->toDateString();
             $this->status         = $project->status;
             $this->aim            = $project->aim;
             $this->deadline       = $project->deadline?->toDateString();
-            $this->initial_budget = (string) $project->initial_budget;
-            $this->addons_amount  = (string) $project->addons_amount;
         }
     }
 
@@ -76,6 +74,11 @@ class Form extends Component
         $orig = $this->projectId ? Project::find($this->projectId)?->deadline?->toDateString() : null;
 
         return $orig && $this->deadline && $this->deadline !== $orig;
+    }
+
+    public function updatedKey(): void
+    {
+        $this->key = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $this->key));
     }
 
     public function updatedClientId(): void
@@ -92,15 +95,12 @@ class Form extends Component
 
     public function save(): void
     {
-        // commas are stripped, so bound the digits that remain (max 9,999,999.99)
-        $money = fn ($a, $v, $fail) => preg_match('/^\d{1,7}(\.\d{1,2})?$/', str_replace(',', '', (string) $v)) || $fail('Too large.');
         $data = $this->validate([
             'aim'            => 'nullable|string|max:5000',
-            'initial_budget' => ['bail', 'required', 'regex:/^[\d,]{1,11}(\.\d{1,2})?$/', $money],
-            'addons_amount'  => ['bail', 'required', 'regex:/^[\d,]{1,11}(\.\d{1,2})?$/', $money],
             'currency'       => ['nullable', Rule::in($this->currencyOptions())],
             'client_id'      => 'required|exists:clients,id',
             'name'           => 'required|string|max:255',
+            'key'            => ['nullable', 'regex:/^[A-Z0-9]{2,5}$/', Rule::unique('projects', 'key')->ignore($this->projectId)],
             'description'    => 'nullable|string',
             'buffer_percent' => 'numeric|min:0|max:999.99',
             'start_date'     => 'nullable|date',
@@ -110,9 +110,8 @@ class Form extends Component
             'template'       => ['required', Rule::in(array_keys(BoardTemplates::ALL))],
         ]);
 
+        $data['key'] = strtoupper(trim((string) $this->key)) ?: ($this->projectId ? Project::find($this->projectId)->key : null);
         $data['aim'] = trim((string) $data['aim']) ?: null;
-        $data['initial_budget'] = str_replace(',', '', $data['initial_budget']);
-        $data['addons_amount'] = str_replace(',', '', $data['addons_amount']);
         $data['currency'] = $data['currency'] ?: null; // null on create = the client's currency
         ['deadline' => $deadline, 'reason' => $reason] = $data;
         unset($data['deadline'], $data['reason']);
@@ -132,20 +131,13 @@ class Form extends Component
         $this->redirect(route('projects.index'), navigate: true);
     }
 
-    private function finalBudget(): string
-    {
-        $c = fn ($v) => preg_match('/^[\d,]{1,11}(\.\d{0,2})?$/', (string) $v) ? Money::toCents($v) : 0;
-
-        return Money::toInput($c($this->initial_budget) + $c($this->addons_amount));
-    }
-
     public function render()
     {
         return view('livewire.projects.form', [
             'clients' => Client::orderBy('name')->get(),
             'currencies' => $this->currencyOptions(),
             'templates' => array_keys(BoardTemplates::ALL),
-            'finalBudget' => $this->finalBudget(),
+            'project' => $this->projectId ? Project::find($this->projectId) : null,
         ]);
     }
 }

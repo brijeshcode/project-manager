@@ -53,6 +53,7 @@
                             @if ($canManage)
                                 <span class="drag-handle cursor-grab text-slate-300 hover:text-slate-500" title="Drag to reorder" aria-label="Drag to reorder"><x-icon name="grip-vertical" /></span>
                             @endif
+                            <x-ui.task-code :task="$task" />
                             <a href="{{ route('tasks.show', $task) }}" wire:navigate class="min-w-0 flex-1 basis-40 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
                             <x-ui.type-badge :type="$task->type" />
                             <x-ui.priority :value="$task->priority" />
@@ -61,6 +62,14 @@
                                 <x-ui.label-chip :label="$l" class="hidden sm:inline-flex" />
                             @endforeach
                             <x-ui.deadline :date="$task->deadline" :done="$done" class="text-xs" />
+                            @if ($money)
+                                @if ($task->isAddon())
+                                    <x-ui.badge :color="$task->addon_accepted_at ? 'green' : 'amber'" data-test="row-addon">{{ $task->addon_accepted_at ? 'Add-on' : 'Proposed add-on' }}</x-ui.badge>
+                                @elseif (! $hourly && $task->budget_amount === null)
+                                    <x-ui.badge color="amber" data-test="row-unpriced">Unpriced</x-ui.badge>
+                                @endif
+                                @if ($task->budget_amount !== null)<span class="text-xs tabular-nums text-slate-600" data-test="row-value">{{ \App\Support\Money::format(\App\Support\Money::toCents((string) $task->budget_amount), $project->currency) }}</span>@endif
+                            @endif
                             <x-ui.stage-badge :column="$task->column" />
                             <x-ui.progress :pct="$progressService->forTask($task)" class="w-32" data-test="task-bar" />
                         </li>
@@ -124,14 +133,7 @@
 
                 @if ($money)
                     <x-ui.side-section title="Budget" name="budget" :panel="$panel" :can="$canManage">
-                        @if ($module->budgetAmount() === null)
-                            <p class="text-slate-400">Not set</p>
-                        @else
-                            <p>{{ \App\Support\Money::format(\App\Support\Money::toCents($module->budgetAmount()), $project->currency) }}</p>
-                            @if ($hourly && $module->budget_hours !== null)
-                                <p class="text-xs text-slate-500">{{ $module->budget_hours }} h @ {{ $module->hourly_rate }}</p>
-                            @endif
-                        @endif
+                        @include('livewire.modules._budget-panel')
                         <x-slot:editor>
                             <div class="space-y-1.5">
                                 @if ($hourly)
@@ -145,6 +147,7 @@
                             @foreach (['hours', 'rate', 'amount', 'budgetReason'] as $f)
                                 @error($f) <p class="field-error">{{ $message }}</p> @enderror
                             @endforeach
+                            @include('livewire.items._over-budget', ['bv' => $bv])
                         </x-slot:editor>
                     </x-ui.side-section>
                 @endif

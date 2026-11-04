@@ -13,6 +13,7 @@
                 <x-icon name="pencil" class="h-5 w-5" />
             </button>
         @endif
+        @isset($code)<span class="mt-2 shrink-0 font-mono text-base font-medium text-slate-400 dark:text-gray-500" data-test="task-code">{{ $code }}</span>@endisset
         <h1 id="item-title" class="min-w-0 break-words font-display text-2xl font-bold tracking-tight text-slate-900" data-test="item-title">{{ $heading }}</h1>
     </div>
 @endif

@@ -22,9 +22,8 @@ class Project extends Model
     protected $attributes = ['initial_budget' => 0, 'addons_amount' => 0, 'final_budget' => 0];
 
     protected $fillable = [
+        'key',
         'aim',
-        'initial_budget',
-        'addons_amount',
         'client_id',
         'currency',
         'name',
@@ -40,6 +39,7 @@ class Project extends Model
     {
         // a project starts in its client's currency; the owner can change it
         static::creating(function (self $p) {
+            $p->key = $p->key ? strtoupper($p->key) : static::uniqueKeyFor($p->name);
             $p->currency_id ??= Client::whereKey($p->client_id)->value('currency_id');
         });
 
@@ -61,6 +61,40 @@ class Project extends Model
             $p->final_budget = $sum($p->initial_budget, $p->addons_amount);
             $p->final_budget_local = $sum($p->initial_budget_local, $p->addons_amount_local);
         });
+    }
+
+    /** Task-code prefix from a name: initials of its words (or its first letters), 3-5 chars, made unique. */
+    public static function uniqueKeyFor(string $name, ?int $ignoreId = null): string
+    {
+        $words = preg_split('/[^A-Za-z0-9]+/', $name, -1, PREG_SPLIT_NO_EMPTY);
+        $key = strtoupper(count($words) >= 3 ? implode('', array_map(fn ($w) => $w[0], array_slice($words, 0, 5))) : substr(implode('', $words), 0, 3));
+        $base = str_pad(substr($key, 0, 5), 3, 'X');
+        $taken = fn ($k) => static::where('key', $k)->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))->exists();
+        for ($i = 2, $key = $base; $taken($key); $i++) {
+            $key = substr($base, 0, 5 - strlen((string) $i)).$i;
+        }
+
+        return $key;
+    }
+
+    /**
+     * initial_budget / addons_amount / final_budget are CALCULATED, never typed: initial = Σ modules' budgets minus
+     * their accepted add-ons, addons = Σ accepted add-ons, final = initial + addons = Σ module budgets. The *_local
+     * twins are the project's own conversion of those amounts (FreezesLocalAmounts refreshes the rate whenever an
+     * amount changes), so initial_local + addons_local == final_local always. Called whenever a module budget
+     * changes, a module is created/deleted/moved, or an add-on is accepted.
+     */
+    public function recalculateBudget(): void
+    {
+        $initial = $addons = 0;
+        foreach ($this->modules()->with('project.client')->get() as $m) {
+            $mb = new \App\Services\ModuleBudget($m);
+            $a = $m->tasks()->whereNotNull('addon_accepted_at')->where('scope', 'out')->with('subtasks')->get()->sum(fn ($t) => $mb->valueCents($t));
+            $total = $m->budgetAmount() === null ? 0 : Money::toCents($m->budgetAmount());
+            $initial += $total - $a;
+            $addons += $a;
+        }
+        $this->forceFill(['initial_budget' => Money::toInput($initial), 'addons_amount' => Money::toInput($addons)])->save();
     }
 
     protected function localAmounts(): array

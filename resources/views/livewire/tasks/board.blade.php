@@ -172,7 +172,8 @@
                                             <x-icon name="pencil" class="h-3.5 w-3.5" />
                                         </a>
                                     </div>
-                                    <a href="{{ route('tasks.show', $task) }}" draggable="false" data-test="card-link" class="mt-1 line-clamp-2 break-words text-[13px] font-medium leading-snug text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
+                                    <x-ui.task-code :task="$task" class="mt-1 block text-[11px]" />
+                                    <a href="{{ route('tasks.show', $task) }}" draggable="false" data-test="card-link" class="mt-0.5 line-clamp-2 break-words text-[13px] font-medium leading-snug text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
                                     <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500" data-test="card-meta">
                                         <x-ui.deadline :date="$task->deadline" :done="$col->stage === 'done'" class="inline-flex items-center rounded bg-slate-100 px-1.5 py-px text-[11px] dark:bg-gray-600/60" data-test="card-deadline" />
                                         @if($subs->isNotEmpty())
@@ -211,6 +212,7 @@
             <section role="dialog" aria-labelledby="item-title" tabindex="-1" x-init="$el.focus({ preventScroll: true })" data-test="task-panel"
                      class="task-panel fixed inset-y-0 right-0 z-[60] flex w-full flex-col bg-white shadow-2xl ring-1 ring-slate-900/10 outline-none sm:w-[42rem] dark:bg-gray-900 dark:ring-white/10">
                 <div class="flex shrink-0 items-center justify-end gap-1 border-b border-slate-200 px-3 py-2 dark:border-gray-700">
+                    <x-ui.task-code :task="$panelTask" class="mr-auto pl-2 text-sm" data-test="panel-code" />
                     <a href="{{ route('tasks.show', $panelTask) }}" wire:navigate class="btn btn-ghost h-8 gap-1 px-2 py-1 text-xs" title="Open full page" aria-label="Open full page" data-test="panel-full"><x-icon name="external-link" /> Open full page</a>
                     <button type="button" @click="navigator.clipboard.writeText(location.href); copied = true; setTimeout(() => copied = false, 1500)" class="btn btn-ghost h-8 px-2 py-1" title="Copy link to this task" aria-label="Copy link to this task" data-test="panel-copy"><x-icon name="link" /><span x-show="copied" style="display:none" class="ml-1 text-xs text-emerald-600">Copied</span></button>
                     <button type="button" wire:click="closeTask" class="btn btn-ghost h-8 px-2 py-1" title="Close" aria-label="Close" data-test="panel-close"><x-icon name="x" /></button>

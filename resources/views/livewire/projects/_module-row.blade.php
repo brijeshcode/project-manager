@@ -31,9 +31,16 @@
                             <x-ui.progress :pct="$mPct" class="w-40" data-test="module-progress" />
                             <span class="w-14 text-right text-xs text-slate-400" data-test="module-task-count">{{ $module->tasks->count() }} {{ Str::plural('task', $module->tasks->count()) }}</span>
                             @can('manage-money')
+                                @php $mbs = (new \App\Services\ModuleBudget($module))->summary(); @endphp
+                                @if ($mbs['cap'] !== null)
+                                    <span @class(['text-xs tabular-nums', 'text-slate-500' => $mbs['remaining'] >= 0, 'font-medium text-rose-600 dark:text-rose-400' => $mbs['remaining'] < 0]) data-test="module-budget-line">Allocated {{ (new \App\Services\ModuleBudget($module))->format($mbs['allocated']) }} of {{ (new \App\Services\ModuleBudget($module))->format($mbs['cap']) }} &middot; {{ $mbs['remaining'] < 0 ? (new \App\Services\ModuleBudget($module))->format(-$mbs['remaining']).' over' : (new \App\Services\ModuleBudget($module))->format($mbs['remaining']).' left' }}</span>
+                                @endif
                                 <span class="text-xs text-slate-500">{{ $module->budgetAmount() === null ? 'No budget' : \App\Support\Money::format(\App\Support\Money::toCents($module->budgetAmount()), $project->currency) }}</span>
                             @endcan
                         </div>
+                        @if (! empty($budgetBlocked[$module->id]))
+                            <div class="mx-5 mb-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-900 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200" role="alert" data-test="module-over-budget">{{ $budgetBlocked[$module->id] }} Nothing was saved. <a href="{{ route('modules.show', [$project, $module]) }}" wire:navigate class="font-medium underline">Open the module</a> to raise the budget, create an add-on or rebalance the tasks.</div>
+                        @endif
                         <div x-show="open" x-collapse style="display:none" class="border-t border-slate-100">
                         <div class="border-b border-slate-100 px-5 py-3.5" x-data="{ editingDesc: false }">
                             @if ($canManage)
@@ -90,8 +97,16 @@
                                         <button @click="open = !open" class="flex shrink-0 items-center text-left" title="Expand task" aria-label="Expand task">
                                             <x-icon name="chevron-right" class="h-4 w-4 text-slate-400 transition" ::class="open && 'rotate-90'" />
                                         </button>
+                                        <x-ui.task-code :task="$task" />
                                         <a href="{{ route('tasks.show', $task) }}" wire:navigate data-test="task-link" class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
                                         <x-ui.assignees :users="$task->assignees" :candidates="$canManage ? $candidates : null" method="toggleTaskAssignee" :id="$task->id" />
+                                        @can('manage-money')
+                                            @if ($task->isAddon())
+                                                <x-ui.badge :color="$task->addon_accepted_at ? 'green' : 'amber'">{{ $task->addon_accepted_at ? 'Add-on' : 'Proposed add-on' }}</x-ui.badge>
+                                            @elseif ($task->budget_amount === null && $project->client->billing_mode !== \App\Enums\BillingMode::Hourly)
+                                                <x-ui.badge color="amber" data-test="row-unpriced">Unpriced</x-ui.badge>
+                                            @endif
+                                        @endcan
                                         @foreach ($task->labels as $l)
                                             <x-ui.label-chip :label="$l" class="hidden sm:inline-flex" />
                                         @endforeach

@@ -109,6 +109,9 @@ class Show extends Component
         $this->reset('newDeadline', 'deadlineReason');
     }
 
+    /** Modules whose last budget edit was refused as over budget: moduleId => message. */
+    public array $budgetBlocked = [];
+
     public function saveBudget(int $moduleId): void
     {
         $this->authorize('manage-money');
@@ -137,8 +140,14 @@ class Show extends Component
             $this->addError("budget.$moduleId.reason", $e->errors()['reason'][0] ?? 'Reason required.');
 
             return;
+        } catch (\App\Exceptions\OverBudget $e) {
+            // the module page has the three ways out (raise, add-on, rebalance); here we only refuse and point to it
+            $this->budgetBlocked[$moduleId] = $e->getMessage();
+
+            return;
         }
 
+        unset($this->budgetBlocked[$moduleId]);
         $this->fillBudget($module->fresh());
     }
 
@@ -299,6 +308,7 @@ class Show extends Component
         $modules = $this->project->modules()
             ->with([
                 'tasks' => fn ($q) => $q->visibleTo(auth()->user())->orderBy('position')->orderBy('id'),
+                'tasks.project',
                 'tasks.subtasks',
                 'tasks.assignees',
                 'tasks.labels',

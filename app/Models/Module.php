@@ -68,6 +68,15 @@ class Module extends Model
 
     protected static function booted(): void
     {
+        // the project's budget fields are calculated from its modules
+        static::saved(function (self $m) {
+            if ($m->wasRecentlyCreated || $m->wasChanged(['budget_amount', 'budget_hours', 'hourly_rate', 'project_id'])) {
+                Project::find($m->project_id)?->recalculateBudget(); // not the cached relation: the module may just have moved
+                $m->wasChanged('project_id') && Project::find($m->getOriginal('project_id'))?->recalculateBudget();
+            }
+        });
+        static::deleted(fn (self $m) => Project::find($m->project_id)?->recalculateBudget());
+
         static::deleting(function (self $m) {
             $m->comments()->delete();
             $m->activities()->delete();
@@ -192,6 +201,8 @@ class Module extends Model
             throw ValidationException::withMessages(['reason' => 'A reason is required when changing an existing budget value.']);
         }
 
+        $this->guardCap($changes);
+
         DB::transaction(function () use ($changes, $by, $reason) {
             foreach ($changes as $f => [$old, $new]) {
                 ModuleBudgetChange::create(['module_id' => $this->id, 'user_id' => $by->id, 'field' => $f, 'old' => $old, 'new' => $new, 'reason' => trim($reason) ?: null]);
@@ -201,6 +212,22 @@ class Module extends Model
             $this->save();
             $this->activityMute = [];
         });
+    }
+
+    /** Lowering the cap below what the tasks already use is refused (see ModuleBudget / OverBudget). */
+    private function guardCap(array $changes): void
+    {
+        $mb = new \App\Services\ModuleBudget($this);
+        $field = $mb->hourly() ? 'budget_hours' : 'budget_amount';
+        if (! isset($changes[$field]) || $changes[$field][1] === null) {
+            return;
+        }
+        $to = fn ($v) => $mb->hourly() ? (int) round((float) $v * 100) : Money::toCents($v);
+        [$old, $new] = [$changes[$field][0] === null ? null : $to($changes[$field][0]), $to($changes[$field][1])];
+        $allocated = $mb->allocated();
+        if ($new < $allocated && ($old === null || $new < $old)) {
+            throw new \App\Exceptions\OverBudget($this, $allocated - $new, $allocated, $new);
+        }
     }
 
     /** Sum of all tasks' totalEstimateHours for this module. */

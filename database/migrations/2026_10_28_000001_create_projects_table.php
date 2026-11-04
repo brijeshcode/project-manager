@@ -13,6 +13,8 @@ return new class extends Migration
             $table->foreignId('client_id')->constrained()->cascadeOnDelete();
             $table->foreignId('currency_id')->constrained('currencies');
             $table->string('name');
+            $table->string('key', 5)->unique();                    // task code prefix (KEY-12)
+            $table->unsignedInteger('task_counter')->default(0);   // last task number handed out
             $table->decimal('buffer_percent', 5, 2)->default(0);
             $table->text('aim')->nullable();
             foreach (['initial_budget', 'addons_amount', 'final_budget'] as $col) {
@@ -46,6 +48,10 @@ return new class extends Migration
             $t->date('ends_on');
             $t->string('status')->default('planned');   // planned|active|completed
             $t->timestamp('completed_at')->nullable();
+            // values (cents) frozen when the sprint completes: what was planned, finished, and carried over
+            $t->unsignedBigInteger('planned_value_cents')->nullable();
+            $t->unsignedBigInteger('done_value_cents')->nullable();
+            $t->unsignedBigInteger('carried_value_cents')->nullable();
             $t->timestamps();
         });
 

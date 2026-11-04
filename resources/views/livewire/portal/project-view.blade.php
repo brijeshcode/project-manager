@@ -46,7 +46,7 @@
         <x-ui.card class="mb-4 space-y-4" x-data="{ commenting: false }">
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                    <h3 class="font-display text-sm font-semibold text-slate-900">{{ $task->title }}</h3>
+                    <h3 class="font-display text-sm font-semibold text-slate-900"><x-ui.task-code :task="$task" class="mr-1" />{{ $task->title }}</h3>
                     @if($task->description)
                         <x-ui.markdown :text="$task->description" class="mt-1" />
                     @endif

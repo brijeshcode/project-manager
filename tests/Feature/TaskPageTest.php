@@ -144,14 +144,14 @@ it('edits every task field from the sidebar panels and logs it', function () {
         ->call('openPanel', 'priority')->set('priority', 2)->call('savePanel')
         ->call('moveColumn', $col->id)
         ->call('openPanel', 'visibility')->set('clientVisible', false)->call('savePanel')
-        ->call('openPanel', 'estimate')->set('estimate', '6')->set('scope', 'out')->set('price', '120.50')->call('savePanel')->assertHasNoErrors()
+        ->call('openPanel', 'estimate')->set('estimate', '6')->set('scope', 'out')->set('budget_amount', '120.50')->call('savePanel')->assertHasNoErrors()
         ->call('openPanel', 'assignees')->set('assigneeIds', [$s['member']->id, $s['outsider']->id])->call('savePanel')
         ->call('openPanel', 'labels')->set('labelIds', [$label->id])->call('savePanel');
 
     $t = $s['task']->fresh();
     expect($t)->title->toBe('Renamed')->priority->toBe(2)->board_column_id->toBe($col->id)->client_visible->toBeFalse();
     expect($t->deadline->toDateString())->toBe('2030-03-03');
-    expect($t->price)->toBe(120.5);
+    expect($t->budget_amount)->toBe(120.5);
     expect($t->assignees()->pluck('users.id')->all())->toBe([$s['member']->id]); // outsider is not on the project
     expect($t->activities()->where('field', 'deadline')->first())->reason->toBe('Client asked');
     expect($t->activities()->where('field', 'board_column_id')->first()->new)->toBe($col->name);
@@ -163,9 +163,9 @@ it('edits every task field from the sidebar panels and logs it', function () {
 
 it('validates task money, dates and title on the page', function () {
     $s = tpSetup();
-    tpPage($s)->call('openPanel', 'estimate')->set('price', '-5')->set('estimate', '-1')->call('savePanel')->assertHasErrors(['price', 'estimate'])->assertSet('panel', 'estimate');
+    tpPage($s)->call('openPanel', 'estimate')->set('budget_amount', '-5')->set('estimate', '-1')->call('savePanel')->assertHasErrors(['budget_amount', 'estimate'])->assertSet('panel', 'estimate');
     tpPage($s)->call('openPanel', 'deadline')->set('deadline', 'nope')->call('savePanel')->assertHasErrors('deadline');
-    tpPage($s)->call('openPanel', 'estimate')->set('scope', 'out')->set('price', '99999999')->call('savePanel')->assertHasErrors('price');
+    tpPage($s)->call('openPanel', 'estimate')->set('scope', 'out')->set('budget_amount', '99999999')->call('savePanel')->assertHasErrors('budget_amount');
     tpPage($s)->call('editTitle')->set('title', '')->call('saveTitle')->assertHasErrors('title');
 });
 

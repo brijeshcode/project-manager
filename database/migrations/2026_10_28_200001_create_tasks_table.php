@@ -20,6 +20,8 @@ return new class extends Migration
 
         Schema::create('tasks', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('project_id')->constrained()->cascadeOnDelete();   // denormalised from the module; filled on create
+            $table->unsignedInteger('number');                                    // per-project, never reused: shown as KEY-12
             $table->foreignId('module_id')->constrained()->cascadeOnDelete();
             $table->foreignId('creator_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('task_type_id')->nullable()->constrained('task_types')->nullOnDelete();
@@ -30,9 +32,11 @@ return new class extends Migration
             $table->unsignedInteger('priority')->default(0);
             $table->float('estimate_hours')->default(0.0);
             $table->string('scope')->default('in');              // TaskScope enum
-            $table->decimal('price', 12, 2)->nullable();
+            $table->decimal('budget_amount', 14, 2)->nullable();   // the task's value
             $table->decimal('exchange_rate', 18, 6)->nullable();   // project currency -> local
-            $table->decimal('local_price', 12, 2)->nullable();
+            $table->decimal('budget_amount_local', 14, 2)->nullable();
+            $table->timestamp('addon_accepted_at')->nullable();   // an out-of-scope task becomes a counted add-on when the client confirms
+            $table->foreignId('addon_accepted_by')->nullable()->constrained('users')->nullOnDelete();
             $table->boolean('client_visible')->default(false);
             $table->boolean('testing_enabled')->default(false);
             $table->string('testing_add_type')->nullable();      // 'percent'|'fixed'
@@ -44,6 +48,7 @@ return new class extends Migration
             $table->date('started_at')->nullable();     // first time in an active-stage column (auto, editable)
             $table->date('completed_at')->nullable();   // while in a done-stage column (auto, editable)
             $table->timestamps();
+            $table->unique(['project_id', 'number']);
         });
     }
 

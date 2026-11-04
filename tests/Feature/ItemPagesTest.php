@@ -235,9 +235,9 @@ it('converts a subtask to a task, moving comments and attachments without duplic
     Storage::disk('local')->assertExists('attachments/x/spec.txt');
     // activity on the new task
     $a = $new->activities()->where('event', 'converted')->first();
-    expect($a->old)->toBe('Build form')->and($a->summary())->toBe('converted this from a subtask of Build form');
+    expect($a->old)->toBe('SIT-1 Build form')->and($a->summary())->toBe('converted this from a subtask of SIT-1 Build form');
     // the moved items show on the new task page
-    Livewire::actingAs($s['admin'])->test(App\Livewire\Tasks\Show::class, ['task' => $new])->assertSee('A comment')->assertSee('converted this from a subtask of Build form')->assertSee('spec.txt');
+    Livewire::actingAs($s['admin'])->test(App\Livewire\Tasks\Show::class, ['task' => $new])->assertSee('A comment')->assertSee('converted this from a subtask of SIT-1 Build form')->assertSee('spec.txt');
     // deleting the new task cleans up its files
     $new->delete();
     Storage::disk('local')->assertMissing('attachments/x/spec.txt');
@@ -315,7 +315,7 @@ it('opens a prefilled task create page from the Copy action, saving nothing unti
     $s = ipSetup();
     $this->actingAs($s['admin']);
     $label = Label::create(['name' => 'Bug', 'color' => '#f00']);
-    $s['task']->update(['client_visible' => true, 'price' => 10, 'scope' => 'out']);
+    $s['task']->update(['client_visible' => true, 'budget_amount' => 10, 'scope' => 'out']);
     $s['task']->syncLabels([$label->id]);
     $s['task']->syncAssignees([$s['member']->id]);
     $s['task']->addComment($s['admin'], 'not copied');
@@ -326,7 +326,7 @@ it('opens a prefilled task create page from the Copy action, saving nothing unti
 
     Livewire::withQueryParams(['copy' => $s['task']->id])->test(TaskForm::class)
         ->assertSet('title', 'Copy of Build form')->assertSet('description', 'Task text')->assertSet('priority', 2)->assertSet('estimate_hours', 4.0)
-        ->assertSet('price', 10.0)->assertSet('scope', 'out')->assertSet('client_visible', true)->assertSet('deadline', '2030-01-01')
+        ->assertSet('budget_amount', 10.0)->assertSet('scope', 'out')->assertSet('client_visible', true)->assertSet('deadline', '2030-01-01')
         ->assertSet('module_id', $s['module']->id)->assertSet('labelIds', [$label->id])->assertSet('assigneeIds', [$s['member']->id])->assertSet('copySubtasks', true);
     expect(Task::count())->toBe($count);
 });

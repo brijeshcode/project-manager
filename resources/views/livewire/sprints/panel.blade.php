@@ -58,6 +58,11 @@
                                     <span class="text-xs text-slate-500">{{ $p->starts_on->format('M j') }} – {{ $p->ends_on->format('M j, Y') }}</span>
                                     <span class="ml-auto text-xs text-slate-500" data-test="past-done">{{ $pt->count() }} done</span>
                                     <span class="text-xs font-medium text-slate-700">{{ $fmt(\App\Models\Sprint::hours($pt)) }}</span>
+                                    @can('manage-money')
+                                        @if ($p->planned_value_cents !== null)
+                                            <span class="text-xs tabular-nums text-slate-500" data-test="past-values">Planned {{ \App\Support\Money::format($p->planned_value_cents, $project->currency) }} &middot; Done {{ \App\Support\Money::format($p->done_value_cents, $project->currency) }} &middot; Carried over {{ \App\Support\Money::format($p->carried_value_cents, $project->currency) }}</span>
+                                        @endif
+                                    @endcan
                                 </button>
                                 @if ($isOpen)
                                     <ul class="divide-y divide-slate-100 border-t border-slate-100 dark:divide-gray-700 dark:border-gray-700" data-test="past-tasks">
@@ -146,6 +151,11 @@
                         <dt class="text-slate-500">Unfinished</dt><dd class="text-right font-medium" data-test="sum-open">{{ $sum['open']->count() }} {{ Str::plural('task', $sum['open']->count()) }}</dd>
                         <dt class="text-slate-500">Planned hours</dt><dd class="text-right font-medium" data-test="sum-planned">{{ $fmt(\App\Models\Sprint::hours($sum['all'])) }}</dd>
                         <dt class="text-slate-500">Completed hours</dt><dd class="text-right font-medium" data-test="sum-completed">{{ $fmt(\App\Models\Sprint::hours($sum['done'])) }}</dd>
+                        @can('manage-money')
+                            <dt class="text-slate-500">Planned value</dt><dd class="text-right font-medium" data-test="sum-planned-value">{{ \App\Support\Money::format(\App\Models\Sprint::value($sum['all']), $project->currency) }}</dd>
+                            <dt class="text-slate-500">Done value</dt><dd class="text-right font-medium" data-test="sum-done-value">{{ \App\Support\Money::format(\App\Models\Sprint::value($sum['done']), $project->currency) }}</dd>
+                            <dt class="text-slate-500">Carried-over value</dt><dd class="text-right font-medium" data-test="sum-carried-value">{{ \App\Support\Money::format(\App\Models\Sprint::value($sum['open']), $project->currency) }}</dd>
+                        @endcan
                     </dl>
                     @if ($sum['open']->isNotEmpty())
                         <fieldset class="space-y-2 text-sm">

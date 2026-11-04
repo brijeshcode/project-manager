@@ -175,7 +175,7 @@ class Board extends Component
         return Task::visibleTo(auth()->user())
             ->whereIn('module_id', $this->project->modules()->pluck('id'))
             ->when($this->ints($this->moduleIds), fn ($q, $ids) => $q->whereIn('module_id', $ids))
-            ->when(trim($this->search) !== '', fn ($q) => $q->where('title', 'like', '%'.addcslashes(trim($this->search), '%_\\').'%'))
+            ->when(trim($this->search) !== '', fn ($q) => $q->search($this->search))
             ->when($this->prios, fn ($q) => $q->whereIn('priority', array_map('intval', $this->prios)))
             ->when($this->ints($this->typeIds), fn ($q, $ids) => $q->whereIn('task_type_id', $ids))
             ->when($this->ints($this->labelIds), fn ($q, $ids) => $q->whereHas('labels', fn ($l) => $l->whereIn('labels.id', $ids)))
@@ -188,7 +188,7 @@ class Board extends Component
                 });
             })
             ->when($this->sprintFilter() !== null, fn ($q) => $q->where('sprint_id', $this->sprintFilter()))
-            ->with(['module', 'type', 'labels', 'subtasks.checklistItems', 'checklistItems', 'assignees'])
+            ->with(['project', 'module','type', 'labels', 'subtasks.checklistItems', 'checklistItems', 'assignees'])
             ->orderBy('position')
             ->orderBy('id')
             ->get()

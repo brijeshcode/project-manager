@@ -45,6 +45,48 @@ class DemoSeeder extends Seeder
         $this->seedLargeProject();
         $this->seedTypes();
         $this->seedSprints();
+        $this->seedBudgets();
+    }
+
+    /**
+     * The budget model on a fixed-price client (Globex / Fleet Tracker): module caps, priced and unpriced tasks,
+     * one accepted and one proposed add-on, and a completed sprint whose done tasks became ONE billable line.
+     * Idempotent: skipped once the Maps module has a budget.
+     */
+    private function seedBudgets(): void
+    {
+        $project = Project::where('name', 'Fleet Tracker')->first();
+        $admin = User::where('email', 'admin@example.com')->first();
+        $maps = $project?->modules()->where('name', 'Maps')->first();
+        $reports = $project?->modules()->where('name', 'Reports')->first();
+        if (! $project || ! $admin || ! $maps || ! $reports || $maps->budget_amount !== null) {
+            return;
+        }
+        auth()->setUser($admin);
+        $done = $project->columns->firstWhere('stage', 'done');
+        $maps->updateBudget(['budget_amount' => '6000'], $admin, '');
+        $reports->updateBudget(['budget_amount' => '4000'], $admin, '');
+
+        // Maps: one priced task, one unpriced (so the distribute helper has something to do); Reports: fully priced
+        [$map, $fence] = $maps->tasks()->orderBy('position')->get();
+        $map->update(['budget_amount' => '3000', 'board_column_id' => $done->id]);
+        [$mileage, $score] = $reports->tasks()->orderBy('position')->get();
+        $mileage->update(['budget_amount' => '1500', 'board_column_id' => $done->id]);
+        $score->update(['budget_amount' => '1500']);
+
+        // an accepted add-on (raises Maps to 6,800) and a proposed one (not counted yet)
+        $export = Task::create(['module_id' => $maps->id, 'creator_id' => $admin->id, 'title' => 'Fleet export API', 'status' => 'published', 'scope' => 'out', 'estimate_hours' => 10, 'budget_amount' => '800', 'client_visible' => true]);
+        $export->acceptAddon($admin);
+        Task::create(['module_id' => $reports->id, 'creator_id' => $admin->id, 'title' => 'Driver mobile alerts', 'status' => 'published', 'scope' => 'out', 'estimate_hours' => 14, 'budget_amount' => '1200', 'client_visible' => true]);
+
+        // a completed sprint: its two done tasks are one billable line
+        $start = now()->subDays(20)->startOfDay();
+        $sprint = $project->sprints()->create(['name' => 'Sprint 1', 'status' => 'active', 'goal' => 'Maps and mileage reporting.', 'starts_on' => $start, 'ends_on' => $start->copy()->addDays(13)]);
+        $map->update(['sprint_id' => $sprint->id]);
+        $mileage->update(['sprint_id' => $sprint->id]);
+        $fence->update(['sprint_id' => $sprint->id]);
+        $sprint->complete('backlog');
+        auth()->forgetUser();
     }
 
     /**
@@ -101,7 +143,6 @@ class DemoSeeder extends Seeder
 
         $project = Project::create([
             'client_id' => $client->id, 'name' => 'Customer Portal Revamp', 'buffer_percent' => 10,
-            'initial_budget' => 9000, 'addons_amount' => 0,
             'start_date' => now()->subWeeks(1)->startOfWeek(), 'status' => 'active',
         ]);
         $project->setDeadline(now()->addWeeks(10)->toDateString(), $admin);
@@ -332,9 +373,8 @@ See the [gateway docs](https://example.com/docs).", 'client_visible' => true]);
         // Project 1 — active, with real work for live progress bars.
         $storefront = Project::create([
             'client_id' => $client->id,
-            'name' => 'Northwind Storefront',
+            'name' => 'Northwind Storefront', 'key' => 'NWS',
             'aim' => 'Let Northwind sell online without phone orders.',
-            'initial_budget' => '12000', 'addons_amount' => '1500.50',
             'buffer_percent' => 15,
             'start_date' => now()->subWeeks(2)->startOfWeek(),
             'status' => 'active',
@@ -395,7 +435,6 @@ See the [gateway docs](https://example.com/docs).", 'client_visible' => true]);
         Project::create([
             'client_id' => $client->id,
             'name' => 'Inventory API', 'template' => 'blank',
-            'initial_budget' => '4000', 'addons_amount' => '0',
             'buffer_percent' => 10,
             'start_date' => now()->startOfWeek(),
             'status' => 'draft',
@@ -470,7 +509,6 @@ See the [gateway docs](https://example.com/docs).", 'client_visible' => true]);
             foreach ($projects as $p => [$projectName, $status, $modules]) {
                 $project = Project::create([
                     'client_id' => $client->id, 'name' => $projectName, 'buffer_percent' => 10 + $p * 5,
-                    'initial_budget' => 5000 + $p * 2500, 'addons_amount' => $p * 400,
                     'start_date' => now()->subWeeks(6 - $p * 2)->startOfWeek(), 'status' => $status,
                     'template' => ($n + $p) % 2 ? 'blank' : 'software',   // demo both board templates
                 ]);

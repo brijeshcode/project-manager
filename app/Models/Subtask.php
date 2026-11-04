@@ -71,7 +71,7 @@ class Subtask extends Model
             foreach (['comments' => 'commentable', 'attachments' => 'attachable', 'checklistItems' => 'checklistable', 'timeEntries' => 'timeable'] as $rel => $morph) {
                 $this->{$rel}()->reorder()->update(["{$morph}_type" => $task->getMorphClass(), "{$morph}_id" => $task->id]);
             }
-            $task->logActivity('converted', null, $parent->title);
+            $task->logActivity('converted', null, $parent->code().' '.$parent->title);
             $this->delete();
 
             return $task;

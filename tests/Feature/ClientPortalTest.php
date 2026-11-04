@@ -173,9 +173,9 @@ it('client does NOT see draft tasks on ProjectView', function () {
         ->assertDontSee('Draft Client Task');
 });
 
-// ── price / cost never exposed ────────────────────────────────────────────────
+// ── budget amount / cost never exposed ────────────────────────────────────────────────
 
-it('portal ProjectView response contains no price field', function () {
+it('portal ProjectView response contains no budget amount field', function () {
     [$client, $clientUser] = portalClient();
     $project  = portalProject($client);
     $module   = portalModule($project);
@@ -184,10 +184,10 @@ it('portal ProjectView response contains no price field', function () {
     portalTask($module, $internal, [
         'title'          => 'Priced Task',
         'client_visible' => true,
-        'price'          => 9999.00,
+        'budget_amount'          => 9999.00,
     ]);
 
-    // The rendered HTML must not contain the numeric price value
+    // The rendered HTML must not contain the numeric budget amount value
     Livewire::actingAs($clientUser)
         ->test(ProjectView::class, ['project' => $project])
         ->assertDontSee('9999');

@@ -11,6 +11,7 @@ use App\Livewire\Projects\Index as ProjectIndex;
 use App\Livewire\Projects\Show as ProjectShow;
 use App\Livewire\Tasks\Board as TaskBoard;
 use App\Livewire\Tasks\Form as TaskForm;
+use App\Models\Task;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome');
@@ -98,7 +99,16 @@ Route::middleware(['auth'])->group(function () {
     Route::get('tasks/create', TaskForm::class)->name('tasks.create');
     Route::get('tasks/{task}/edit', TaskForm::class)->name('tasks.edit');
     Route::get('tasks/{task}', \App\Livewire\Tasks\Show::class)->whereNumber('task')->name('tasks.show');
-    Route::get('subtasks/{subtask}', \App\Livewire\Subtasks\Show::class)->whereNumber('subtask')->name('subtasks.show');
+    // short link by code: /t/NWS-12 -> the task page, 404 unless the user may see it
+    Route::get('t/{code}', function (string $code) {
+        abort_unless(preg_match('/^([A-Za-z0-9]{2,5})-(\d+)$/', $code, $m), 404);
+        $task = Task::visibleTo(auth()->user())->where('number', (int) $m[2])
+            ->whereHas('project', fn ($p) => $p->where('key', strtoupper($m[1])))->first();
+        abort_unless($task && auth()->user()->can('view', $task->project), 404);
+
+        return redirect()->route('tasks.show', $task);
+    })->name('tasks.code');
+    Route::get('subtasks/{subtask}',\App\Livewire\Subtasks\Show::class)->whereNumber('subtask')->name('subtasks.show');
 });
 
 require __DIR__.'/auth.php';

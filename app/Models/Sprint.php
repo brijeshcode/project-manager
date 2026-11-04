@@ -17,7 +17,7 @@ class Sprint extends Model
     /** Two weeks plus a small tolerance (days between starts_on and ends_on). */
     public const MAX_DAYS = 16;
 
-    protected $fillable = ['project_id', 'name', 'goal', 'starts_on', 'ends_on', 'status', 'completed_at'];
+    protected $fillable = ['project_id', 'name', 'goal', 'starts_on', 'ends_on', 'status', 'completed_at', 'planned_value_cents', 'done_value_cents', 'carried_value_cents'];
 
     protected function casts(): array
     {
@@ -91,10 +91,16 @@ class Sprint extends Model
     /** Counted tasks with their stage loaded: all, done (in a done-stage column) and open (the rest). */
     public function summary(): array
     {
-        $all = $this->tasks()->counted()->with(['column', 'subtasks'])->get();
+        $all = $this->tasks()->counted()->with(['column', 'subtasks', 'module.project.client'])->get();
         $done = $all->filter(fn (Task $t) => $t->column?->stage === 'done')->values();
 
         return ['all' => $all, 'done' => $done, 'open' => $all->diff($done)->values()];
+    }
+
+    /** Money (cents) of a set of tasks, each valued by its own module's rules (stored amount, or hours x rate for hourly clients). */
+    public static function value(Collection $tasks): int
+    {
+        return $tasks->sum(fn (Task $t) => (new \App\Services\ModuleBudget($t->module))->valueCents($t));
     }
 
     /** planned -> active. Only one sprint per project may be active. */
@@ -123,7 +129,8 @@ class Sprint extends Model
                 throw ValidationException::withMessages(['sprint' => 'Only the active sprint can be completed.']);
             }
             $next = null;
-            $open = $this->summary()['open'];
+            $sum = $this->summary();
+            $open = $sum['open'];
             if ($to === 'next' && $open->isNotEmpty()) {
                 $next = static::where('project_id', $this->project_id)->planned()->orderBy('starts_on')->orderBy('id')->first()
                     ?? static::create([
@@ -135,7 +142,9 @@ class Sprint extends Model
             foreach ($open as $task) { // per model: each move is logged
                 $task->update(['sprint_id' => $next?->id]);
             }
-            $this->update(['status' => 'completed', 'completed_at' => now()]);
+            $this->update(['status' => 'completed', 'completed_at' => now(), 'planned_value_cents' => static::value($sum['all']), 'done_value_cents' => static::value($sum['done']), 'carried_value_cents' => static::value($open)]);
+            // the done tasks become ONE billable line for the sprint (replacing their pending per-task lines)
+            app(\App\Services\BillableService::class)->syncCompletedWork($this->project->client);
 
             return $next;
         });

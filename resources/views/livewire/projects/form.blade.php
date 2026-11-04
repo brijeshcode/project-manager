@@ -47,6 +47,13 @@
             </div>
 
             <div>
+                <label class="label" for="key">Project key <span class="font-normal text-slate-400">(optional)</span></label>
+                <input id="key" type="text" wire:model.blur="key" maxlength="5" placeholder="Auto, e.g. NWS" class="input w-40 uppercase" data-test="project-key">
+                <p class="mt-1 text-xs text-slate-500">2-5 letters or digits. Tasks are numbered with it, like KEY-12. Leave blank to derive it from the name.</p>
+                @error('key') <p class="field-error">{{ $message }}</p> @enderror
+            </div>
+
+            <div>
                 <label class="label" for="description">Description <span class="font-normal text-slate-400">(optional)</span></label>
                 <x-ui.markdown-editor model="description" :rows="5" :uploads="false" placeholder="What is this project about? Scope, goals, anything the team should know." />
                 @error('description') <p class="field-error">{{ $message }}</p> @enderror
@@ -58,21 +65,14 @@
                 @error('aim') <p class="field-error">{{ $message }}</p> @enderror
             </div>
 
-            <div class="grid gap-5 sm:grid-cols-3">
-                <div>
-                    <label class="label" for="initial_budget">Initial budget ({{ $currency }})</label>
-                    <input id="initial_budget" type="text" inputmode="decimal" wire:model.live.debounce.300ms="initial_budget" class="input">
-                    @error('initial_budget') <p class="field-error">{{ $message }}</p> @enderror
-                </div>
-                <div>
-                    <label class="label" for="addons_amount">Addons amount ({{ $currency }})</label>
-                    <input id="addons_amount" type="text" inputmode="decimal" wire:model.live.debounce.300ms="addons_amount" class="input">
-                    @error('addons_amount') <p class="field-error">{{ $message }}</p> @enderror
-                </div>
-                <div>
-                    <label class="label" for="final_budget">Final budget ({{ $currency }})</label>
-                    <input id="final_budget" type="text" value="{{ $finalBudget }}" readonly class="input bg-slate-50">
-                </div>
+            <div class="grid gap-5 sm:grid-cols-3" data-test="calculated-budget">
+                @foreach ([['initial_budget', 'Initial budget'], ['addons_amount', 'Add-ons'], ['final_budget', 'Final budget']] as [$f, $l])
+                    <div>
+                        <label class="label" for="{{ $f }}">{{ $l }} ({{ $currency }})</label>
+                        <input id="{{ $f }}" type="text" value="{{ $project ? \App\Support\Money::format(\App\Support\Money::toCents($project->$f), $project->currency) : '0.00' }}" readonly class="input bg-slate-50 dark:bg-gray-800" data-test="{{ $f }}">
+                    </div>
+                @endforeach
+                <p class="text-xs text-slate-500 sm:col-span-3">Calculated from the project's modules: the initial budget is what the modules were budgeted at, add-ons are accepted add-on tasks, and the final budget is their sum. Set budgets on each module.</p>
             </div>
 
             <div class="grid gap-5 sm:grid-cols-3">

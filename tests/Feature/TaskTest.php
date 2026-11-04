@@ -126,28 +126,28 @@ it('can mark a task as an idea', function () {
     expect($task->is_idea)->toBeTrue();
 });
 
-// ── price / scope ─────────────────────────────────────────────────────────────
+// ── budget amount / scope ─────────────────────────────────────────────────────────────
 
-it('price is null for in-scope tasks', function () {
+it('budget amount is null for in-scope tasks', function () {
     $project = makeTaskProject();
     $module  = makeModule($project);
     $creator = memberOfProject($project);
 
-    $task = makeTask($module, $creator, ['scope' => TaskScope::In, 'price' => null]);
+    $task = makeTask($module, $creator, ['scope' => TaskScope::In, 'budget_amount' => null]);
 
-    expect($task->price)->toBeNull();
+    expect($task->budget_amount)->toBeNull();
     expect($task->scope)->toBe(TaskScope::In);
 });
 
-it('price is meaningful for out-of-scope tasks', function () {
+it('budget amount is meaningful for out-of-scope tasks', function () {
     $project = makeTaskProject();
     $module  = makeModule($project);
     $creator = memberOfProject($project);
 
-    $task = makeTask($module, $creator, ['scope' => TaskScope::Out, 'price' => 500.0]);
+    $task = makeTask($module, $creator, ['scope' => TaskScope::Out, 'budget_amount' => 500.0]);
 
     expect($task->scope)->toBe(TaskScope::Out);
-    expect($task->price)->toBe(500.0);
+    expect($task->budget_amount)->toBe(500.0);
 });
 
 // ── relations ─────────────────────────────────────────────────────────────────

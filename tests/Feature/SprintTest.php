@@ -265,6 +265,16 @@ it('orders list rows by module then task position', function () {
     spPage($s)->assertViewHas('backlog', fn ($b) => spTitles($b) === ['Chk 1', 'Chk 2', 'Cat 1']);
 });
 
+it('sinks done tasks to the bottom of a sprint list so the next open task is on top', function () {
+    $s = spSetup();
+    $a = spSprint($s, 'active');
+    spTask($s, $s['m1'], 'Done first', 'done', ['sprint_id' => $a->id]);
+    spTask($s, $s['m2'], 'Done catalog', 'done', ['sprint_id' => $a->id]);
+    spTask($s, $s['m1'], 'Open checkout', 'active', ['sprint_id' => $a->id]);
+    spTask($s, $s['m2'], 'Open catalog', 'not_started', ['sprint_id' => $a->id]);
+    spPage($s)->assertViewHas('activeTasks', fn ($b) => spTitles($b) === ['Open checkout', 'Open catalog', 'Done first', 'Done catalog']);
+});
+
 it('shows list counts, hours and done/total for the active sprint', function () {
     $s = spSetup();
     $a = spSprint($s, 'active');

@@ -2,7 +2,11 @@
 
 namespace App\Livewire\Tasks;
 
+use App\Exceptions\OverBudget;
+use App\Livewire\Concerns\HandlesBudgetBlock;
 use App\Livewire\Concerns\ItemPage;
+use App\Services\ModuleBudget;
+use App\Support\Money;
 use App\Models\Project;
 use App\Models\Subtask;
 use App\Models\Task;
@@ -15,7 +19,7 @@ use Livewire\Component;
 
 class Show extends Component
 {
-    use ItemPage;
+    use HandlesBudgetBlock, ItemPage;
 
     public Task $task;
 
@@ -24,6 +28,10 @@ class Show extends Component
 
     #[Locked]
     public bool $canCost = false;
+
+    /** Amounts are for users who manage money; everyone else sees hours only. */
+    #[Locked]
+    public bool $canMoney = false;
 
     public string $deadline = '';
 
@@ -41,7 +49,7 @@ class Show extends Component
 
     public string $estimate = '0';
 
-    public string $price = '';
+    public string $budget_amount = '';
 
     public ?int $typeId = null;
 
@@ -73,6 +81,7 @@ class Show extends Component
         $this->task = $task;
         $this->canEdit = $user->can('update', $task);
         $this->canCost = $user->can('updateCostTime', $task);
+        $this->canMoney = $user->can('manage-money');
     }
 
     protected function item(): Model
@@ -102,7 +111,7 @@ class Show extends Component
         $this->isIdea = $t->is_idea;
         $this->scope = $t->scope->value;
         $this->estimate = (string) $t->estimate_hours;
-        $this->price = $t->price === null ? '' : (string) $t->price;
+        $this->budget_amount = $t->budget_amount === null ? '' : (string) $t->budget_amount;
         $this->startedAt = $t->started_at?->toDateString() ?? '';
         $this->completedAt = $t->completed_at?->toDateString() ?? '';
     }
@@ -144,8 +153,45 @@ class Show extends Component
     private function saveEstimate(Task $t): void
     {
         abort_unless($this->canCost, 403);
-        $this->validate(['scope' => 'required|in:in,out', 'estimate' => 'numeric|min:0|max:99999', 'price' => 'nullable|numeric|min:0|max:9999999.99']);
-        $t->update(['scope' => $this->scope, 'estimate_hours' => (float) $this->estimate, 'price' => $this->price === '' ? null : (float) $this->price]);
+        $this->validate(['scope' => 'required|in:in,out', 'estimate' => 'numeric|min:0|max:99999', 'budget_amount' => 'nullable|numeric|min:0|max:9999999.99']);
+        $data = ['scope' => $this->scope, 'estimate_hours' => (float) $this->estimate];
+        if ($this->canMoney) {
+            $data['budget_amount'] = $this->budget_amount === '' ? null : (float) $this->budget_amount;
+        }
+        // what the task would use of its module's budget after this save
+        $probe = $t->replicate()->forceFill($data)->setRelation('subtasks', $t->subtasks);
+        if ($probe->countsTowardBudget()) {
+            $mb = new ModuleBudget($t->module);
+            try {
+                $mb->guard($t, $mb->units($probe));
+            } catch (OverBudget $e) {
+                $this->blockFrom($e, ['kind' => 'task', 'taskId' => $t->id, 'newUnits' => $mb->units($probe), 'title' => $t->title]);
+                $this->addError('budget_amount', $e->getMessage()); // keeps the panel open
+
+                return;
+            }
+        }
+        $t->update($data);
+        $this->dismissBlock();
+    }
+
+    protected function retryBlocked(): void
+    {
+        $this->saveEstimate($this->task);
+        $this->getErrorBag()->any() || $this->closePanel();
+    }
+
+    /** The client confirmed the add-on: raises the module budget by its value and counts it from now on. */
+    public function acceptAddon(): void
+    {
+        abort_unless($this->canMoney, 403);
+        $this->authorize('update', $this->task->module->project);
+        try {
+            $this->task->acceptAddon(auth()->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->addError('addon', $e->errors()['addon'][0]);
+        }
+        $this->task->refresh();
     }
 
     public function moveColumn(int $columnId): void
@@ -216,6 +262,9 @@ class Show extends Component
             'attachments' => $this->task->attachments()->latest('id')->get(),
             'canCopy' => auth()->user()->can('update', $project),
             'pct' => app(ProgressService::class)->forTask($this->task),
+            'bv' => $this->blockView(),
+            'mb' => $this->canMoney ? new ModuleBudget($this->task->module) : null,
+            'logged' => $this->canMoney ? round((float) $this->task->timeEntries()->sum('hours') + (float) $this->task->subtasks->sum(fn ($s) => $s->timeEntries()->sum('hours')), 2) : 0,
         ]);
     }
 }

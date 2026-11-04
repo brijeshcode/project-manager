@@ -52,14 +52,14 @@ it('rejects a project currency that is not in the system', function () {
     Livewire::actingAs($this->owner)->test(Form::class)->set('client_id', $c->id)->set('name', 'X')->set('currency', 'JPY')->call('save')->assertHasErrors('currency');
 });
 
-it('keeps rate and local amount on a module budget, a task price and a billable line, from the project currency', function () {
+it('keeps rate and local amount on a module budget, a task budget amount and a billable line, from the project currency', function () {
     $c = csClient('USD');
     $p = Project::create(['client_id' => $c->id, 'currency' => 'EUR', 'name' => 'P', 'status' => 'active', 'buffer_percent' => 0]);
     $m = Module::create(['project_id' => $p->id, 'name' => 'M', 'position' => 1, 'budget_amount' => '100.00', 'hourly_rate' => '25.00']);
     expect((string) $m->exchange_rate)->toBe('100.000000')->and($m->budget_amount_local)->toBe('10000.00')->and($m->hourly_rate_local)->toBe('2500.00');
 
-    $t = Task::create(['module_id' => $m->id, 'creator_id' => $this->owner->id, 'title' => 'T', 'price' => '10.00']);
-    expect((string) $t->exchange_rate)->toBe('100.000000')->and((string) $t->local_price)->toBe('1000.00');
+    $t = Task::create(['module_id' => $m->id, 'creator_id' => $this->owner->id, 'title' => 'T', 'budget_amount' => '10.00']);
+    expect((string) $t->exchange_rate)->toBe('100.000000')->and((string) $t->budget_amount_local)->toBe('1000.00');
 
     $l = BillableLine::create(['client_id' => $c->id, 'project_id' => $p->id, 'description' => 'W', 'quantity' => 1, 'unit_price_cents' => 500, 'amount_cents' => 500]);
     expect($l->lineCurrency())->toBe('EUR')->and($l->local_amount_cents)->toBe(50000);

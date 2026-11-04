@@ -2,7 +2,10 @@
 
 namespace App\Livewire\Modules;
 
+use App\Exceptions\OverBudget;
+use App\Livewire\Concerns\HandlesBudgetBlock;
 use App\Livewire\Concerns\ItemPage;
+use App\Services\ModuleBudget;
 use App\Models\Module;
 use App\Models\Project;
 use App\Models\Task;
@@ -16,7 +19,10 @@ use Livewire\Component;
 
 class Show extends Component
 {
-    use ItemPage;
+    use HandlesBudgetBlock, ItemPage;
+
+    /** The distribute helper's preview is open. */
+    public bool $distributing = false;
 
     #[Locked]
     public Project $project;
@@ -114,8 +120,39 @@ class Show extends Component
                 ], auth()->user(), $this->budgetReason);
             } catch (ValidationException $e) {
                 $this->addError('budgetReason', $e->errors()['reason'][0] ?? 'Reason required.');
+            } catch (OverBudget $e) {
+                $this->blockFrom($e, ['kind' => 'module', 'newUnits' => 0, 'title' => $m->name]);
+                $this->addError($e->module->project->client->billing_mode === \App\Enums\BillingMode::Hourly ? 'hours' : 'amount', $e->getMessage());
             }
         }
+    }
+
+    protected function retryBlocked(): void
+    {
+        $this->module->refresh();
+        $this->saveExtra('budget');
+        $this->getErrorBag()->any() || $this->closePanel();
+    }
+
+    protected function afterModuleRaise(): void
+    {
+        $this->module->refresh();
+        $this->closePanel();
+    }
+
+    public function openDistribute(): void
+    {
+        abort_unless(auth()->user()->can('manage-money'), 403);
+        $this->authorize('update', $this->project);
+        $this->distributing = true;
+    }
+
+    public function applyDistribute(): void
+    {
+        abort_unless(auth()->user()->can('manage-money'), 403);
+        $this->authorize('update', $this->project);
+        (new ModuleBudget($this->module))->applyDistribute();
+        $this->distributing = false;
     }
 
     /** Drag-reorder of the task list: the module's one task order (also what the board shows within a column). */
@@ -155,13 +192,15 @@ class Show extends Component
     public function render()
     {
         return view('livewire.modules.show', $this->panelData() + [
-            'tasks' => $this->module->tasks()->visibleTo(auth()->user())->with(['column', 'type', 'assignees', 'labels', 'checklistItems', 'subtasks'])->orderBy('position')->orderBy('id')->get(),
+            'tasks' => $this->module->tasks()->visibleTo(auth()->user())->with(['project', 'column', 'type', 'assignees', 'labels', 'checklistItems', 'subtasks'])->orderBy('position')->orderBy('id')->get(),
             'progressService' => app(ProgressService::class),
             'pct' => app(ProgressService::class)->forModule($this->module),
             'startedAt' => $this->module->startedAt(),
             'endedAt' => $this->module->endedAt(),
             'copyUrl' => route('modules.create', ['project' => $this->project, 'copy' => $this->module->id]),
             'status' => $this->module->status(),
+            'mb' => auth()->user()->can('manage-money') ? new ModuleBudget($this->module) : null,
+            'bv' => $this->blockView(),
             'hourly' => $this->project->client->billing_mode === \App\Enums\BillingMode::Hourly,
         ]);
     }

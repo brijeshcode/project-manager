@@ -38,14 +38,14 @@ function bsSync(Module $m): void
 
 it('creates one pending line for a done priced task, idempotently', function () {
     $m = bsModule();
-    $t = bsTask($m, ['price' => 200]);
+    $t = bsTask($m, ['budget_amount' => 200]);
     bsSync($m);
     bsSync($m);
     $lines = app(BillableService::class)->pendingFor($m->project->client);
     expect($lines)->toHaveCount(1)
         ->and($lines[0]->amount_cents)->toBe(20000)
         ->and($lines[0]->unit_price_cents)->toBe(20000)
-        ->and($lines[0]->description)->toBe('Build it')
+        ->and($lines[0]->description)->toBe('SIT-1 Build it')
         ->and($lines[0]->source_id)->toBe($t->id)
         ->and($lines[0]->project_id)->toBe($m->project_id);
 });
@@ -64,25 +64,25 @@ it('does not bill unpriced tasks for fixed clients', function () {
     expect(BillableLine::count())->toBe(0);
 });
 
-it('updates an uninvoiced line when the task price changes', function () {
+it('updates an uninvoiced line when the task budget amount changes', function () {
     $m = bsModule();
-    $t = bsTask($m, ['price' => 200]);
+    $t = bsTask($m, ['budget_amount' => 200]);
     bsSync($m);
-    $t->update(['price' => 250, 'title' => 'Renamed']);
+    $t->update(['budget_amount' => 250, 'title' => 'Renamed']);
     bsSync($m);
     expect(BillableLine::count())->toBe(1)
         ->and(BillableLine::first()->amount_cents)->toBe(25000)
-        ->and(BillableLine::first()->description)->toBe('Renamed');
+        ->and(BillableLine::first()->description)->toBe('SIT-1 Renamed');
 });
 
 it('removes an uninvoiced line when the task leaves Done but keeps invoiced ones', function () {
     $m = bsModule();
-    $a = bsTask($m, ['price' => 200]);
-    $b = bsTask($m, ['price' => 100, 'title' => 'B']);
+    $a = bsTask($m, ['budget_amount' => 200]);
+    $b = bsTask($m, ['budget_amount' => 100, 'title' => 'B']);
     bsSync($m);
     BillableLine::where('source_id', $b->id)->update(['invoice_id' => 7]);
     $a->update(['board_column_id' => colId($m, 'In progress')]);
-    $b->update(['board_column_id' => colId($m, 'In progress'), 'price' => 999]);
+    $b->update(['board_column_id' => colId($m, 'In progress'), 'budget_amount' => 999]);
     bsSync($m);
     expect(BillableLine::pluck('source_id')->all())->toBe([$b->id])
         ->and(BillableLine::first()->amount_cents)->toBe(10000);
@@ -90,9 +90,9 @@ it('removes an uninvoiced line when the task leaves Done but keeps invoiced ones
 
 it('ignores drafts and other clients', function () {
     $m = bsModule();
-    bsTask($m, ['price' => 200, 'status' => TaskStatus::Draft]);
+    bsTask($m, ['budget_amount' => 200, 'status' => TaskStatus::Draft]);
     $other = bsModule();
-    bsTask($other, ['price' => 300]);
+    bsTask($other, ['budget_amount' => 300]);
     bsSync($m);
     expect(BillableLine::count())->toBe(0);
 });
@@ -112,14 +112,14 @@ it('hourly amount matches rate x totalEstimateHours with testing add-ons and sub
     }
 });
 
-it('treats price 0 as unpriced', function () {
+it('treats budget amount 0 as unpriced', function () {
     $h = bsModule('hourly', 5000);
-    bsTask($h, ['price' => 0, 'estimate_hours' => 2]);
+    bsTask($h, ['budget_amount' => 0, 'estimate_hours' => 2]);
     bsSync($h);
     expect(BillableLine::first()->amount_cents)->toBe(10000);
 
     $f = bsModule();
-    bsTask($f, ['price' => 0, 'estimate_hours' => 2]);
+    bsTask($f, ['budget_amount' => 0, 'estimate_hours' => 2]);
     bsSync($f);
     expect(BillableLine::where('client_id', $f->project->client_id)->count())->toBe(0);
 });
@@ -142,9 +142,9 @@ it('follows billing mode switches without touching invoiced lines', function () 
 
 it('deletes an uninvoiced line when the task amount becomes null', function () {
     $m = bsModule();
-    $t = bsTask($m, ['price' => 200]);
+    $t = bsTask($m, ['budget_amount' => 200]);
     bsSync($m);
-    $t->update(['price' => null]);
+    $t->update(['budget_amount' => null]);
     bsSync($m);
     expect(BillableLine::count())->toBe(0);
 });
@@ -152,8 +152,8 @@ it('deletes an uninvoiced line when the task amount becomes null', function () {
 it('never alters another client\'s lines', function () {
     $a = bsModule();
     $b = bsModule();
-    $ta = bsTask($a, ['price' => 100]);
-    $tb = bsTask($b, ['price' => 300]);
+    $ta = bsTask($a, ['budget_amount' => 100]);
+    $tb = bsTask($b, ['budget_amount' => 300]);
     bsSync($b);
     bsSync($a);
     $tb->update(['board_column_id' => colId($b, 'Backlog')]);
@@ -171,7 +171,7 @@ it('does not bill hourly tasks when the module has no rate', function () {
 
 it('self-heals duplicate uninvoiced lines', function () {
     $m = bsModule();
-    $t = bsTask($m, ['price' => 200]);
+    $t = bsTask($m, ['budget_amount' => 200]);
     bsSync($m);
     $dup = BillableLine::first()->replicate();
     $dup->save();
