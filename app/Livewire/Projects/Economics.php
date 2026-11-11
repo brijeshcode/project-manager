@@ -48,6 +48,12 @@ class Economics extends Component
         return $modules;
     }
 
+    #[Computed]
+    public function invoicedTasks(): array
+    {
+        return ProjectEconomics::invoicedTasks($this->project, $this->budgetModules->flatMap->tasks);
+    }
+
     public function render()
     {
         return view('livewire.projects.economics');

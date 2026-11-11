@@ -19,22 +19,42 @@
     </div>
 
     @if($tab === 'details')
-        <x-ui.card class="space-y-4" data-test="portal-details">
-            <div class="flex items-center justify-between gap-3">
-                <x-ui.badge color="brand">{{ ucfirst($project->status) }}</x-ui.badge>
-                @if($project->start_date)
-                    <span class="text-xs text-slate-500">Started {{ $project->start_date->format('M j, Y') }}</span>
-                @endif
+        <div class="grid gap-6 lg:grid-cols-3">
+            <div class="space-y-6 lg:col-span-2">
+                <x-ui.card data-test="portal-details">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">About this project</h2>
+                        <x-ui.badge color="brand">{{ ucfirst($project->status) }}</x-ui.badge>
+                    </div>
+                    @if($project->aim)
+                        <div class="mb-4 flex gap-3 rounded-lg border-l-4 border-brand-500 bg-brand-50/60 px-4 py-3 dark:bg-brand-500/10">
+                            <x-icon name="flag" class="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+                            <div class="min-w-0">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">Aim</p>
+                                <x-ui.markdown :text="$project->aim" class="text-slate-800 dark:text-gray-200" />
+                            </div>
+                        </div>
+                    @endif
+                    @if($project->description)
+                        <x-ui.markdown :text="$project->description" class="max-w-none" />
+                    @endif
+                    @if(! $project->aim && ! $project->description)
+                        <p class="text-sm text-slate-500 dark:text-gray-400">No description yet.</p>
+                    @endif
+                </x-ui.card>
+
+                <x-ui.card>
+                    <div class="mb-4 flex items-center justify-between gap-3">
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Progress</h2>
+                        @php($pct = app(\App\Services\ProgressService::class)->forProject($project))
+                        <x-ui.progress class="w-40" :pct="$pct" />
+                    </div>
+                    @include('livewire.projects._project-counts', ['moduleDone' => fn ($m) => $m->status_override === 'completed' || ($m->status_override === null && $m->tasks->isNotEmpty() && $m->tasks->every(fn ($t) => $t->column?->stage === 'done'))])
+                </x-ui.card>
             </div>
-            @if($project->aim)
-                <p class="text-sm font-medium text-slate-700">{{ $project->aim }}</p>
-            @endif
-            @if($project->description)
-                <x-ui.markdown :text="$project->description" />
-            @endif
-            <x-ui.progress :pct="app(\App\Services\ProgressService::class)->forProject($project)" :label="false" />
-        </x-ui.card>
-        <div class="mt-4">@include('livewire.projects._project-counts')</div>
+
+            <div data-test="portal-timeline">@include('livewire.projects._timeline', ['client' => true])</div>
+        </div>
     @endif
 
     @if($tab === 'modules')

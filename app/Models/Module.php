@@ -116,8 +116,12 @@ class Module extends Model
     /** pending | working | in_review | completed, derived from the tasks' board-column stages. */
     public function derivedStatus(): string
     {
-        $stages = $this->countedTasks()->map(fn ($t) => $t->column?->stage);
+        return self::statusFromStages($this->countedTasks()->map(fn ($t) => $t->column?->stage));
+    }
 
+    /** The derived status for a given set of task stages (lets a page derive it from the tasks it shows). */
+    public static function statusFromStages(\Illuminate\Support\Collection $stages): string
+    {
         if ($stages->isEmpty() || $stages->every(fn ($s) => $s === 'not_started')) {
             return 'pending';
         }

@@ -76,7 +76,7 @@ it('client modules tab has the filter bar and a Completed section', function () 
 it('request modules are left out of counts and budget', function () {
     $req = Module::create(['project_id' => $this->project->id, 'name' => 'Asked Module', 'position' => 2, 'client_visible' => true, 'request_status' => 'pending', 'budget_amount' => '999']);
 
-    $one = ['data-test="counts-modules"', '<div class="text-xl font-semibold">1</div>', 'data-test="counts-tasks"'];
+    $one = ['data-test="counts-modules"', 'data-test="count-total">1<', 'data-test="counts-tasks"'];
     Livewire::actingAs($this->clientUser)->test(ProjectView::class, ['project' => $this->project])->set('tab', 'details')
         ->assertSeeHtmlInOrder($one);
     Livewire::actingAs($this->clientUser)->test(ProjectView::class, ['project' => $this->project])->set('tab', 'budget')

@@ -39,8 +39,8 @@ it('splits completed and pending work and shows module budgets', function () {
     bbTask($this->fixed, $this->admin, ['title' => 'Idea Task', 'budget_amount' => '9000', 'is_idea' => true]);
 
     Livewire::actingAs($this->admin)->test(Economics::class, ['project' => $this->p, 'embedded' => true])
-        ->assertSeeInOrder(['Completed work', '$300.00', 'Pending work', '$200.00', 'Total', '$500.00'])
-        ->assertSeeInOrder(['Checkout', '$1,234.00', 'Done Task', 'Open Task', 'No Amount', '—', 'Tasks total', '$500.00'])
+        ->assertSeeInOrder(['Work done', '$300.00', 'of $500.00 planned'])
+        ->assertSeeInOrder(['Checkout', 'Budget', '$1,234.00', 'Tasks', '$500.00', 'Done', '$300.00', 'Open Task', 'No Amount', '—', 'Done Task'])
         ->assertDontSee('Idea Task')
         ->assertSee('Secret Module')
         ->assertSee('Hours logged');
@@ -97,5 +97,15 @@ it('shows only client-visible counts on the portal details tab', function () {
 
     Livewire::actingAs($this->cu)->test(ProjectView::class, ['project' => $this->p])->set('tab', 'details')
         ->assertSee('Online store rebuild')->assertSee('Ship the shop')
-        ->assertSeeInOrder(['Modules', '2', '1 completed', '1 pending', 'Tasks', '2', '2 completed', '0 pending']);
+        // the fixed module's only open task is hidden, so the client sees it as completed
+        ->assertSeeInOrder(['Modules', '2', '2 completed', '0 pending', 'Tasks', '2', '2 completed', '0 pending']);
+});
+
+it('shows the timeline to the client without the buffer', function () {
+    $this->p->forceFill(['start_date' => today()->subDays(3), 'deadline' => today()->addDays(34)])->save();
+
+    Livewire::actingAs($this->cu)->test(ProjectView::class, ['project' => $this->p])->set('tab', 'details')
+        ->assertSeeHtml('data-test="portal-timeline"')->assertSee('Timeline')
+        ->assertSeeInOrder(['3', 'days used', '34', 'days left'])->assertDontSee('Buffer');
+    Livewire::actingAs($this->admin)->test(Show::class, ['project' => $this->p])->assertSee('Buffer');
 });

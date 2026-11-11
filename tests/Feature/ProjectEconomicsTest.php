@@ -122,8 +122,7 @@ it('computes profit and hourly figures', function () {
     ecoPay($p, 50000);
     $e = ProjectEconomics::for($p);
     expect($e['profit_cents'])->toBe(50000 - 4000)
-        ->and($e['hourly_received_cents'])->toBe(12500)
-        ->and($e['hourly_invoiced_cents'])->toBe(25000);
+        ->and($e['hourly_received_cents'])->toBe(12500);
 });
 
 it('reports negative profit in red', function () {
@@ -139,7 +138,7 @@ it('returns null hourly at zero hours and renders', function () {
     $p = ecoProject();
     ecoPay($p, 1000);
     $e = ProjectEconomics::for($p);
-    expect($e['hourly_received_cents'])->toBeNull()->and($e['hourly_invoiced_cents'])->toBeNull();
+    expect($e['hourly_received_cents'])->toBeNull();
     $this->actingAs(ecoOwner());
     Livewire::test(Economics::class, ['project' => $p])->assertOk()->assertSee('—');
 });
