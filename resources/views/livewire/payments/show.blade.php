@@ -3,9 +3,8 @@
         $money = fn ($c, $cur) => \App\Support\Money::format($c, $cur);
         $foreign = strtoupper($payment->currency) !== $local;
         $method = $payment->method ? (strlen($payment->method) <= 4 ? strtoupper($payment->method) : ucfirst($payment->method)) : null;
-        $row = 'flex items-baseline justify-between gap-4 py-3';
-        $dt = 'text-sm text-slate-500 dark:text-gray-400';
-        $dd = 'text-right text-sm font-medium text-gray-900 dark:text-white';
+        $dt = 'text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-gray-400';
+        $dd = 'mt-1 text-sm font-medium text-gray-900 dark:text-white';
     @endphp
     <x-ui.breadcrumb :items="[['Payments', route('payments.index')], ['Payment #'.$payment->id, null]]" />
     <x-ui.page-header :title="'Payment #'.$payment->id" :subtitle="$payment->client->name.' · received '.$payment->paid_on->format('M j, Y')">
@@ -30,11 +29,11 @@
                     </p>
                 @endif
 
-                <dl class="mt-6 grid gap-x-10 border-t border-slate-100 sm:grid-cols-2 dark:border-gray-700">
-                    <div class="{{ $row }} border-b border-slate-100 dark:border-gray-700"><dt class="{{ $dt }}">Paid on</dt><dd class="{{ $dd }}">{{ $payment->paid_on->format('M j, Y') }}</dd></div>
-                    <div class="{{ $row }} border-b border-slate-100 dark:border-gray-700"><dt class="{{ $dt }}">Type</dt><dd class="{{ $dd }}"><x-ui.badge>{{ ucfirst(str_replace('_', ' ', $payment->type->value)) }}</x-ui.badge></dd></div>
-                    <div class="{{ $row }} border-b border-slate-100 sm:border-b-0 dark:border-gray-700"><dt class="{{ $dt }}">Method</dt><dd class="{{ $dd }}">{{ $method ?? '—' }}</dd></div>
-                    <div class="{{ $row }}"><dt class="{{ $dt }}">Project</dt><dd class="{{ $dd }} truncate">
+                <dl class="mt-6 grid grid-cols-2 gap-6 border-t border-slate-100 pt-6 sm:grid-cols-4 dark:border-gray-700">
+                    <div><dt class="{{ $dt }}">Paid on</dt><dd class="{{ $dd }}">{{ $payment->paid_on->format('M j, Y') }}</dd></div>
+                    <div><dt class="{{ $dt }}">Type</dt><dd class="{{ $dd }}"><x-ui.badge>{{ ucfirst(str_replace('_', ' ', $payment->type->value)) }}</x-ui.badge></dd></div>
+                    <div><dt class="{{ $dt }}">Method</dt><dd class="{{ $dd }}">{{ $method ?? '—' }}</dd></div>
+                    <div class="min-w-0"><dt class="{{ $dt }}">Project</dt><dd class="{{ $dd }} truncate">
                         @if ($payment->project)<a href="{{ route('projects.show', $payment->project) }}" wire:navigate class="link">{{ $payment->project->name }}</a>@else — @endif
                     </dd></div>
                 </dl>
