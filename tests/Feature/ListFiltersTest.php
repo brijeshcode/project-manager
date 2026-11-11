@@ -82,6 +82,19 @@ it('projects: search by name or client, status filter, % literal', function () {
         ->set('search', 'nothing')->assertSee('No matches');
 });
 
+it('projects: status pills show counts; budget only for money users', function () {
+    $a = lfClient('Acme');
+    Project::create(['client_id' => $a->id, 'name' => 'Website', 'status' => 'active', 'initial_budget' => '4321']);
+    Project::create(['client_id' => $a->id, 'name' => 'Mobile', 'status' => 'on_hold']);
+    $this->actingAs(User::factory()->create()->assignRole('super_admin'));
+    Livewire::test(ProjectsIndex::class)->assertSeeHtml('data-test="status-on_hold"')->assertSeeInOrder(['All', '2', 'Active', '1', 'On hold', '1'])->assertSee('4,321');
+
+    $dev = User::factory()->create()->assignRole('developer');
+    foreach (Project::all() as $p) { ProjectMember::create(['project_id' => $p->id, 'user_id' => $dev->id, 'role_on_project' => 'developer', 'access_scope' => AccessScope::All, 'active' => true]); }
+    $this->actingAs($dev);
+    Livewire::test(ProjectsIndex::class)->assertSee('Website')->assertDontSee('4,321');
+});
+
 it('projects: developer search only sees member projects; paginates 15', function () {
     $c = lfClient('Acme');
     $mine = Project::create(['client_id' => $c->id, 'name' => 'Mine App', 'status' => 'active']);

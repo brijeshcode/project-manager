@@ -55,7 +55,7 @@ it('renders project cards with live progress (health meter) without error', func
     actingAs($admin)->get('/projects')
         ->assertOk()
         ->assertSee('Acme Site')
-        ->assertSee('Checklist'); // health meter rendered
+        ->assertSee('Progress')->assertSee('of estimated time');
 });
 
 it('project show page displays estimated and logged hours', function () {
