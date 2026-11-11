@@ -6,8 +6,12 @@ use App\Enums\RecurringFrequency;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use App\Models\Concerns\FreezesLocalAmounts;
+use App\Services\LocalCurrency;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class RecurringCharge extends Model
 {
@@ -45,6 +49,49 @@ class RecurringCharge extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function lines(): HasMany
+    {
+        return $this->hasMany(BillableLine::class);
+    }
+
+    /** Currency the charge and its lines are priced in: its project's, else the client's. */
+    public function currency(): string
+    {
+        return $this->moneyCurrency() ?? LocalCurrency::code();
+    }
+
+    /** Adds invoiced_count / invoiced_cents / invoiced_local_cents (lines on sent invoices) and draft_count (lines on not-sent invoices). Voiding releases lines, so void never counts. */
+    public function scopeWithUsage(Builder $q): Builder
+    {
+        $on = fn (string $status) => fn ($l) => $l->whereHas('invoice', fn ($i) => $i->where('status', $status));
+
+        return $q->withCount(['lines as invoiced_count' => $on('sent'), 'lines as draft_count' => $on('draft')])
+            ->withSum(['lines as invoiced_cents' => $on('sent')], 'amount_cents')
+            ->withSum(['lines as invoiced_local_cents' => $on('sent')], 'local_amount_cents');
+    }
+
+    public const KEEP_HISTORY = 'This service is on invoices, so its history is kept. Pause it instead.';
+
+    /** Deletes the charge and its pending lines; refuses (false) once any of its lines is on an invoice. */
+    public function deleteIfNeverInvoiced(): bool
+    {
+        return DB::transaction(function () {
+            if ($this->lines()->whereNotNull('invoice_id')->lockForUpdate()->exists()) {
+                return false;
+            }
+            $this->lines()->delete();
+            $this->delete();
+
+            return true;
+        });
+    }
+
+    /** Value per month in the local currency (yearly spread over 12). */
+    public function monthlyLocalCents(): int
+    {
+        return intdiv((int) $this->local_amount_cents, $this->frequency === RecurringFrequency::Yearly ? 12 : 1);
     }
 
     private const MAX_PERIODS_PER_RUN = 36;

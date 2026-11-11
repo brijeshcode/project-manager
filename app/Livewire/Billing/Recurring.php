@@ -2,48 +2,28 @@
 
 namespace App\Livewire\Billing;
 
-use App\Enums\RecurringFrequency;
+use App\Livewire\Concerns\WithListSearch;
+use App\Models\BillableLine;
 use App\Models\Client;
 use App\Models\RecurringCharge;
-use App\Support\Money;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Enum;
+use App\Services\LocalCurrency;
+use App\Support\Settings;
 use Livewire\Component;
 
 class Recurring extends Component
 {
-    public ?int $client_id = null;
-    public ?int $project_id = null;
-    public string $description = '';
-    public string $amount = '';
-    public string $frequency = 'monthly';
-    public string $next_due_on = '';
+    use WithListSearch;
+
+    public string $clientFilter = '';
 
     public function mount(): void
     {
         $this->authorize('manage-money');
     }
 
-    public function save(): void
+    public function updatedClientFilter(): void
     {
-        $this->authorize('manage-money');
-
-        $data = $this->validate([
-            'client_id'   => 'required|exists:clients,id',
-            'project_id'  => ['nullable', Rule::exists('projects', 'id')->where('client_id', $this->client_id)],
-            'description' => 'required|string|max:255',
-            'amount'      => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('The amount must be greater than zero.')],
-            'frequency'   => ['required', new Enum(RecurringFrequency::class)],
-            'next_due_on' => 'required|date_format:Y-m-d',
-        ]);
-
-        RecurringCharge::create([
-            'client_id' => $data['client_id'], 'project_id' => $data['project_id'] ?: null,
-            'description' => $data['description'], 'amount_cents' => Money::toCents($data['amount']),
-            'frequency' => $data['frequency'], 'next_due_on' => $data['next_due_on'], 'active' => true,
-        ]);
-
-        $this->reset('project_id', 'description', 'amount', 'next_due_on');
+        $this->resetPage();
     }
 
     public function toggle(int $id): void
@@ -51,14 +31,46 @@ class Recurring extends Component
         $this->authorize('manage-money');
         $c = RecurringCharge::findOrFail($id);
         $c->setActive(! $c->active, today());
+        $this->dispatch('toast', type: 'success', message: $c->active ? 'Service resumed.' : 'Service paused.');
+    }
+
+    public function delete(int $id): void
+    {
+        $this->authorize('manage-money');
+        $ok = RecurringCharge::findOrFail($id)->deleteIfNeverInvoiced();
+        $this->dispatch('toast', type: $ok ? 'success' : 'error', message: $ok ? 'Service deleted.' : RecurringCharge::KEEP_HISTORY);
     }
 
     public function render()
     {
+        $this->authorize('manage-money');
+        $like = $this->likeTerm();
+
+        $charges = RecurringCharge::query()->withUsage()->with(['client', 'project'])
+            ->when($this->clientFilter !== '', fn ($q) => $q->where('client_id', (int) $this->clientFilter))
+            ->when($this->status === 'active', fn ($q) => $q->where('active', true))
+            ->when($this->status === 'paused', fn ($q) => $q->where('active', false))
+            ->when($like, fn ($q) => $q->where(fn ($w) => $w
+                ->whereRaw("description LIKE ? ESCAPE '!'", [$like])
+                ->orWhereHas('client', fn ($c) => $c->whereRaw("name LIKE ? ESCAPE '!'", [$like]))
+                ->orWhereHas('project', fn ($c) => $c->whereRaw("name LIKE ? ESCAPE '!'", [$like]))))
+            ->orderByDesc('active')->orderBy('next_due_on');
+
+        $active = RecurringCharge::where('active', true)->get(['id', 'amount_cents', 'local_amount_cents', 'frequency', 'next_due_on']);
+        $invoiced = BillableLine::whereNotNull('recurring_charge_id')->whereHas('invoice', fn ($i) => $i->where('status', 'sent'));
+
         return view('livewire.billing.recurring', [
-            'charges'  => RecurringCharge::with(['client', 'project'])->orderByDesc('active')->orderBy('next_due_on')->get(),
-            'clients'  => Client::orderBy('name')->get(),
-            'projects' => $this->client_id ? Client::find($this->client_id)?->projects()->orderBy('name')->get() ?? collect() : collect(),
+            'charges' => $this->fitPage($charges, Settings::pageSize()),
+            'local' => LocalCurrency::code(),
+            'clients' => Client::orderBy('name')->get(['id', 'name']),
+            'stats' => [
+                'active' => $active->count(),
+                'paused' => RecurringCharge::where('active', false)->count(),
+                'monthly' => $active->sum(fn ($c) => $c->monthlyLocalCents()),
+                'due_soon' => $active->filter(fn ($c) => $c->next_due_on->lte(today()->addDays(30)))->count(),
+                'invoiced' => (int) (clone $invoiced)->sum('local_amount_cents'),
+                'invoiced_count' => (clone $invoiced)->count(),
+            ],
         ]);
     }
 }
