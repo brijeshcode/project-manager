@@ -5,37 +5,30 @@ namespace App\Support;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\LocalCurrency;
+use Illuminate\Database\Eloquent\Builder;
 
 /** Owner list-page stat cards. All cents in the local currency; cancelled (void) invoices never count. */
 class MoneyStats
 {
-    /** total/this_month are null when any counted invoice has no local figure (all-or-nothing, like the dashboard). */
-    public static function invoices(): array
+    /** Stats over the list's filtered query. Sums are null when any counted invoice has no local figure (all-or-nothing). */
+    public static function invoices(Builder $filtered): array
     {
-        $live = Invoice::where('status', 'sent')->get(['id', 'currency_id', 'total_cents', 'exchange_rate', 'issued_on']);
+        $rows = (clone $filtered)->get(['invoices.id', 'status', 'local_total_cents']);
         $sum = function ($rows) {
             $vals = $rows->map->localDisplayCents();
 
             return $vals->contains(null) ? null : (int) $vals->sum();
         };
-        $month = $live->filter(fn ($i) => $i->issued_on->between(now()->startOfMonth(), now()->endOfMonth()));
-        $owed = DashboardMoney::forPeriodLocal(now()->startOfMonth(), now());
+        $sent = $rows->where('status', 'sent');
+        $draft = $rows->where('status', 'draft');
 
         return [
             'currency' => LocalCurrency::code(),
-            'total' => $sum($live),
-            'this_month' => $sum($month),
-            'missing_rate' => $live->filter(fn ($i) => $i->localDisplayCents() === null)->count(),
-            'count' => $live->count(),
-            'outstanding' => $owed['outstanding'],
-            'outstanding_missing_rate' => $owed['outstanding_missing_rate'],
-            'cancelled' => Invoice::where('status', 'void')->count(),
-            'draft' => Invoice::where('status', 'draft')->count(),
-            'draft_total' => (function () use ($sum) {
-                $d = Invoice::where('status', 'draft')->get(['id', 'currency_id', 'total_cents', 'exchange_rate', 'local_total_cents']);
-
-                return $sum($d);
-            })(),
+            'total' => $sum($sent),
+            'count' => $sent->count(),
+            'missing_rate' => $sent->filter(fn ($i) => $i->localDisplayCents() === null)->count(),
+            'draft' => $draft->count(),
+            'draft_total' => $sum($draft),
         ];
     }
 

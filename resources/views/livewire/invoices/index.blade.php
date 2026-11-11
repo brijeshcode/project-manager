@@ -7,13 +7,10 @@
     </x-ui.page-header>
 
     @php $fmt = fn ($c) => $c === null ? '—' : \App\Support\Money::format($c, $stats['currency']); @endphp
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="mb-6 grid gap-4 sm:grid-cols-2">
         <x-ui.stat label="Total invoiced" :value="$fmt($stats['total'])" color="blue"
             :hint="$stats['count'].' sent'.($stats['missing_rate'] ? ' · '.$stats['missing_rate'].' without a rate' : '')" />
-        <x-ui.stat label="Invoiced this month" :value="$fmt($stats['this_month'])" color="green" hint="Sent only" />
-        <x-ui.stat label="Outstanding" :value="$fmt($stats['outstanding'])" color="yellow"
-            :hint="'Client balances owed'.($stats['outstanding_missing_rate'] ? ' · '.$stats['outstanding_missing_rate'].' without a rate' : '')" />
-        <x-ui.stat label="Future invoices" :value="$fmt($stats['draft_total'])" color="purple" :hint="$stats['draft'].' not sent (estimate) · '.$stats['cancelled'].' cancelled'" />
+        <x-ui.stat label="Not sent" :value="$fmt($stats['draft_total'])" color="purple" :hint="$stats['draft'].' draft (estimate)'" />
     </div>
 
     <div class="card mb-6 p-4">
@@ -36,10 +33,22 @@
                 </select>
             </div>
         </div>
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+            <label for="from" class="text-sm text-slate-500 dark:text-gray-400">Issued</label>
+            <input wire:model.live="from" id="from" type="date" class="input w-auto dark:[color-scheme:dark]" aria-label="Issued from" />
+            <span class="text-sm text-slate-400">to</span>
+            <input wire:model.live="to" id="to" type="date" class="input w-auto dark:[color-scheme:dark]" aria-label="Issued to" />
+            @foreach (['month' => 'This month', 'year' => 'This year', 'fy' => 'This financial year'] as $p => $text)
+                <button type="button" wire:click="setPeriod('{{ $p }}')" @class(['rounded-lg px-3 py-1.5 text-sm font-medium transition', 'bg-brand-50 text-brand-700 dark:bg-blue-900/30 dark:text-blue-300' => $period === $p, 'text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-700' => $period !== $p]) data-test="period-{{ $p }}">{{ $text }}</button>
+            @endforeach
+            @if ($from !== '' || $to !== '')
+                <button type="button" wire:click="setPeriod('')" class="link text-sm">Any date</button>
+            @endif
+        </div>
     </div>
 
     @if ($invoices->isEmpty())
-        @if ($search !== '' || $status !== '' || $clientFilter !== '')
+        @if ($search !== '' || $status !== '' || $clientFilter !== '' || $from !== '' || $to !== '')
             <x-ui.empty-state title="No matches" message="No invoices match your filters.">
                 <x-slot name="action"><button type="button" wire:click="clearFilters" class="btn btn-secondary">Clear filters</button></x-slot>
             </x-ui.empty-state>
@@ -88,9 +97,9 @@
                                 @else
                                     @php $pickValue = $i->status; @endphp
                                     <label for="status-{{ $i->id }}" class="sr-only">Status of {{ $i->number }}</label>
-                                    <select id="status-{{ $i->id }}" wire:change="setStatus({{ $i->id }}, $event.target.value)" wire:confirm="Change this invoice's status? Sent counts in the client's balance and is emailed once." wire:key="status-{{ $i->id }}-{{ $pickValue }}" class="badge badge-{{ $color }} cursor-pointer border-0 py-1 pl-2.5 pr-7 text-xs focus:ring-2 focus:ring-brand-500" data-test="row-status">
-                                        <option value="draft" @selected($pickValue === 'draft')>Not sent</option>
-                                        <option value="sent" @selected($pickValue === 'sent')>Sent</option>
+                                    <select id="status-{{ $i->id }}" wire:change="setStatus({{ $i->id }}, $event.target.value)" wire:confirm="Change this invoice's status? Sent counts in the client's balance and is emailed once." wire:key="status-{{ $i->id }}-{{ $pickValue }}" class="badge badge-{{ $color }} cursor-pointer border-0 py-1 pl-2.5 pr-7 text-xs [color-scheme:light] focus:ring-2 focus:ring-brand-500 dark:[color-scheme:dark]" data-test="row-status">
+                                        <option value="draft" class="bg-white text-slate-900 dark:bg-gray-800 dark:text-gray-100" @selected($pickValue === 'draft')>Not sent</option>
+                                        <option value="sent" class="bg-white text-slate-900 dark:bg-gray-800 dark:text-gray-100" @selected($pickValue === 'sent')>Sent</option>
                                     </select>
                                 @endif
                             </td>

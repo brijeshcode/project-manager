@@ -189,3 +189,34 @@ it('changes the status from the invoice list', function () {
     $t->call('setStatus', $inv->id, 'void')->assertDispatched('toast', type: 'error');
     expect($inv->fresh()->status)->toBe('draft');
 });
+
+it('stats follow the status and client filters', function () {
+    $c = ieClient();
+    $other = Client::create(['name' => 'Beta', 'currency' => 'USD', 'billing_mode' => 'fixed', 'contact_email' => 'b@beta.test']);
+    ieInvoice($c, [ieLine($c, 10000)->id]);          // 8,350.00 INR
+    ieInvoice($other, [ieLine($other, 20000)->id]);  // 16,700.00 INR
+
+    Livewire::actingAs(ieOwner())->test(Index::class)
+        ->assertSee('25,050.00')
+        ->set('clientFilter', (string) $c->id)->assertSee('8,350.00')->assertDontSee('25,050.00')
+        ->set('clientFilter', '')->set('status', 'draft')->assertSee('0 sent')->assertSee('0 draft');
+});
+
+it('filters by issued date with month, year and financial year shortcuts', function () {
+    $this->travelTo('2026-11-11');
+    $c = ieClient();
+    $now = ieInvoice($c, [ieLine($c, 10000)->id]);
+    $may = ieInvoice($c, [ieLine($c, 20000)->id]);
+    $may->update(['issued_on' => '2026-05-10']);
+    $feb = ieInvoice($c, [ieLine($c, 30000)->id]);
+    $feb->update(['issued_on' => '2026-02-10']);
+
+    $t = Livewire::actingAs(ieOwner())->test(Index::class)
+        ->call('setPeriod', 'month')->assertSet('from', '2026-11-01')->assertSet('to', '2026-11-30')
+        ->assertSee($now->number)->assertDontSee($may->number)->assertSee('1 sent')
+        ->call('setPeriod', 'fy')->assertSet('from', '2026-04-01')->assertSet('to', '2027-03-31')
+        ->assertSee($may->number)->assertDontSee($feb->number)
+        ->call('setPeriod', 'year')->assertSee($feb->number)->assertSee('3 sent')
+        ->set('from', '2026-05-01')->set('to', '2026-05-31')->assertSee($may->number)->assertDontSee($now->number)
+        ->call('setPeriod', '')->assertSet('from', '')->assertSee($now->number);
+});

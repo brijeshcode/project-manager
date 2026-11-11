@@ -151,6 +151,8 @@ describe('pdf route', function () {
         $this->actingAs(idUser('client'))->get(route('invoices.pdf', $inv))->assertNotFound();
         $this->actingAs(idUser('developer'))->get(route('invoices.pdf', $inv))->assertNotFound();
         $this->actingAs(idUser('project_manager'))->get(route('invoices.pdf', $inv))->assertNotFound();
+        $inv->update(['status' => 'draft']);
+        $this->actingAs(idUser('client', $c->id))->get(route('invoices.pdf', $inv))->assertNotFound();
     });
 
     it('redirects guests', function () {

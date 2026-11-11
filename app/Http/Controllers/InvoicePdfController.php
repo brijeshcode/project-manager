@@ -14,7 +14,7 @@ class InvoicePdfController extends Controller
         $user = $request->user();
         $owner = Gate::allows('manage-money');
         $ownClient = $user->hasRole('client') && $user->client_id !== null
-            && $user->client_id === $invoice->client_id && $invoice->status !== 'void';
+            && $user->client_id === $invoice->client_id && $invoice->status === 'sent';
         abort_unless($owner || $ownClient, 404);
 
         return response(InvoiceMail::pdfBytes($invoice), 200, [

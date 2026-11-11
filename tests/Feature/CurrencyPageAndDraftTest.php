@@ -139,7 +139,7 @@ it('invoice stats keep drafts out of the totals and show them as an estimate', f
     app(InvoiceService::class)->create($c, [cdLine($c, 10000)->id]);                                 // sent: 100 USD = 8,000 INR
     app(InvoiceService::class)->create($c, [cdLine($c, 50000)->id], [], 0.0, null, null, null, true); // draft: 500 USD = 40,000 INR
     Livewire::actingAs($this->owner)->test(InvoiceIndex::class)
-        ->assertSee('Future invoices')->assertSee('₹40,000.00')->assertSee('₹8,000.00')->assertSee('not sent');
+        ->assertSee('Not sent')->assertSee('₹40,000.00')->assertSee('₹8,000.00')->assertSee('1 draft');
 });
 
 it('a positive client balance is an advance, a negative one is owed', function () {
