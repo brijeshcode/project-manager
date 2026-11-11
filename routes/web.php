@@ -55,6 +55,11 @@ Route::middleware(['auth', 'can:manage-taxonomy'])->prefix('settings')->name('se
 
 Route::get('billing/recurring', \App\Livewire\Billing\Recurring::class)
     ->middleware(['auth', 'can:manage-money'])->name('billing.recurring');
+Route::middleware(['auth', 'can:manage-money'])->prefix('billing/recurring')->name('billing.recurring.')->whereNumber('charge')->group(function () {
+    Route::get('create', \App\Livewire\Billing\RecurringForm::class)->name('create');
+    Route::get('{charge}', \App\Livewire\Billing\RecurringShow::class)->name('show');
+    Route::get('{charge}/edit', \App\Livewire\Billing\RecurringForm::class)->name('edit');
+});
 Route::middleware(['auth', 'can:manage-money'])->prefix('currencies')->name('currencies.')->group(function () {
     Route::get('/', \App\Livewire\Currencies\Index::class)->name('index');
     Route::get('create', \App\Livewire\Currencies\Form::class)->name('create');
@@ -72,6 +77,7 @@ Route::get('projects/{project}/economics', \App\Livewire\Projects\Economics::cla
 Route::get('payments', \App\Livewire\Payments\Index::class)
     ->middleware(['auth', 'can:manage-money'])->name('payments.index');
 Route::middleware(['auth', 'can:manage-money'])->prefix('payments')->name('payments.')->whereNumber('payment')->group(function () {
+    Route::get('create', \App\Livewire\Payments\Form::class)->name('create');
     Route::get('{payment}', \App\Livewire\Payments\Show::class)->name('show');
     Route::get('{payment}/edit', \App\Livewire\Payments\Edit::class)->name('edit');
 });

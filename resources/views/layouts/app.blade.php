@@ -23,11 +23,11 @@
                 ['Projects',      'portal.dashboard',      ['portal.dashboard', 'portal.project'], 'folder',      $client],
                 ['Clients',       'clients.index',         'clients.*',                            'users',       $u && $u->hasRole('super_admin')],
                 ['Projects',      'projects.index',        'projects.*',                           'folder',      $u && ! $client],
+                ['Recurring',     'billing.recurring',     ['billing.recurring', 'billing.recurring.*'], 'refresh',     $money],
                 ['Invoices',      'invoices.index',        'invoices.*',                           'document',    $money],
                 ['Invoices',      'portal.invoices',       'portal.invoices',                      'document',    $client],
                 ['Payments',      'payments.index',        'payments.*',                           'credit-card', $money],
                 ['Payments',      'portal.payments',       'portal.payments',                      'credit-card', $client],
-                ['Recurring',     'billing.recurring',     'billing.recurring',                    'refresh',     $money],
             ])->filter(fn ($i) => $i[4]);
             $settingsNav = collect([
                 ['Currencies',    'currencies.index',      'currencies.*',                         'coins',              $money],
