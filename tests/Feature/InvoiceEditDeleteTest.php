@@ -148,3 +148,16 @@ it('is owner only', function () {
     $dev = User::factory()->create()->assignRole('developer');
     Livewire::actingAs($dev)->test(Edit::class, ['invoice' => $inv])->assertForbidden();
 });
+
+it('previews the live total on edit when a line is unticked and tax changes', function () {
+    $c = ieClient();
+    $a = ieLine($c, 10000);
+    $inv = ieInvoice($c, [$a->id, ieLine($c, 5000)->id]);
+    $total = fn ($t) => preg_match('/data-test="invoice-total">([^<]+)</', $t->html(), $m) ? $m[1] : null;
+    $lw = Livewire::actingAs(ieOwner())->test(Edit::class, ['invoice' => $inv]);
+    expect($total($lw))->toBe('$150.00');
+    $lw->set('selected', [(string) $a->id]);
+    expect($total($lw))->toBe('$100.00');
+    $lw->set('taxPercent', '10');
+    expect($total($lw))->toBe('$110.00');
+});

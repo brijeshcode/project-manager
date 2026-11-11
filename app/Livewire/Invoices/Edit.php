@@ -98,18 +98,43 @@ class Edit extends Component
         return $this->redirectRoute('invoices.show', $invoice);
     }
 
+    /** Live preview of the totals; same math as InvoiceService::update, invalid inputs count as 0. */
+    private function summary(Invoice $invoice, $lines): array
+    {
+        $num = fn ($v, $d = 7) => preg_match('/^\d{1,'.$d.'}(\.\d+)?$/', trim((string) $v)) ? Money::toCents($v) : 0;
+        $amount = fn ($r) => intdiv($num($r['quantity'] ?? '') * $num($r['unit_price'] ?? '') + 50, 100);
+        $cur = strtoupper($invoice->currency);
+        $rate = $cur === LocalCurrency::code() ? '1' : (Money::isValidRate($this->exchangeRate) ? $this->exchangeRate : ($invoice->exchange_rate !== null ? (string) $invoice->exchange_rate : LocalCurrency::rateFor($cur)));
+        $conv = app(InvoiceService::class)->lineConverter($cur, $rate);
+        $edits = array_map($amount, $this->edits);
+        $picked = $lines->whereIn('id', array_map('intval', $this->selected));
+        $custom = array_map($amount, $this->custom);
+        $subtotal = (int) $picked->sum(fn ($l) => $conv($edits[$l->id] ?? (int) $l->amount_cents, $l->lineCurrency())) + array_sum($custom);
+
+        return [
+            'currency' => $cur,
+            'count' => $picked->count() + count($custom),
+            'edits' => $edits,
+            'custom' => $custom,
+            'subtotal' => $subtotal,
+            'tax' => $subtotal < intdiv(PHP_INT_MAX, 20000) ? intdiv($subtotal * min($num($this->taxPercent, 3), 10000) + 5000, 10000) : 0,
+        ];
+    }
+
     public function render()
     {
         $this->authorize('manage-money');
         $invoice = Invoice::with('client')->findOrFail($this->invoiceId);
         $ownLines = BillableLine::where('invoice_id', $invoice->id)->orderBy('id')->get();
+        $lines = $ownLines->concat(BillableLine::pending()->where('client_id', $invoice->client_id)->orderBy('id')->get());
 
         return view('livewire.invoices.edit', [
+            'summary' => $this->summary($invoice, $lines),
             'invoice' => $invoice,
             'client' => $invoice->client,
             'local' => LocalCurrency::code(),
             'sameCurrency' => strtoupper($invoice->currency) === LocalCurrency::code(),
-            'lines' => $ownLines->concat(BillableLine::pending()->where('client_id', $invoice->client_id)->orderBy('id')->get()),
+            'lines' => $lines,
             'banks' => BankAccount::orderBy('label')->get(['id', 'label', 'bank_name']),
         ]);
     }
