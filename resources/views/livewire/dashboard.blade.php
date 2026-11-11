@@ -58,7 +58,7 @@
         <h2 class="{{ $h2 }} mb-4">Quick Actions</h2>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <a href="{{ route('invoices.create') }}" wire:navigate class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"><x-nav.icon name="document" class="h-5 w-5" />Create Invoice</a>
-            <a href="{{ route('payments.index') }}" wire:navigate class="inline-flex items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"><x-nav.icon name="credit-card" class="h-5 w-5" />Record Payment</a>
+            <a href="{{ route('payments.create') }}" wire:navigate class="inline-flex items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"><x-nav.icon name="credit-card" class="h-5 w-5" />Record Payment</a>
             <a href="{{ route('clients.create') }}" wire:navigate class="inline-flex items-center justify-center gap-2 rounded-md bg-purple-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-purple-700 dark:bg-purple-700 dark:hover:bg-purple-800"><x-nav.icon name="user-plus" class="h-5 w-5" />Add Client</a>
             <a href="{{ route('projects.create') }}" wire:navigate class="inline-flex items-center justify-center gap-2 rounded-md bg-orange-600 px-4 py-3 text-sm font-medium text-white transition hover:bg-orange-700 dark:bg-orange-700 dark:hover:bg-orange-800"><x-nav.icon name="folder-plus" class="h-5 w-5" />Add Project</a>
         </div>

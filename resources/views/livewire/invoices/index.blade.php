@@ -1,7 +1,7 @@
 <div>
     <x-ui.page-header title="Invoices" subtitle="Bill clients for completed work. Payments settle the client balance.">
         <x-slot:actions>
-            <a href="{{ route('payments.index') }}" class="btn btn-secondary">Record payment</a>
+            <a href="{{ route('payments.create') }}" class="btn btn-secondary">Record payment</a>
             <a href="{{ route('invoices.create') }}" class="btn btn-primary">New invoice</a>
         </x-slot:actions>
     </x-ui.page-header>

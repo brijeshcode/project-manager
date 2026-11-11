@@ -18,7 +18,7 @@
             @if ($invoice->status === 'draft')
                 <button wire:click="sendNow" wire:confirm="Send this invoice? It will count against the client's balance and be emailed." class="btn btn-primary">Send invoice</button>
             @elseif ($invoice->status === 'sent')
-                <a href="{{ route('payments.index', ['client' => $invoice->client_id]) }}" class="btn btn-primary">Record payment</a>
+                <a href="{{ route('payments.create', ['client' => $invoice->client_id]) }}" class="btn btn-primary">Record payment</a>
             @endif
             <div class="relative" x-data="{ open: false }" @keydown.escape.window="open = false">
                 <button type="button" @click="open = !open" class="btn btn-ghost px-2" aria-label="More actions" aria-haspopup="menu" :aria-expanded="open"><x-icon name="ellipsis" class="h-5 w-5" /></button>
