@@ -70,50 +70,62 @@
                 <thead>
                     <tr>
                         <th class="table-th">Date</th>
-                        <th class="table-th">Client</th>
+                        <th class="table-th">Client / project</th>
                         <th class="table-th">Type</th>
-                        <th class="table-th text-right">Amount</th>
-                        <th class="table-th"><span class="sr-only">Documents</span></th>
+                        <th class="table-th hidden md:table-cell">Method</th>
+                        <th class="table-th text-right">Received</th>
+                        <th class="table-th hidden text-right lg:table-cell">Rate</th>
+                        <th class="table-th text-right">In {{ $local }}</th>
+                        <th class="table-th text-center"><span class="sr-only">Documents</span><x-icon name="file-text" class="mx-auto h-4 w-4" aria-hidden="true" /></th>
                         <th class="table-th"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
                     @foreach ($payments as $p)
+                        @php
+                            $foreign = strtoupper($p->currency) !== $local;
+                            $method = $p->method ? (strlen($p->method) <= 4 ? strtoupper($p->method) : ucfirst($p->method)) : null;
+                        @endphp
                         <tr wire:key="pay-{{ $p->id }}" class="hover:bg-slate-50 dark:hover:bg-gray-700/40">
-                            <td class="table-td whitespace-nowrap">{{ $p->paid_on->toFormattedDateString() }}</td>
-                            <td class="table-td">
-                                <span class="font-medium text-gray-900 dark:text-white">{{ $p->client->name }}</span>
-                                @if ($p->project)<div class="text-xs text-slate-500 dark:text-gray-400">{{ $p->project->name }}</div>@endif
+                            <td class="table-td whitespace-nowrap text-slate-600 dark:text-gray-300">{{ $p->paid_on->format('M j, Y') }}</td>
+                            <td class="table-td max-w-xs">
+                                <a href="{{ route('payments.show', $p) }}" wire:navigate class="block truncate font-medium text-gray-900 hover:underline dark:text-white">{{ $p->client->name }}</a>
+                                <div class="truncate text-xs text-slate-500 dark:text-gray-400">{{ $p->project?->name ?? 'No project' }}</div>
                             </td>
-                            <td class="table-td">
-                                <x-ui.badge>{{ $typeLabel($p->type->value) }}</x-ui.badge>
-                                @if ($p->method)<div class="mt-1 text-xs text-slate-500 dark:text-gray-400">{{ $p->method }}</div>@endif
-                            </td>
-                            <td class="table-td whitespace-nowrap text-right tabular-nums">
-                                <a href="{{ route('payments.show', $p) }}" wire:navigate class="font-medium text-gray-900 hover:underline dark:text-white">{{ \App\Support\Money::format($p->amount_cents, $p->currency) }}</a>
-                                @if ($p->hasLocal() && strtoupper($p->currency) !== $p->local_currency)
-                                    <div class="text-xs text-slate-500 dark:text-gray-400">{{ \App\Support\Money::format($p->local_amount_cents, $p->local_currency) }} @ {{ rtrim(rtrim($p->exchange_rate, '0'), '.') }}</div>
-                                @elseif (! $p->hasLocal() && strtoupper($p->currency) !== $local)
-                                    <form wire:submit="setRate({{ $p->id }})" class="mt-1 flex items-center justify-end gap-1">
+                            <td class="table-td whitespace-nowrap"><x-ui.badge>{{ $typeLabel($p->type->value) }}</x-ui.badge></td>
+                            <td class="table-td hidden whitespace-nowrap text-sm text-slate-600 md:table-cell dark:text-gray-300">{{ $method ?? '—' }}</td>
+                            <td class="table-td whitespace-nowrap text-right font-medium tabular-nums text-gray-900 dark:text-white">{{ \App\Support\Money::format($p->amount_cents, $p->currency) }}</td>
+                            <td class="table-td hidden whitespace-nowrap text-right text-sm tabular-nums text-slate-500 lg:table-cell dark:text-gray-400">{{ $foreign && $p->hasLocal() ? rtrim(rtrim($p->exchange_rate, '0'), '.') : '—' }}</td>
+                            <td class="table-td whitespace-nowrap text-right tabular-nums text-slate-700 dark:text-gray-200">
+                                @if (! $foreign)
+                                    {{ \App\Support\Money::format($p->amount_cents, $p->currency) }}
+                                @elseif ($p->hasLocal())
+                                    {{ \App\Support\Money::format($p->local_amount_cents, $p->local_currency) }}
+                                @else
+                                    <form wire:submit="setRate({{ $p->id }})" class="flex items-center justify-end gap-1">
                                         <label for="rowRate-{{ $p->id }}" class="sr-only">Rate to {{ $local }}</label>
-                                        <input wire:model="rowRate.{{ $p->id }}" id="rowRate-{{ $p->id }}" type="text" inputmode="decimal" placeholder="Rate" class="input w-24 py-1 text-xs" />
+                                        <input wire:model="rowRate.{{ $p->id }}" id="rowRate-{{ $p->id }}" type="text" inputmode="decimal" placeholder="Rate" class="input w-20 py-1 text-xs" />
                                         <button type="submit" class="btn btn-secondary py-1 text-xs">Set rate</button>
                                     </form>
                                     @error("rowRate.{$p->id}") <p class="field-error">{{ $message }}</p> @enderror
                                 @endif
                             </td>
-                            <td class="table-td whitespace-nowrap">
+                            <td class="table-td whitespace-nowrap text-center">
                                 @if ($p->documents_count)
-                                    <a href="{{ route('payments.show', $p) }}#documents" wire:navigate class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-brand-600 dark:text-gray-400 dark:hover:text-blue-300"
+                                    <a href="{{ route('payments.show', $p) }}#documents" wire:navigate class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-blue-300"
                                         title="{{ $p->documents_count }} {{ \Illuminate\Support\Str::plural('document', $p->documents_count) }}" aria-label="View {{ $p->documents_count }} {{ \Illuminate\Support\Str::plural('document', $p->documents_count) }}" data-test="docs-link">
                                         <x-icon name="file-text" class="h-4 w-4" />{{ $p->documents_count }}
                                     </a>
+                                @else
+                                    <span class="text-slate-300 dark:text-gray-600">—</span>
                                 @endif
                             </td>
                             <td class="table-td whitespace-nowrap text-right">
-                                <a href="{{ route('payments.show', $p) }}" wire:navigate class="btn btn-ghost px-2" title="View" aria-label="View payment"><x-icon name="eye" class="h-4 w-4" /></a>
-                                <a href="{{ route('payments.edit', $p) }}" wire:navigate class="btn btn-ghost px-2" title="Edit" aria-label="Edit payment"><x-icon name="pencil" class="h-4 w-4" /></a>
-                                <button type="button" wire:click="deletePayment({{ $p->id }})" wire:confirm="Delete this payment? The client balance will change." class="btn btn-ghost px-2 text-rose-600 dark:text-rose-400" title="Delete" aria-label="Delete payment"><x-icon name="trash-2" class="h-4 w-4" /></button>
+                                <div class="inline-flex items-center gap-0.5">
+                                    <a href="{{ route('payments.show', $p) }}" wire:navigate class="btn btn-ghost px-2" title="View" aria-label="View payment"><x-icon name="eye" class="h-4 w-4" /></a>
+                                    <a href="{{ route('payments.edit', $p) }}" wire:navigate class="btn btn-ghost px-2" title="Edit" aria-label="Edit payment"><x-icon name="pencil" class="h-4 w-4" /></a>
+                                    <button type="button" wire:click="deletePayment({{ $p->id }})" wire:confirm="Delete this payment? The client balance will change." class="btn btn-ghost px-2 text-rose-600 dark:text-rose-400" title="Delete" aria-label="Delete payment"><x-icon name="trash-2" class="h-4 w-4" /></button>
+                                </div>
                             </td>
                         </tr>
                     @endforeach

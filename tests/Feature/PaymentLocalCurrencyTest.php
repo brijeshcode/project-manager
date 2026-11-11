@@ -84,7 +84,7 @@ it('lists both numbers for a converted row and one for a same-currency row', fun
     $i = lcClient('INR');
     lcPage($i, '50.00')->call('save');
     Livewire::actingAs($this->owner)->test(Index::class)->assertOk()
-        ->assertSee('$100.00')->assertSee('₹8,350.00')->assertSee('@ 83.5')->assertSee('₹50.00');
+        ->assertSee('$100.00')->assertSee('₹8,350.00')->assertSeeHtml('>83.5<')->assertSee('₹50.00');
     expect(Payment::where('client_id', $i->id)->first()->local_amount_cents)->toBe(5000);
 });
 

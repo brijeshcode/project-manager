@@ -35,8 +35,11 @@ class Show extends Component
     {
         $this->authorize('manage-money');
 
+        $payment = Payment::with(['client', 'project', 'documents'])->findOrFail($this->paymentId);
+
         return view('livewire.payments.show', [
-            'payment' => Payment::with(['client', 'project', 'documents'])->findOrFail($this->paymentId),
+            'payment' => $payment,
+            'balance' => app(\App\Services\ClientAccount::class)->balanceCents($payment->client),
             'local' => LocalCurrency::code(),
         ]);
     }
