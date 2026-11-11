@@ -34,23 +34,13 @@
             @endif
             <x-ui.progress :pct="app(\App\Services\ProgressService::class)->forProject($project)" :label="false" />
         </x-ui.card>
+        <div class="mt-4">@include('livewire.projects._project-counts')</div>
     @endif
 
     @if($tab === 'modules')
-        <div class="mb-6">
-            <form wire:submit="createTask" class="flex gap-2">
-                <input wire:model="newTitle" type="text" placeholder="Request a new task…" class="input flex-1">
-                <button type="submit" class="btn btn-primary whitespace-nowrap">+ Request</button>
-            </form>
-            @error('newTitle') <p class="field-error mt-1">{{ $message }}</p> @enderror
-        </div>
+        @include('livewire.portal._request-forms')
 
-        @forelse($modules as $module)
-            @php($mStatus = $module->status())
-            @include('livewire.projects._module-row', ['client' => true, 'canManage' => false, 'candidates' => null, 'budgetBlocked' => []])
-        @empty
-            <x-ui.empty-state title="No modules shared" message="Modules shared with you will appear here." />
-        @endforelse
+        @include('livewire.projects._module-list', ['client' => true, 'canManage' => false, 'candidates' => null, 'budgetBlocked' => []])
     @endif
 
 
@@ -63,26 +53,7 @@
     @endif
 
     @if($tab === 'budget')
-        @forelse($modules->filter(fn ($m) => $tasks->contains('module_id', $m->id)) as $module)
-            @php($mt = $tasks->where('module_id', $module->id))
-            <x-ui.card class="mb-4" data-test="portal-budget-module">
-                <h3 class="mb-2 font-display text-sm font-semibold text-slate-900">{{ $module->name }}</h3>
-                <table class="w-full text-sm">
-                    @foreach($mt as $task)
-                        <tr class="border-t border-slate-100">
-                            <td class="py-2"><x-ui.task-code :task="$task" class="mr-1" />{{ $task->title }}</td>
-                            <td class="py-2 text-right tabular-nums">{{ $task->budget_amount === null ? '—' : \App\Support\Money::format(\App\Support\Money::toCents((string) $task->budget_amount), $currency) }}</td>
-                        </tr>
-                    @endforeach
-                    <tr class="border-t border-slate-200 font-semibold">
-                        <td class="py-2">Total</td>
-                        <td class="py-2 text-right tabular-nums">{{ \App\Support\Money::format(\App\Models\Sprint::value($mt), $currency) }}</td>
-                    </tr>
-                </table>
-            </x-ui.card>
-        @empty
-            <x-ui.empty-state title="No budgets yet" message="Task budgets will appear here." />
-        @endforelse
+        @include('livewire.projects._budget-breakdown', ['modules' => $budgetModules])
     @endif
 
     @if($tab === 'planned')

@@ -21,6 +21,7 @@
                                 <x-ui.priority :value="$module->priority" data-test="module-priority" />
                             @endif
                             <x-ui.badge :color="\App\Models\Module::STATUS_COLORS[$mStatus]" data-test="module-status">{{ \App\Models\Module::STATUS_LABELS[$mStatus] }}</x-ui.badge>
+                            @include('livewire.projects._request-status', ['subject' => $module, 'kind' => 'module'])
                             @php $cv = $module->client_visible; $cvTitle = $cv ? 'Visible to client' : 'Hidden from client'; @endphp
                             @unless ($client)
                             @if ($canManage)
@@ -137,6 +138,8 @@
                                         <x-ui.priority :value="$task->priority" />
                                         <x-ui.deadline :date="$task->deadline" :done="$task->column?->stage === 'done'" class="text-xs" />
                                         <x-ui.stage-badge :column="$task->column" />
+                                        @include('livewire.projects._request-status', ['subject' => $task, 'kind' => 'task'])
+                                        @include('livewire.projects._task-visibility')
                                         @if ($client)
                                             @if ($task->client_approval === 'approved')
                                                 <x-ui.badge color="green">Approved</x-ui.badge>

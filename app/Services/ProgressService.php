@@ -44,7 +44,7 @@ class ProgressService
     /** Constant number of queries however many modules the project has. */
     public function forProject(Project $project): float
     {
-        $modules = $project->modules()->with(['tasks' => fn ($q) => $q->counted()->with(['column', 'checklistItems', 'subtasks'])])->get();
+        $modules = $project->modules()->approved()->with(['tasks' => fn ($q) => $q->counted()->with(['column', 'checklistItems', 'subtasks'])])->get();
 
         return $this->weighted(
             $modules,

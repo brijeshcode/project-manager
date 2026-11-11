@@ -13,6 +13,7 @@
     <x-ui.type-badge :type="$task->type" />
     @foreach ($task->labels as $l)<x-ui.label-chip :label="$l" class="hidden md:inline-flex" />@endforeach
     <x-ui.priority :value="$task->priority" />
+    @include('livewire.projects._task-visibility')
     @unless ($client)
     <x-ui.assignees :users="$task->assignees" :candidates="($canManage ?? false) ? $candidates : null" method="toggleTaskAssignee" :id="$task->id" />
     @endunless

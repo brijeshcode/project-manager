@@ -37,6 +37,17 @@ class Economics extends Component
         return ProjectEconomics::for($this->project);
     }
 
+    /** All modules with their budgeted tasks, for the budget breakdown. */
+    #[Computed]
+    public function budgetModules()
+    {
+        $modules = $this->project->modules()->approved()
+            ->with(['tasks' => fn ($q) => $q->budgeted()->orderBy('position')->orderBy('id'), 'tasks.column'])->get();
+        $modules->flatMap->tasks->each->setRelation('project', $this->project);
+
+        return $modules;
+    }
+
     public function render()
     {
         return view('livewire.projects.economics');

@@ -25,7 +25,7 @@ class BillableService
     {
         $tasks = Task::query()
             ->whereHas('module.project', fn ($q) => $q->where('client_id', $client->id))
-            ->where('status', TaskStatus::Published->value)
+            ->where('status', TaskStatus::Published->value)->approved()
             ->whereHas('column', fn ($q) => $q->where('stage', 'done'))
             ->with(['module.project', 'subtasks', 'sprint'])
             ->get();

@@ -80,7 +80,7 @@ it('numbers tasks from quick-add and the portal', function () {
     $cu = User::factory()->create(['client_id' => $this->client->id]);
     $cu->assignRole('client');
     $this->module->update(['client_visible' => true]);
-    Livewire::actingAs($cu)->test(PortalView::class, ['project' => $this->project])->set('newTitle', 'From client')->call('createTask');
+    Livewire::actingAs($cu)->test(PortalView::class, ['project' => $this->project])->call('openTaskRequest')->set('taskForm.title', 'From client')->call('saveTaskRequest');
     expect(Task::where('title', 'From client')->first()->code())->toBe('NWS-2');
 });
 

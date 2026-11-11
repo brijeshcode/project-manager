@@ -3,6 +3,7 @@
 namespace App\Livewire\Sprints;
 
 use App\Livewire\Concerns\TogglesTaskAssignee;
+use App\Livewire\Concerns\TogglesTaskVisibility;
 use App\Models\Label;
 use App\Models\Project;
 use App\Models\Sprint;
@@ -22,7 +23,7 @@ use Livewire\Component;
  */
 class Panel extends Component
 {
-    use TogglesTaskAssignee;
+    use TogglesTaskAssignee, TogglesTaskVisibility;
 
     public Project $project;
 
@@ -221,7 +222,7 @@ class Panel extends Component
 
     private function projectTasks()
     {
-        return Task::whereIn('module_id', $this->project->modules()->pluck('id'));
+        return Task::approved()->whereIn('module_id', $this->project->modules()->pluck('id'));
     }
 
     // ── data ─────────────────────────────────────────────────────────────────

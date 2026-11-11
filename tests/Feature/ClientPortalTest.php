@@ -232,8 +232,9 @@ it('client can create a task (lands client_visible=true, published, scope=in)', 
 
     Livewire::actingAs($clientUser)
         ->test(ProjectView::class, ['project' => $project])
-        ->set('newTitle', 'My New Request')
-        ->call('createTask');
+        ->call('openTaskRequest')
+        ->set('taskForm.title', 'My New Request')
+        ->call('saveTaskRequest');
 
     $task = Task::where('title', 'My New Request')->firstOrFail();
     expect($task->client_visible)->toBeTrue();

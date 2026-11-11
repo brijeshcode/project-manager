@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class BoardColumn extends Model
 {
-    protected $fillable = ['project_id', 'name', 'stage', 'position', 'wip_limit'];
+    protected $fillable = ['project_id', 'name', 'stage', 'position', 'wip_limit', 'client_movable'];
+
+    protected $casts = ['client_movable' => 'boolean'];
 
     public function project(): BelongsTo
     {

@@ -49,8 +49,12 @@
                 <x-ui.card><div class="text-sm text-slate-500 dark:text-gray-400">Addons</div><x-ui.money-pair class="text-xl font-semibold" :cents="\App\Support\Money::toCents($project->addons_amount)" :currency="$project->currency" :local="$project->addons_amount_local === null ? null : \App\Support\Money::toCents($project->addons_amount_local)" /></x-ui.card>
                 <x-ui.card><div class="text-sm text-slate-500 dark:text-gray-400">Final budget</div><x-ui.money-pair class="text-xl font-semibold" :cents="\App\Support\Money::toCents($project->final_budget)" :currency="$project->currency" :local="$project->final_budget_local === null ? null : \App\Support\Money::toCents($project->final_budget_local)" /></x-ui.card>
                 @endcan
-                <x-ui.card><div class="text-sm text-slate-500 dark:text-gray-400">Modules</div><div class="text-xl font-semibold">{{ $modules->count() }}</div></x-ui.card>
             </div>
+            @include('livewire.projects._project-counts', ['countModules' => $modules->whereNull('request_status'), 'countTasks' => \App\Models\Task::counted()->whereIn('module_id', $modules->pluck('id'))->with('column')->get()])
+            @php $waiting = $modules->where('request_status', 'pending')->count() + $modules->flatMap->tasks->where('request_status', 'pending')->count(); @endphp
+            @if ($waiting)
+                <a href="{{ route('projects.show', [$project, 'tab' => 'modules']) }}" wire:navigate class="block rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200" data-test="requests-waiting">{{ $waiting }} client {{ Str::plural('request', $waiting) }} waiting for approval</a>
+            @endif
             @can('manage-money')
                 <p class="text-sm text-slate-500 dark:text-gray-400" data-test="allocated-line">Allocated to modules: {{ \App\Support\Money::format($project->allocatedToModules(), $project->currency) }} of Final {{ \App\Support\Money::format(\App\Support\Money::toCents($project->final_budget), $project->currency) }}</p>
             @endcan
@@ -197,59 +201,7 @@
                     @endif
                 </div>
 
-                <div class="mb-4 flex flex-wrap items-center gap-3" data-test="module-filters">
-                    <div class="inline-flex overflow-hidden rounded-lg border border-slate-200 text-sm dark:border-gray-700" role="group" aria-label="Module filter">
-                        @foreach (['sprint' => 'In active sprint', 'backlog' => 'Not in sprint', 'completed' => 'Completed', 'all' => 'All'] as $k => $lbl)
-                            <button type="button" wire:click="$set('filter', '{{ $k }}')" aria-pressed="{{ $filter === $k ? 'true' : 'false' }}" data-test="filter-{{ $k }}" @class(['px-3 py-1.5 font-medium', 'bg-brand-600 text-white' => $filter === $k, 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-transparent dark:text-gray-300' => $filter !== $k])>{{ $lbl }}</button>
-                        @endforeach
-                    </div>
-                    <select wire:model.live="assignedTo" class="select h-9 w-48 text-sm" aria-label="Assigned to" data-test="filter-user">
-                        <option value="">Everyone</option>
-                        @foreach ($userOptions as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
-                    </select>
-                </div>
-
-                @php
-                    $help = match ($filter) {
-                        'sprint' => $activeSprint ? 'Showing modules that have at least one task in '.$activeSprint->name : 'No active sprint — start one in the Sprint tab',
-                        'backlog' => 'Showing modules that are not completed and have no task in the active sprint',
-                        'completed' => 'Showing completed modules',
-                        default => 'Showing all modules; completed ones are in the section at the bottom',
-                    };
-                    $helpUser = $assignedTo !== '' ? $userOptions->firstWhere('id', (int) $assignedTo) : null;
-                @endphp
-                <p class="-mt-2 mb-4 text-xs text-slate-500 dark:text-gray-400" data-test="filter-help">{{ $help }}@if ($helpUser). Only modules assigned to {{ $helpUser->name }}, or with a task assigned to them.@endif</p>
-
-                <div x-data x-sortable data-sort-method="reorderModules" data-sort-handle=".module-handle" data-test="module-rows">
-                    @foreach ($mainRows as $r)
-                        @php($module = $r['m'])
-                        @php($mStatus = $r['status'])
-                        @include('livewire.projects._module-row')
-                    @endforeach
-                </div>
-
-                @if ($modules->isEmpty())
-                    <x-ui.empty-state title="No modules yet" message="Modules group related tasks — like “Checkout” or “Onboarding”. Add one to start building the plan."></x-ui.empty-state>
-                @elseif ($filter === 'sprint' && ! $activeSprint)
-                    <x-ui.empty-state title="No active sprint" message="Start a sprint in the Sprint tab to see which modules are part of it." data-test="module-no-sprint"></x-ui.empty-state>
-                @elseif ($mainRows->isEmpty() && $doneRows->isEmpty())
-                    <x-ui.empty-state title="No modules match" message="Nothing fits this filter. Try another one, or pick Everyone." data-test="module-empty"></x-ui.empty-state>
-                @endif
-
-                @if ($doneRows->isNotEmpty())
-                    <div x-data="{ done: false }" class="mt-2" data-test="completed-section">
-                        <button type="button" @click="done = !done" class="mb-3 flex items-center gap-1.5 text-sm font-semibold text-green-700 dark:text-green-400" :aria-expanded="done" data-test="completed-toggle">
-                            <x-icon name="chevron-right" class="h-4 w-4 transition" ::class="done && 'rotate-90'" /> Completed ({{ $doneRows->count() }})
-                        </button>
-                        <div x-show="done" style="display:none" data-test="completed-rows">
-                            @foreach ($doneRows as $r)
-                                @php($module = $r['m'])
-                                @php($mStatus = $r['status'])
-                                @include('livewire.projects._module-row')
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
+                @include('livewire.projects._module-list')
             </div>
     </div>
 @elseif ($active === 'sprint')

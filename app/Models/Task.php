@@ -67,6 +67,8 @@ class Task extends Model
         'completed_at',
         'section',
         'client_approval',
+        'request_status',
+        'request_note',
     ];
 
     protected function casts(): array
@@ -438,19 +440,26 @@ class Task extends Model
     /** Does this task use up its module's budget? Published and not an idea (scope does not matter). */
     public function countsTowardBudget(): bool
     {
-        return $this->status === TaskStatus::Published && ! $this->is_idea;
+        return $this->status === TaskStatus::Published && ! $this->is_idea && $this->request_status === null
+            && ($this->module?->request_status === null);
+    }
+
+    /** Not a pending/rejected client request, and not inside one. */
+    public function scopeApproved(Builder $query): Builder
+    {
+        return $query->whereNull('tasks.request_status')->whereIn('tasks.module_id', Module::approved()->select('id'));
     }
 
     /** Tasks that use up the module budget. */
     public function scopeBudgeted(Builder $query): Builder
     {
-        return $query->where('is_idea', false)->where('status', TaskStatus::Published->value);
+        return $query->where('is_idea', false)->where('status', TaskStatus::Published->value)->approved();
     }
 
-    /** Tasks that count toward module status/progress: no ideas, drafts or out-of-scope work. */
+    /** Tasks that count toward module status/progress: no ideas, drafts, out-of-scope work or unapproved requests. */
     public function scopeCounted(Builder $query): Builder
     {
-        return $query->where('is_idea', false)->where('status', TaskStatus::Published->value)->where('scope', TaskScope::In->value);
+        return $query->where('is_idea', false)->where('status', TaskStatus::Published->value)->where('scope', TaskScope::In->value)->approved();
     }
 
     /**

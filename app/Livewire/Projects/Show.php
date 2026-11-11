@@ -13,15 +13,19 @@ use App\Models\Task;
 use App\Services\ProgressService;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
+use App\Livewire\Concerns\FiltersModules;
 use App\Livewire\Concerns\HandlesMarkdownUploads;
 use App\Livewire\Concerns\TogglesTaskAssignee;
+use App\Livewire\Concerns\TogglesTaskVisibility;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Component;
 
 class Show extends Component
 {
+    use FiltersModules;
     use HandlesMarkdownUploads;
     use TogglesTaskAssignee;
+    use TogglesTaskVisibility;
 
     // ponytail: inline editors here are text-only; attach files on the module/task page
     protected function uploadTarget(): Model
@@ -36,10 +40,6 @@ class Show extends Component
 
     #[Url]
     public string $tab = 'details';
-
-    /** Module list filter: all | sprint | backlog | completed. */
-    #[Url(as: 'filter')]
-    public string $filter = 'all';
 
     /** Module list user filter: a user id, or '' for everyone. */
     #[Url(as: 'user')]
@@ -195,6 +195,31 @@ class Show extends Component
         $this->project->modules()->findOrFail($moduleId)->update(['priority' => $priority]);
     }
 
+    /** Reject reasons for client requests: [kind][id]. */
+    public array $rejectNote = [];
+
+    /** A client-requested module or task of this project; $kind is 'module' or 'task'. */
+    private function clientRequest(string $kind, int $id): Module|Task
+    {
+        $this->authorize('update', $this->project);
+
+        return ($kind === 'module' ? $this->project->modules() : Task::whereIn('module_id', $this->project->modules()->select('id')))
+            ->whereNotNull('request_status')->findOrFail($id);
+    }
+
+    public function approveRequest(string $kind, int $id): void
+    {
+        $this->clientRequest($kind, $id)->update(['request_status' => null, 'request_note' => null]);
+    }
+
+    public function rejectRequest(string $kind, int $id): void
+    {
+        $item = $this->clientRequest($kind, $id);
+        $this->validate(["rejectNote.$kind.$id" => 'required|string|max:1000'], [], ["rejectNote.$kind.$id" => 'reason']);
+        $item->update(['request_status' => 'rejected', 'request_note' => trim($this->rejectNote[$kind][$id])]);
+        unset($this->rejectNote[$kind][$id]);
+    }
+
     public function toggleModuleVisibility(int $moduleId): void
     {
         $this->authorize('update', $this->project);
@@ -342,22 +367,8 @@ class Show extends Component
             ])
             ->get();
 
-        // Sprint = modules with at least one task in the ACTIVE sprint; Backlog = open modules without one.
-        $activeSprint = $this->project->sprints()->active()->first();
-        $sprintModules = $activeSprint ? Task::counted()->where('sprint_id', $activeSprint->id)->pluck('module_id')->unique() : collect();
         $userId = (int) $this->assignedTo;
-        $filter = in_array($this->filter, ['all', 'sprint', 'backlog', 'completed'], true) ? $this->filter : 'all';
-        $rows = $modules->map(fn ($m) => ['m' => $m, 'status' => $m->status()])
-            ->filter(fn ($r) => ! $userId || $r['m']->assignees->contains('id', $userId) || $r['m']->tasks->contains(fn ($t) => $t->assignees->contains('id', $userId)))
-            ->values();
-        $done = $rows->filter(fn ($r) => $r['status'] === 'completed')->values();
-        $open = $rows->reject(fn ($r) => $r['status'] === 'completed')->values();
-        $main = match ($filter) {
-            'completed' => $done,
-            'sprint' => $rows->filter(fn ($r) => $sprintModules->contains($r['m']->id))->values(),
-            'backlog' => $open->reject(fn ($r) => $sprintModules->contains($r['m']->id))->values(),
-            default => $open,
-        };
+        $keep = fn ($r) => ! $userId || $r['m']->assignees->contains('id', $userId) || $r['m']->tasks->contains(fn ($t) => $t->assignees->contains('id', $userId));
 
         $tabs = ['details' => 'Details', 'modules' => 'Modules', 'sprint' => 'Sprint', 'board' => 'Board', 'resources' => 'Resources']
             + (auth()->user()->can('manage-money') ? ['economics' => 'Economics'] : []);
@@ -367,13 +378,9 @@ class Show extends Component
             'active'   => isset($tabs[$this->tab]) ? $this->tab : 'details',
             'project'  => $this->project->load('client', 'members'),
             'modules'  => $modules,
-            'mainRows' => $main,
-            'doneRows' => $filter === 'all' ? $done : collect(),
-            'filter'   => $filter,
-            'activeSprint' => $activeSprint,
             'candidates' => $this->candidates(),
             'userOptions' => $this->project->members()->orderBy('name')->get(),
             'progress' => app(ProgressService::class),
-        ]);
+        ] + $this->moduleRows($modules, $keep));
     }
 }

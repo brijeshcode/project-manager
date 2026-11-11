@@ -9,6 +9,7 @@ use App\Models\Concerns\HasAttachments;
 use App\Models\Concerns\HasComments;
 use App\Models\Concerns\HasLabels;
 use App\Models\Concerns\LogsActivity;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -32,7 +33,7 @@ class Module extends Model
 
     public const STATUS_COLORS = ['pending' => 'slate', 'working' => 'brand', 'in_review' => 'amber', 'completed' => 'green', 'on_hold' => 'rose'];
 
-    protected $fillable = ['project_id', 'name', 'description', 'position', 'priority', 'status_override', 'client_visible', 'billing_mode', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
+    protected $fillable = ['project_id', 'name', 'description', 'position', 'priority', 'status_override', 'client_visible', 'billing_mode', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local', 'request_status', 'request_note'];
 
     public const BUDGET_FIELDS = ['billing_mode', 'budget_hours', 'hourly_rate', 'budget_amount', 'deadline', 'exchange_rate', 'hourly_rate_local', 'budget_amount_local'];
 
@@ -129,6 +130,12 @@ class Module extends Model
 
         // ponytail: not_started + review (nothing active) falls through to working
         return $stages->reject(fn ($s) => $s === 'done')->every(fn ($s) => $s === 'review') ? 'in_review' : 'working';
+    }
+
+    /** Not a pending/rejected client request. */
+    public function scopeApproved(Builder $query): Builder
+    {
+        return $query->whereNull('modules.request_status');
     }
 
     /** What the badge shows: a manual on_hold/completed override wins, otherwise the derived status. */

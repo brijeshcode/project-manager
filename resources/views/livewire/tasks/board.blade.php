@@ -126,6 +126,12 @@
                     </select>
                     <input type="number" min="1" max="999" step="1" value="{{ $col->wip_limit }}" placeholder="No limit" class="input h-9 w-24 py-1 text-sm" aria-label="Column limit" title="Soft limit: the count turns amber at it and red over it" data-test="wip-limit"
                            wire:change="setLimit({{ $col->id }}, $event.target.value)">
+                    <button type="button" wire:click="toggleClientMovable({{ $col->id }})" role="switch" aria-checked="{{ $col->client_movable ? 'true' : 'false' }}" class="inline-flex h-9 items-center gap-2 px-1 text-xs text-slate-600" title="Clients can drag tasks into and out of this column" data-test="client-movable">
+                        <span @class(['relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors', 'bg-brand-600' => $col->client_movable, 'bg-slate-300 dark:bg-gray-600' => ! $col->client_movable])>
+                            <span @class(['inline-block h-4 w-4 rounded-full bg-white shadow transition-transform', 'translate-x-4' => $col->client_movable, 'translate-x-0.5' => ! $col->client_movable])></span>
+                        </span>
+                        Client can move tasks here
+                    </button>
                     @unless($locked)
                         <button type="button" wire:click="moveColumn({{ $col->id }}, -1)" class="btn btn-secondary h-9 px-2 py-1 text-sm" aria-label="Move left">&larr;</button>
                         <button type="button" wire:click="moveColumn({{ $col->id }}, 1)" class="btn btn-secondary h-9 px-2 py-1 text-sm" aria-label="Move right">&rarr;</button>
@@ -170,7 +176,8 @@
                         $sumHours = $client ? 0.0 : (float) $cards->sum('estimate_hours');
                         $totals = implode(' · ', array_filter([$sumCents > 0 ? $fmtMoney($sumCents) : null, $sumHours > 0 ? $fmtHours($sumHours) : null]));
                     @endphp
-                    @continue($client && $cards->isEmpty())
+                    @php $drag = ! $client || $col->client_movable; @endphp
+                    @continue($client && $cards->isEmpty() && ! $col->client_movable)
                     <div data-col class="flex min-h-0 min-w-[16rem] max-w-80 flex-1 basis-64 shrink-0 flex-col rounded-xl bg-gray-100 dark:bg-gray-800/60" wire:key="col-{{ $lane?->id ?? 'all' }}-{{ $col->id }}" data-stage="{{ $col->stage }}" data-sym="{{ $sym }}" @if($limit) data-limit="{{ $limit }}" @endif>
                         <div class="shrink-0 px-3 py-2">
                             <div class="flex items-center gap-2">
@@ -186,7 +193,8 @@
                         <ul class="board-column min-h-16 flex-1 space-y-1.5 overflow-y-auto px-2 pb-2"
                             data-column="{{ $col->id }}"
                             data-lane="{{ $lane?->id ?? 'all' }}"
-                            {!! $client ? '' : 'x-data x-board-drag' !!}>
+                            {{-- clients drag only within the columns opened to them: locked columns get no Sortable, so they neither give nor take cards --}}
+                            {!! $drag ? 'x-data x-board-drag' : '' !!}>
                             @foreach($cards as $task)
                                 @php
                                     $subs = $task->subtasks;
@@ -196,8 +204,8 @@
                                     $tc = $task->type && preg_match('/^#[0-9a-fA-F]{6}$/', (string) $task->type->color) ? $task->type->color : '#6b7280';
                                 @endphp
                                 @php $value = ($canMoney || $client) && $task->budget_amount > 0 ? \App\Support\Money::toCents((string) $task->budget_amount) : 0; @endphp
-                                <li wire:key="task-{{ $task->id }}" data-task-id="{{ $task->id }}" @unless($client) data-hours="{{ (float) $task->estimate_hours }}" @endunless @if($canMoney) data-value="{{ $value }}" @endif data-test="board-card" tabindex="0" @unless($client) @click="openCard($event, {{ $task->id }})" @keydown.enter.self="openCard($event, {{ $task->id }})" @endunless
-                                    @class(['board-card group relative rounded-lg bg-[#ffffff] px-2.5 py-2 shadow-sm ring-1 ring-slate-900/5 hover:ring-slate-900/15 dark:bg-gray-700 dark:ring-white/10 dark:hover:ring-white/20', 'cursor-grab' => ! $client, 'opacity-70 hover:opacity-100 focus-within:opacity-100' => $col->stage === 'done'])>
+                                <li wire:key="task-{{ $task->id }}" data-task-id="{{ $task->id }}" @unless($client) data-hours="{{ (float) $task->estimate_hours }}" @endunless @if($canMoney) data-value="{{ $value }}" @endif data-test="board-card" tabindex="0" @click="openCard($event, {{ $task->id }})" @keydown.enter.self="openCard($event, {{ $task->id }})"
+                                    @class(['board-card group relative rounded-lg bg-[#ffffff] px-2.5 py-2 shadow-sm ring-1 ring-slate-900/5 hover:ring-slate-900/15 dark:bg-gray-700 dark:ring-white/10 dark:hover:ring-white/20', 'cursor-grab' => $drag, 'cursor-pointer' => ! $drag, 'opacity-70 hover:opacity-100 focus-within:opacity-100' => $col->stage === 'done'])>
                                     <div class="flex items-center gap-1.5">
                                         @if($task->type)
                                             <span data-f="type" class="inline-flex shrink-0" style="color: {{ $tc }}" data-tip="{{ $task->type->name }}" data-type="{{ $task->type->name }}" aria-label="{{ $task->type->name }}" role="img" tabindex="0"><x-ui.glyph :value="$task->type->icon ?: 'circle-dot'" class="h-3.5 w-3.5" /></span>
@@ -231,9 +239,10 @@
                                         @if(! $client && $task->estimate_hours > 0)
                                             <span data-f="hours" class="inline-flex max-w-full items-center whitespace-nowrap rounded bg-slate-100 px-1.5 py-px font-medium tabular-nums dark:bg-gray-600/60" data-tip="Estimate" data-test="card-hours">{{ $fmtHours((float) $task->estimate_hours) }}</span>
                                         @endif
-                                        @if($task->client_visible && ! $client)
-                                            <span data-f="client" class="inline-flex text-sky-600 dark:text-sky-400" data-tip="Visible to the client" aria-label="Visible to the client" role="img" data-test="card-client"><x-icon name="globe" class="h-3.5 w-3.5" /></span>
-                                        @endif
+                                        @unless($client)
+                                            @php $cvTitle = $task->client_visible ? 'Visible to the client' : 'Hidden from the client'; @endphp
+                                            <span data-f="client" @class(['inline-flex', 'text-brand-600' => $task->client_visible, 'text-slate-400' => ! $task->client_visible]) data-tip="{{ $cvTitle }}" aria-label="{{ $cvTitle }}" role="img" data-test="card-client"><x-icon :name="$task->client_visible ? 'eye' : 'eye-off'" class="h-3.5 w-3.5" /></span>
+                                        @endunless
                                         @unless ($client)
                                         <span data-f="assignees" class="ml-auto"><x-ui.assignees :users="$task->assignees" :candidates="$candidates" method="toggleTaskAssignee" :id="$task->id" size="xs" :max="3" ring="ring-2 ring-white dark:ring-gray-700" /></span>
                                         @endunless
@@ -265,12 +274,52 @@
                      class="task-panel fixed inset-y-0 right-0 z-[60] flex w-full flex-col bg-white shadow-2xl ring-1 ring-slate-900/10 outline-none sm:w-[42rem] dark:bg-gray-900 dark:ring-white/10">
                 <div class="flex shrink-0 items-center justify-end gap-1 border-b border-slate-200 px-3 py-2 dark:border-gray-700">
                     <x-ui.task-code :task="$panelTask" class="mr-auto pl-2 text-sm" data-test="panel-code" />
+                    @unless($client)
                     <a href="{{ route('tasks.show', $panelTask) }}" wire:navigate class="btn btn-ghost h-8 gap-1 px-2 py-1 text-xs" title="Open full page" aria-label="Open full page" data-test="panel-full"><x-icon name="external-link" /> Open full page</a>
+                    @endunless
                     <button type="button" @click="navigator.clipboard.writeText(location.href); copied = true; setTimeout(() => copied = false, 1500)" class="btn btn-ghost h-8 px-2 py-1" title="Copy link to this task" aria-label="Copy link to this task" data-test="panel-copy"><x-icon name="link" /><span x-show="copied" style="display:none" class="ml-1 text-xs text-emerald-600">Copied</span></button>
                     <button type="button" wire:click="closeTask" class="btn btn-ghost h-8 px-2 py-1" title="Close" aria-label="Close" data-test="panel-close"><x-icon name="x" /></button>
                 </div>
                 <div class="task-embed min-h-0 flex-1 overflow-y-auto p-5">
-                    <livewire:tasks.show :task="$panelTask" :embedded="true" :key="'panel-'.$panelTask->id" />
+                    @if($client)
+                        {{-- client-safe view: no hours, rates, cost, assignees or internal comments --}}
+                        <div class="space-y-5" data-test="client-task-panel">
+                            <h2 id="item-title" class="text-lg font-semibold text-slate-800 dark:text-gray-100">{{ $panelTask->title }}</h2>
+                            <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                <dt class="text-slate-500">Module</dt><dd>{{ $panelTask->module->name }}</dd>
+                                <dt class="text-slate-500">Type</dt><dd>{{ $panelTask->type?->name ?? '—' }}</dd>
+                                <dt class="text-slate-500">Priority</dt><dd><x-ui.priority :value="$panelTask->priority" /></dd>
+                                <dt class="text-slate-500">Deadline</dt><dd>@if($panelTask->deadline)<x-ui.deadline :date="$panelTask->deadline" format="M j, Y" />@else<span class="text-slate-400">None</span>@endif</dd>
+                            </dl>
+                            @if($panelTask->labels->isNotEmpty())
+                                <div class="flex flex-wrap gap-1">@foreach($panelTask->labels as $l)<x-ui.label-chip :label="$l" />@endforeach</div>
+                            @endif
+                            @if(filled($panelTask->description))
+                                <x-ui.markdown :text="$panelTask->description" />
+                            @endif
+                            @if($panelTask->subtasks->isNotEmpty())
+                                <div>
+                                    <h3 class="mb-1 text-sm font-semibold text-slate-700">Subtasks</h3>
+                                    <ul class="space-y-1 text-sm" data-test="client-subtasks">
+                                        @foreach($panelTask->subtasks as $s)
+                                            <li class="flex items-center gap-2"><x-icon name="square-check-big" :class="'h-4 w-4 '.($s->is_done ? 'text-emerald-600' : 'text-slate-300')" /><span @class(['line-through text-slate-400' => $s->is_done])>{{ $s->title }}</span></li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+                            <div class="space-y-2">
+                                <h3 class="text-sm font-semibold text-slate-700">Comments</h3>
+                                @include('livewire.portal._threads', ['subject' => $panelTask, 'kind' => 'task'])
+                                <form wire:submit="addComment({{ $panelTask->id }})" class="space-y-2">
+                                    <x-ui.markdown-editor model="taskBody.{{ $panelTask->id }}" :rows="2" :uploads="false" placeholder="Your comment…" />
+                                    <button type="submit" class="btn btn-secondary h-8 px-3 py-1 text-xs" data-test="client-comment-post">Post</button>
+                                </form>
+                                @error('taskBody.'.$panelTask->id) <p class="field-error text-xs">{{ $message }}</p> @enderror
+                            </div>
+                        </div>
+                    @else
+                        <livewire:tasks.show :task="$panelTask" :embedded="true" :key="'panel-'.$panelTask->id" />
+                    @endif
                 </div>
             </section>
         </div>

@@ -2,8 +2,10 @@
 
 namespace App\Livewire\Tasks;
 
+use App\Livewire\Concerns\ClientComments;
+use App\Livewire\Concerns\HandlesMarkdownUploads;
+use Illuminate\Database\Eloquent\Model;
 use App\Livewire\Concerns\TogglesTaskAssignee;
-use App\Enums\TaskStatus;
 use App\Models\BoardColumn;
 use App\Models\Label;
 use App\Models\Project;
@@ -21,7 +23,14 @@ use Livewire\Component;
 
 class Board extends Component
 {
+    use ClientComments;
+    use HandlesMarkdownUploads; // only for the client comment editor's Preview; nothing is uploaded here
     use TogglesTaskAssignee { toggleTaskAssignee as private toggleAssignee; }
+
+    protected function uploadTarget(): Model
+    {
+        abort(403);
+    }
 
     public Project $project;
 
@@ -94,7 +103,7 @@ class Board extends Component
     private function openableTask(?int $id): ?Task
     {
         if ($this->client) {
-            return null;
+            return $id ? $this->clientTasks()->with(['module', 'type', 'labels', 'subtasks'])->find($id) : null;
         }
 
         $task = $id ? Task::visibleTo(auth()->user())->whereIn('module_id', $this->project->modules()->select('id'))->find($id) : null;
@@ -183,10 +192,10 @@ class Board extends Component
     public function columns(): Collection
     {
         $tasks = $this->client
-            ? Task::where('status', TaskStatus::Published->value)->where('client_visible', true)->whereIn('module_id', $this->project->modules()->where('client_visible', true)->pluck('id'))
+            ? $this->clientTasks()
             : Task::visibleTo(auth()->user())->whereIn('module_id', $this->project->modules()->pluck('id'));
 
-        return $tasks
+        return $tasks->approved()
             ->when($this->ints($this->moduleIds), fn ($q, $ids) => $q->whereIn('module_id', $ids))
             ->when(trim($this->search) !== '', fn ($q) => $q->search($this->search))
             ->when($this->prios, fn ($q) => $q->whereIn('priority', array_map('intval', $this->prios)))
@@ -214,15 +223,21 @@ class Board extends Component
      */
     public function taskMoved(int $taskId, int $column, int $position, array $order = []): void
     {
-        abort_if($this->client, 403);
-        $this->authorize('view', $this->project);
+        if ($this->client) {
+            // clients move only their visible tasks, and only between columns the team opened to them
+            $task = $this->guardTask($taskId);
+            $movable = $this->project->columns()->where('client_movable', true)->pluck('id');
+            abort_unless($movable->contains($task->board_column_id) && $movable->contains($column), 403);
+        } else {
+            $this->authorize('view', $this->project);
 
-        try {
-            $task = Task::visibleTo(auth()->user())
-                ->whereIn('module_id', $this->project->modules()->pluck('id'))
-                ->findOrFail($taskId);
-        } catch (ModelNotFoundException) {
-            return; // foreign-project task; silently no-op
+            try {
+                $task = Task::visibleTo(auth()->user())->approved()
+                    ->whereIn('module_id', $this->project->modules()->pluck('id'))
+                    ->findOrFail($taskId);
+            } catch (ModelNotFoundException) {
+                return; // foreign-project task; silently no-op
+            }
         }
 
         // `order` = card ids of the target column after the drop; the slot that matters is among this task's own module
@@ -290,6 +305,14 @@ class Board extends Component
 
             return;
         }
+        unset($this->boardColumns);
+    }
+
+    public function toggleClientMovable(int $id): void
+    {
+        $this->authorize('update', $this->project);
+        $col = $this->project->columns()->findOrFail($id);
+        $col->update(['client_movable' => ! $col->client_movable]);
         unset($this->boardColumns);
     }
 
@@ -361,6 +384,7 @@ class Board extends Component
             'canManage' => $canManage,
             'canMoney'  => auth()->user()->can('manage-money'),
             'panelTask' => $this->openableTask($this->taskId),
+            'threads'   => fn ($subject) => $subject->commentThreads(auth()->user()),
         ]);
     }
 }
