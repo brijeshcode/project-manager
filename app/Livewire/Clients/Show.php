@@ -24,6 +24,13 @@ class Show extends Component
 
     public string $to = '';
 
+    public string $dir = 'desc';
+
+    public function toggleDir(): void
+    {
+        $this->dir = $this->dir === 'desc' ? 'asc' : 'desc';
+    }
+
     public function mount(Client $client): void
     {
         $this->authorize('view', $client);
@@ -73,7 +80,7 @@ class Show extends Component
         $opening = $before->isEmpty() ? 0 : $before->last()['balance'];
 
         return [
-            'rows' => $rows,
+            'rows' => $this->dir === 'asc' ? $rows : $rows->reverse()->values(),
             'opening' => $opening,
             'debit' => $rows->where('type', 'invoice')->sum('amount'),
             'credit' => $rows->where('type', 'payment')->sum('amount'),
@@ -82,12 +89,12 @@ class Show extends Component
         ];
     }
 
-    /** Recurring charges with how often and how much they have been put on non-cancelled invoices. */
+    /** Recurring charges with how often and how much they have been put on sent invoices (matches the recurring page). */
     private function subscriptions(Client $client)
     {
         $charges = $client->recurringCharges()->with('project')->orderByDesc('active')->orderBy('next_due_on')->get();
         $billed = BillableLine::whereIn('recurring_charge_id', $charges->pluck('id'))
-            ->whereHas('invoice', fn ($q) => $q->where('status', '!=', 'void'))
+            ->whereHas('invoice', fn ($q) => $q->where('status', 'sent'))
             ->groupBy('recurring_charge_id')->select('recurring_charge_id', DB::raw('count(*) as n'), DB::raw('sum(amount_cents) as s'))
             ->get()->keyBy('recurring_charge_id');
 

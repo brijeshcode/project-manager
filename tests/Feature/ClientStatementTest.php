@@ -78,6 +78,15 @@ it('renders the statement with opening balance carried from before the filter', 
         ->assertViewHas('statement', fn ($s) => $s['rows']->pluck('model.number')->all() === ['INV-NEW'] && $s['opening'] === -60000);
 });
 
+it('lists newest first by default and toggles to oldest first', function () {
+    stInvoice($this->c, 100000, '2026-01-15', 'sent', 'INV-OLD');
+    stInvoice($this->c, 25000, '2026-03-02', 'sent', 'INV-NEW');
+
+    Livewire::actingAs($this->admin)->test(Show::class, ['client' => $this->c])
+        ->assertSet('dir', 'desc')->assertSeeInOrder(['INV-NEW', 'INV-OLD', 'Opening balance'])
+        ->call('toggleDir')->assertSeeInOrder(['Opening balance', 'INV-OLD', 'INV-NEW']);
+});
+
 it('shows an empty state when there are no transactions', function () {
     Livewire::actingAs($this->admin)->test(Show::class, ['client' => $this->c])->assertSee('No transactions yet')->assertSee('No subscriptions yet');
 });
