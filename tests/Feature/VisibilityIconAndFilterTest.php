@@ -78,11 +78,11 @@ it('request modules are left out of counts and budget', function () {
 
     $one = ['data-test="counts-modules"', '<div class="text-xl font-semibold">1</div>', 'data-test="counts-tasks"'];
     Livewire::actingAs($this->clientUser)->test(ProjectView::class, ['project' => $this->project])->set('tab', 'details')
-        ->assertSeeInOrder($one, false);
+        ->assertSeeHtmlInOrder($one);
     Livewire::actingAs($this->clientUser)->test(ProjectView::class, ['project' => $this->project])->set('tab', 'budget')
         ->assertSee('Open Module')->assertDontSee('Asked Module');
     Livewire::actingAs($this->admin)->test(Show::class, ['project' => $this->project])->set('tab', 'details')
-        ->assertSeeInOrder($one, false);
+        ->assertSeeHtmlInOrder($one);
 
     $e = Livewire::actingAs($this->admin)->test(Economics::class, ['project' => $this->project, 'embedded' => true]);
     expect($e->instance()->budgetModules()->pluck('id')->all())->toBe([$this->module->id]);

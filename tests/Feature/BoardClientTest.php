@@ -32,7 +32,7 @@ beforeEach(function () {
     $this->colB->update(['client_movable' => true]);
 });
 
-function bcTask(array $attrs = []): Task
+function bclTask(array $attrs = []): Task
 {
     return Task::create(array_merge([
         'module_id' => test()->module->id, 'creator_id' => test()->admin->id, 'title' => 'Bc Task',
@@ -41,57 +41,57 @@ function bcTask(array $attrs = []): Task
     ], $attrs));
 }
 
-function bcBoard(User $user, array $query = [])
+function bclBoard(User $user, array $query = [])
 {
     return Livewire::withQueryParams($query)->actingAs($user)->test(Board::class, ['project' => test()->project, 'embedded' => true]);
 }
 
 it('lets only project editors toggle client_movable', function () {
-    bcBoard($this->admin)->call('toggleClientMovable', $this->colC->id);
+    bclBoard($this->admin)->call('toggleClientMovable', $this->colC->id);
     expect($this->colC->fresh()->client_movable)->toBeTrue();
 
-    bcBoard($this->clientUser)->call('toggleClientMovable', $this->colC->id)->assertForbidden();
+    bclBoard($this->clientUser)->call('toggleClientMovable', $this->colC->id)->assertForbidden();
 
     $dev = User::factory()->create();
     $dev->assignRole('developer');
     ProjectMember::create(['project_id' => $this->project->id, 'user_id' => $dev->id, 'role_on_project' => 'developer', 'access_scope' => AccessScope::All, 'active' => true]);
     \App\Models\PermissionOverride::create(['user_id' => $dev->id, 'project_id' => $this->project->id, 'ability' => 'update', 'allowed' => false]);
-    bcBoard($dev)->call('toggleClientMovable', $this->colC->id)->assertForbidden();
+    bclBoard($dev)->call('toggleClientMovable', $this->colC->id)->assertForbidden();
     expect($this->colC->fresh()->client_movable)->toBeTrue();
 });
 
 it('lets a client move a visible task between movable columns only', function () {
-    $task = bcTask();
+    $task = bclTask();
 
-    bcBoard($this->clientUser)->assertSeeHtml('x-board-drag')->call('taskMoved', $task->id, $this->colB->id, 1)->assertOk();
+    bclBoard($this->clientUser)->assertSeeHtml('x-board-drag')->call('taskMoved', $task->id, $this->colB->id, 1)->assertOk();
     expect($task->fresh()->board_column_id)->toBe($this->colB->id);
 
-    bcBoard($this->clientUser)->call('taskMoved', $task->id, $this->colC->id, 1)->assertForbidden();
+    bclBoard($this->clientUser)->call('taskMoved', $task->id, $this->colC->id, 1)->assertForbidden();
     expect($task->fresh()->board_column_id)->toBe($this->colB->id);
 
-    $locked = bcTask(['board_column_id' => $this->colC->id]);
-    bcBoard($this->clientUser)->call('taskMoved', $locked->id, $this->colA->id, 1)->assertForbidden();
+    $locked = bclTask(['board_column_id' => $this->colC->id]);
+    bclBoard($this->clientUser)->call('taskMoved', $locked->id, $this->colA->id, 1)->assertForbidden();
     expect($locked->fresh()->board_column_id)->toBe($this->colC->id);
 });
 
 it('refuses client moves of hidden tasks', function () {
-    $internal = bcTask(['client_visible' => false]);
-    $draft = bcTask(['status' => TaskStatus::Draft]);
-    $request = bcTask(['request_status' => 'pending']);
+    $internal = bclTask(['client_visible' => false]);
+    $draft = bclTask(['status' => TaskStatus::Draft]);
+    $request = bclTask(['request_status' => 'pending']);
 
     foreach ([$internal, $draft, $request] as $t) {
-        bcBoard($this->clientUser)->call('taskMoved', $t->id, $this->colB->id, 1)->assertForbidden();
+        bclBoard($this->clientUser)->call('taskMoved', $t->id, $this->colB->id, 1)->assertForbidden();
         expect($t->fresh()->board_column_id)->toBe($this->colA->id);
     }
 });
 
 it('lets a client open a visible card and comment, but not a hidden one', function () {
-    $task = bcTask(['title' => 'Shared Card', 'description' => 'Card **details**', 'hourly_rate' => 98765]);
+    $task = bclTask(['title' => 'Shared Card', 'description' => 'Card **details**', 'hourly_rate' => 98765]);
     $task->assignees()->attach(User::factory()->create(['name' => 'Secret Dev'])->id);
     $task->subtasks()->create(['title' => 'Sub One', 'position' => 1, 'estimate_hours' => 3]);
     $task->addComment($this->admin, 'Internal note');
 
-    $c = bcBoard($this->clientUser)->call('openTask', $task->id)->assertSet('taskId', $task->id)
+    $c = bclBoard($this->clientUser)->call('openTask', $task->id)->assertSet('taskId', $task->id)
         ->assertSeeHtml('data-test="client-task-panel"')->assertSee('Shared Card')->assertSeeHtml('<strong>details</strong>')->assertSee('Sub One')
         ->assertDontSee('Internal note')->assertDontSee('Secret Dev')->assertDontSee('7.5h')->assertDontSee('98765')->assertDontSeeHtml('data-hours')
         ->assertDontSeeHtml('data-test="panel-full"')->assertDontSeeHtml('data-test="item-hours"');
@@ -102,18 +102,18 @@ it('lets a client open a visible card and comment, but not a hidden one', functi
     $c->set("replyBody.{$root->id}", 'And again')->call('reply', 'task', $task->id, $root->id)->assertHasNoErrors();
     expect($task->comments()->where('parent_id', $root->id)->count())->toBe(1);
 
-    $hidden = bcTask(['client_visible' => false, 'title' => 'Hidden Card']);
-    bcBoard($this->clientUser)->call('openTask', $hidden->id)->assertSet('taskId', null)->assertDontSee('Hidden Card');
-    bcBoard($this->clientUser, ['task' => $hidden->id])->assertSet('taskId', null);
-    bcBoard($this->clientUser)->set("taskBody.{$hidden->id}", 'x')->call('addComment', $hidden->id)->assertForbidden();
+    $hidden = bclTask(['client_visible' => false, 'title' => 'Hidden Card']);
+    bclBoard($this->clientUser)->call('openTask', $hidden->id)->assertSet('taskId', null)->assertDontSee('Hidden Card');
+    bclBoard($this->clientUser, ['task' => $hidden->id])->assertSet('taskId', null);
+    bclBoard($this->clientUser)->set("taskBody.{$hidden->id}", 'x')->call('addComment', $hidden->id)->assertForbidden();
 });
 
 it('shows admins an eye icon on every card', function () {
-    bcTask(['title' => 'Seen']);
-    bcTask(['title' => 'Unseen', 'client_visible' => false]);
+    bclTask(['title' => 'Seen']);
+    bclTask(['title' => 'Unseen', 'client_visible' => false]);
 
-    $html = bcBoard($this->admin)->html();
+    $html = bclBoard($this->admin)->html();
     expect(substr_count($html, 'data-test="card-client"'))->toBe(2)
         ->and($html)->toContain('Hidden from the client')->toContain('Visible to the client');
-    bcBoard($this->clientUser)->assertDontSeeHtml('data-test="card-client"');
+    bclBoard($this->clientUser)->assertDontSeeHtml('data-test="card-client"');
 });

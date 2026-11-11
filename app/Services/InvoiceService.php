@@ -24,7 +24,7 @@ class InvoiceService
      * @param  array<int>  $lineIds  pending lines of this client
      * @param  array<int, array{description:string, quantity:mixed, unit_price:mixed}>  $customLines
      */
-    public function create(Client $client, array $lineIds, array $customLines = [], float $taxPercent = 0.0, ?int $bankAccountId = null, ?string $exchangeRate = null, ?string $currency = null, bool $draft = false): Invoice
+    public function create(Client $client, array $lineIds, array $customLines = [], float $taxPercent = 0.0, ?int $bankAccountId = null, ?string $exchangeRate = null, ?string $currency = null, bool $draft = false, ?string $issuedOn = null): Invoice
     {
         if ($exchangeRate !== null && ! Money::isValidRate($exchangeRate)) {
             throw ValidationException::withMessages(['exchangeRate' => 'Enter a positive rate with up to 6 decimals.']);
@@ -41,7 +41,7 @@ class InvoiceService
             throw ValidationException::withMessages(['lines' => 'Add at least one line.']);
         }
 
-        $invoice = DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $cur, $rate, $conv, $draft) {
+        $invoice = DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $cur, $rate, $conv, $draft, $issuedOn) {
             $picked = BillableLine::pending()->where('client_id', $client->id)->whereIn('id', $lineIds)->lockForUpdate()->get();
             if ($picked->count() !== count($lineIds)) {
                 throw ValidationException::withMessages(['lines' => 'Some lines are not pending lines of this client.']);
@@ -59,7 +59,7 @@ class InvoiceService
 
             $bank = $bankAccountId ? BankAccount::findOrFail($bankAccountId) : null;
             $terms = $client->payment_terms;
-            $issued = now()->startOfDay();
+            $issued = $issuedOn ? \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $issuedOn)->startOfDay() : now()->startOfDay();
 
             $invoice = $this->insertNumbered([
                 'client_id' => $client->id,
