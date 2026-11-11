@@ -25,8 +25,9 @@ class InvoiceService
      * @param  array<int>  $lineIds  pending lines of this client
      * @param  array<int, array{description:string, quantity:mixed, unit_price:mixed}>  $customLines
      * @param  array<int, string>  $labels  line id => label; lines sharing a label print as one row
+     * @param  array<int, int>  $amounts  recurring line id => amount typed on the invoice (cents, line currency)
      */
-    public function create(Client $client, array $lineIds, array $customLines = [], float $taxPercent = 0.0, ?int $bankAccountId = null, ?string $exchangeRate = null, ?string $currency = null, bool $draft = false, ?string $issuedOn = null, array $labels = [], bool $showQuantity = false): Invoice
+    public function create(Client $client, array $lineIds, array $customLines = [], float $taxPercent = 0.0, ?int $bankAccountId = null, ?string $exchangeRate = null, ?string $currency = null, bool $draft = false, ?string $issuedOn = null, array $labels = [], bool $showQuantity = false, array $amounts = []): Invoice
     {
         $labels = array_filter(array_map(fn ($l) => mb_substr(trim((string) $l), 0, 500), $labels), fn ($l) => $l !== '');
         if ($exchangeRate !== null && ! Money::isValidRate($exchangeRate)) {
@@ -44,13 +45,14 @@ class InvoiceService
             throw ValidationException::withMessages(['lines' => 'Add at least one line.']);
         }
 
-        $invoice = DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $cur, $rate, $conv, $draft, $issuedOn, $labels, $showQuantity) {
+        $invoice = DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $cur, $rate, $conv, $draft, $issuedOn, $labels, $showQuantity, $amounts) {
             $order = array_flip($lineIds);
             $picked = BillableLine::pending()->where('client_id', $client->id)->whereIn('id', $lineIds)->lockForUpdate()->get()
                 ->sortBy(fn ($l) => $order[$l->id])->values();
             if ($picked->count() !== count($lineIds)) {
                 throw ValidationException::withMessages(['lines' => 'Some lines are not pending lines of this client.']);
             }
+            $this->applyAmounts($picked, $amounts);
 
             if ($picked->max('amount_cents') > self::MAX_LINE_CENTS) {
                 throw ValidationException::withMessages(['lines' => 'A line amount is too large to invoice.']);
@@ -192,7 +194,7 @@ class InvoiceService
      * @param  array<int, array{description:string, quantity:mixed, unit_price:mixed}>  $lineEdits  keyed by own line id
      * @param  array{tax_percent:mixed, issued_on:string, due_on:?string, terms:?string, bank_account_id:?int, exchange_rate:?string}  $h
      */
-    public function update(Invoice $invoice, array $lineIds, array $customLines, array $h, array $lineEdits = [], ?array $labels = null): Invoice
+    public function update(Invoice $invoice, array $lineIds, array $customLines, array $h, array $lineEdits = [], ?array $labels = null, array $amounts = []): Invoice
     {
         $rate = $h['exchange_rate'] ?? null;
         if ($rate !== null && ! Money::isValidRate($rate)) {
@@ -211,7 +213,7 @@ class InvoiceService
             throw ValidationException::withMessages(['lines' => 'Add at least one line.']);
         }
 
-        DB::transaction(function () use ($invoice, $lineIds, $custom, $pct, $h, $rate, $edits, $editKeys, $conv, $labels) {
+        DB::transaction(function () use ($invoice, $lineIds, $custom, $pct, $h, $rate, $edits, $editKeys, $conv, $labels, $amounts) {
             $locked = Invoice::lockForUpdate()->findOrFail($invoice->id);
             if ($locked->status === 'void') {
                 throw ValidationException::withMessages(['lines' => 'A cancelled invoice cannot be edited.']);
@@ -233,6 +235,7 @@ class InvoiceService
             }
             $order = array_flip($lineIds);
             $picked = $keep->concat($added)->sortBy(fn ($l) => $order[$l->id] ?? PHP_INT_MAX)->values();
+            $this->applyAmounts($picked, $amounts);
             if ($picked->max('amount_cents') > self::MAX_LINE_CENTS) {
                 throw ValidationException::withMessages(['lines' => 'A line amount is too large to invoice.']);
             }
@@ -274,6 +277,21 @@ class InvoiceService
         Log::info('invoice edited', ['id' => $invoice->id, 'number' => $invoice->number, 'total_cents' => $invoice->total_cents, 'user_id' => auth()->id()]);
 
         return $invoice;
+    }
+
+    /** A recurring line takes the amount typed on the invoice (one unit), saved on the line so reports read what was invoiced. */
+    private function applyAmounts(Collection $lines, array $amounts): void
+    {
+        foreach ($lines->whereNotNull('recurring_charge_id') as $l) {
+            if (! array_key_exists($l->id, $amounts)) {
+                continue;
+            }
+            $cents = $amounts[$l->id];
+            if (! is_int($cents) || $cents <= 0 || $cents > self::MAX_LINE_CENTS) {
+                throw ValidationException::withMessages(['lines' => 'A recurring amount must be above zero.']);
+            }
+            $l->fill(['quantity' => 1, 'unit_price_cents' => $cents, 'amount_cents' => $cents])->save();
+        }
     }
 
     /** Printed rows: lines sharing an invoice_label merge into one row with that label (qty 1, summed amount); others print as they are. */

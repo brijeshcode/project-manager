@@ -52,11 +52,13 @@ class Edit extends Component
             'description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price' => Money::toInput((int) $l->unit_price_cents),
         ]])->all();
         $this->updatedShowQuantity();
-        $this->groups = $own->diff($manual)->groupBy(fn ($l) => $l->invoice_label ?? 'line:'.$l->id)
-            ->map(fn ($g) => ['label' => $g->first()->invoice_label ?? $g->first()->description, 'lines' => $g->pluck('id')->map(fn ($i) => (string) $i)->all()])
+        $this->groups = $own->diff($manual)->groupBy(fn ($l) => $l->recurring_charge_id ? 'r:'.$l->id : ($l->invoice_label ?? 'line:'.$l->id))
+            ->map(fn ($g) => $g->first()->recurring_charge_id ? self::recurringGroup($g->first(), $g->first()->invoice_label)
+                : ['label' => $g->first()->invoice_label ?? $g->first()->description, 'lines' => $g->pluck('id')->map(fn ($i) => (string) $i)->all()])
             ->values()->all();
 
         app(BillableService::class)->syncCompletedWork($invoice->client);
+        app(BillableService::class)->syncRecurring($invoice->client);
         $this->pickFirstTab($invoice->client);
     }
 
@@ -102,7 +104,7 @@ class Edit extends Component
             'tax_percent' => $this->taxPercent, 'issued_on' => $this->issuedOn, 'due_on' => $this->dueOn ?: null,
             'terms' => $this->terms ?: null, 'show_quantity' => $this->showQuantity, 'bank_account_id' => $this->bankAccountId === '' ? null : (int) $this->bankAccountId,
             'exchange_rate' => $same ? null : $this->exchangeRate,
-        ], $this->edits, $labels);
+        ], $this->edits, $labels, $this->groupAmounts());
         session()->flash('toast', 'Invoice updated.');
 
         return $this->redirectRoute('invoices.show', $invoice);

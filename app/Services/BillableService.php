@@ -65,6 +65,12 @@ class BillableService
         });
     }
 
+    /** Idempotent, like the daily command: one pending line per due period of this client's active recurring charges. */
+    public function syncRecurring(Client $client): void
+    {
+        $client->recurringCharges()->where('active', true)->each(fn ($c) => $c->generateDue(today()));
+    }
+
     /** Pending task lines with their task, module and sprint, for the invoice work picker. */
     public function pendingTaskLines(Client $client): Collection
     {

@@ -17,15 +17,30 @@
                             @include('livewire.invoices._items-head', ['showQty' => $showQuantity])
                             <div class="divide-y divide-slate-100 dark:divide-gray-700">
                                 @foreach ($groups as $g => $group)
-                                    @php $groupAmount = $fmt($summary['groups'][$g] ?? 0); $n = count($group['lines']); @endphp
-                                    <div wire:key="group-{{ $g }}-{{ $group['lines'][0] ?? $g }}" class="flex flex-wrap items-start gap-3 px-4 py-3 sm:flex-nowrap">
+                                    @php $groupAmount = $fmt($summary['groups'][$g] ?? 0); $n = count($group['lines']); $recurring = isset($group['amount']); @endphp
+                                    <div wire:key="group-{{ $g }}-{{ $group['lines'][0] ?? $g }}" class="flex flex-wrap items-start gap-3 px-4 py-3 sm:flex-nowrap" @if ($recurring) data-test="recurring-item" @endif>
                                         <div class="min-w-0 basis-full sm:basis-auto sm:flex-1">
                                             <label for="group-{{ $g }}" class="sr-only">Description on invoice</label>
                                             <input wire:model.live.debounce.500ms="groups.{{ $g }}.label" id="group-{{ $g }}" type="text" maxlength="500" placeholder="e.g. Sprint 1 (Oct 22 – Nov 4): completed FLE-1, FLE-2" class="input" />
-                                            <p class="mt-1 text-xs text-slate-400 dark:text-gray-500">{{ $n > 1 ? $n.' tasks · ' : '' }}Edit the text as it should print</p>
+                                            <p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-400 dark:text-gray-500">
+                                                @if ($recurring)
+                                                    <x-ui.badge color="brand" class="inline-flex items-center gap-1"><x-icon name="repeat" class="h-3 w-3" />Recurring{{ ($group['period'] ?? '') !== '' ? ' · '.$group['period'] : '' }}</x-ui.badge>
+                                                    @if (($group['currency'] ?? '') !== '' && $group['currency'] !== $summary['currency']) <span>amount in {{ $group['currency'] }}</span> @endif
+                                                @else
+                                                    {{ $n > 1 ? $n.' tasks · ' : '' }}Edit the text as it should print
+                                                @endif
+                                            </p>
                                             @error("groups.$g.label") <p class="field-error">{{ $message }}</p> @enderror
                                         </div>
-                                        @if ($showQuantity)
+                                        @if ($recurring)
+                                            @if ($showQuantity)<div class="flex h-10 w-20 shrink-0 items-center justify-end text-sm text-slate-500 dark:text-gray-400">1</div>@endif
+                                            <div class="{{ $showQuantity ? 'w-32' : 'w-36' }} shrink-0">
+                                                <label for="group-{{ $g }}-amount" class="sr-only">Amount</label>
+                                                <input wire:model.live.debounce.500ms="groups.{{ $g }}.amount" id="group-{{ $g }}-amount" type="number" min="0.01" step="0.01" inputmode="decimal" class="input text-right" />
+                                                @error("groups.$g.amount") <p class="field-error">{{ $message }}</p> @enderror
+                                            </div>
+                                            @if ($showQuantity)<div class="flex h-10 w-32 shrink-0 items-center justify-end text-sm font-medium tabular-nums text-slate-800 dark:text-gray-100">{{ $groupAmount }}</div>@endif
+                                        @elseif ($showQuantity)
                                             <div class="flex h-10 w-20 shrink-0 items-center justify-end text-sm text-slate-500 dark:text-gray-400">1</div>
                                             <div class="flex h-10 w-32 shrink-0 items-center justify-end text-sm tabular-nums text-slate-500 dark:text-gray-400">{{ $groupAmount }}</div>
                                             <div class="flex h-10 w-32 shrink-0 items-center justify-end text-sm font-medium tabular-nums text-slate-800 dark:text-gray-100">{{ $groupAmount }}</div>

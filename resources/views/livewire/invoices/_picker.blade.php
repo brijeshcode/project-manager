@@ -86,7 +86,7 @@
                                     <li wire:key="pc-{{ $l->id }}" class="flex items-center">
                                         <label class="{{ $row }} flex-1 cursor-pointer">
                                             <input type="checkbox" wire:model.live="pickCharges" value="{{ $l->id }}" class="{{ $box }}" />
-                                            <span class="min-w-0 flex-1 text-slate-800 dark:text-gray-100">{{ $l->description }} <span class="block text-xs text-slate-500 dark:text-gray-400">{{ $l->recurring_charge_id ? 'Recurring' : 'Manual' }}</span></span>
+                                            <span class="min-w-0 flex-1 text-slate-800 dark:text-gray-100">{{ $l->description }} <span class="mt-0.5 flex items-center gap-1 text-xs text-slate-500 dark:text-gray-400">@if ($l->recurring_charge_id)<x-icon name="repeat" class="h-3 w-3" />Recurring · {{ strlen((string) $l->period) === 7 ? \Carbon\Carbon::createFromFormat('!Y-m', $l->period)->format('M Y') : $l->period }}@else Manual @endif</span></span>
                                             <span class="tabular-nums text-slate-800 dark:text-gray-100">{{ $raw(collect([$l])) }}</span>
                                         </label>
                                         @unless ($l->recurring_charge_id)

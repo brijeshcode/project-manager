@@ -49,9 +49,11 @@ class Create extends Component
     {
         $this->clientId = $client->id;
         app(BillableService::class)->syncCompletedWork($client);
+        app(BillableService::class)->syncRecurring($client);
         $this->currency = strtoupper($client->currency);
         $this->exchangeRate = self::tidy(LocalCurrency::rateFor($client->currency));
         $this->groups = $this->parkedGroups = [];
+        $this->addDueRecurring($client);
         $this->resetPicks();
         $this->resetValidation();
         $this->pickFirstTab($client);
@@ -138,6 +140,7 @@ class Create extends Component
             $this->issuedOn,
             $labels,
             $this->showQuantity,
+            $this->groupAmounts(),
         );
 
         return $this->redirectRoute('invoices.show', $invoice);

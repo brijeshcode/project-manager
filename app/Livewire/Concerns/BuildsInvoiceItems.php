@@ -88,6 +88,29 @@ trait BuildsInvoiceItems
         ];
     }
 
+    /** A recurring line as its own item: "Hosting (Nov 2026)" with an editable amount in the line's currency. */
+    protected static function recurringGroup(BillableLine $l, ?string $label = null): array
+    {
+        $period = strlen((string) $l->period) === 7 ? \Carbon\Carbon::createFromFormat('!Y-m', $l->period)->format('M Y') : (string) $l->period;
+
+        return [
+            'label' => $label ?? $l->description.($period !== '' ? " ($period)" : ''),
+            'lines' => [(string) $l->id],
+            'amount' => Money::toInput((int) $l->amount_cents),
+            'period' => $period,
+            'currency' => strtoupper((string) $l->lineCurrency()),
+        ];
+    }
+
+    /** Every due recurring service of the client goes on the invoice by default; removing one sets it aside (stays pending). */
+    protected function addDueRecurring(Client $client): void
+    {
+        $used = $this->usedLineIds();
+        BillableLine::pending()->where('client_id', $client->id)->whereNotNull('recurring_charge_id')->orderBy('period')->orderBy('id')->get()
+            ->reject(fn ($l) => in_array($l->id, $used, true))
+            ->each(fn ($l) => $this->groups[] = self::recurringGroup($l));
+    }
+
     private static function codes(Collection $lines): string
     {
         return $lines->map(fn ($l) => $l->task->code())->sortBy(fn ($c) => (int) substr($c, strrpos($c, '-') + 1))->implode(', ');
@@ -125,7 +148,7 @@ trait BuildsInvoiceItems
         }
         foreach ($p['charges'] as $c) {
             if (in_array((string) $c->id, $this->pickCharges, true)) {
-                $this->groups[] = ['label' => $c->description, 'lines' => [(string) $c->id]];
+                $this->groups[] = $c->recurring_charge_id ? self::recurringGroup($c) : ['label' => $c->description, 'lines' => [(string) $c->id]];
             }
         }
         $this->resetPicks();
@@ -240,6 +263,7 @@ trait BuildsInvoiceItems
             'groups.*.label' => ['bail', 'required', 'string', 'max:500'],
             'groups.*.lines' => 'required|array|max:500',
             'groups.*.lines.*' => ['bail', 'regex:/^\d{1,18}$/'],
+            'groups.*.amount' => ['bail', 'sometimes', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('Must be greater than zero.')],
             'custom' => 'array|max:50',
         ];
     }
@@ -259,6 +283,19 @@ trait BuildsInvoiceItems
         return [$ids, $labels];
     }
 
+    /** @return array<int,int> line id => typed amount in cents, for recurring items */
+    protected function groupAmounts(): array
+    {
+        $out = [];
+        foreach ($this->groups as $g) {
+            if (isset($g['amount']) && count($g['lines']) === 1) {
+                $out[(int) $g['lines'][0]] = Money::toCents($g['amount']);
+            }
+        }
+
+        return $out;
+    }
+
     protected static function num($v, int $digits = 7): int
     {
         return preg_match('/^\d{1,'.$digits.'}(\.\d+)?$/', trim((string) $v)) ? Money::toCents($v) : 0;
@@ -274,9 +311,9 @@ trait BuildsInvoiceItems
     {
         $conv = app(InvoiceService::class)->lineConverter($cur, $rate);
         $ids = collect([...$this->groups, ...$this->parkedGroups])->pluck('lines')->flatten()->map(fn ($i) => (int) $i)->unique();
-        $work = BillableLine::with(['project', 'client'])->where('client_id', $client->id)->whereIn('id', $ids)->get()
-            ->mapWithKeys(fn ($l) => [$l->id => $conv((int) $l->amount_cents, $l->lineCurrency())]);
-        $sum = fn (array $g) => (int) collect($g['lines'])->sum(fn ($id) => $work[(int) $id] ?? 0);
+        $work = BillableLine::with(['project', 'client'])->where('client_id', $client->id)->whereIn('id', $ids)->get()->keyBy('id');
+        $sum = fn (array $g) => (int) collect($g['lines'])->sum(fn ($id) => ($l = $work[(int) $id] ?? null)
+            ? $conv(isset($g['amount']) ? self::num($g['amount']) : (int) $l->amount_cents, $l->lineCurrency()) : 0);
         $custom = array_map(fn ($r) => $this->rowAmount($r), $this->custom);
         $subtotal = array_sum(array_map($sum, $this->groups)) + array_sum($custom) + $extra;
         $tax = $subtotal < intdiv(PHP_INT_MAX, 20000) ? intdiv($subtotal * min(self::num($this->taxPercent, 3), 10000) + 5000, 10000) : 0;
