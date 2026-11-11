@@ -118,7 +118,7 @@ it('a payment has no invoice', function () {
 it('saves an invoice as a draft: no email, no balance change, shown as a future invoice', function () {
     $c = cdClient('USD');
     $line = cdLine($c, 25000);
-    Livewire::withQueryParams(['client' => $c->id])->actingAs($this->owner)->test(Create::class)->call('saveDraft')->assertHasNoErrors()->assertRedirect();
+    Livewire::withQueryParams(['client' => $c->id])->actingAs($this->owner)->test(Create::class)->call('addAllWork')->call('saveDraft')->assertHasNoErrors()->assertRedirect();
     $inv = Invoice::firstOrFail();
     expect($inv->status)->toBe('draft')->and($inv->emailed_at)->toBeNull()
         ->and(app(ClientAccount::class)->balanceCents($c))->toBe(0);

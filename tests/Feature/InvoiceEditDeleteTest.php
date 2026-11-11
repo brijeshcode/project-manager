@@ -149,15 +149,43 @@ it('is owner only', function () {
     Livewire::actingAs($dev)->test(Edit::class, ['invoice' => $inv])->assertForbidden();
 });
 
-it('previews the live total on edit when a line is unticked and tax changes', function () {
+it('previews the live total on edit when an item is removed and tax changes', function () {
     $c = ieClient();
     $a = ieLine($c, 10000);
     $inv = ieInvoice($c, [$a->id, ieLine($c, 5000)->id]);
     $total = fn ($t) => preg_match('/data-test="invoice-total">([^<]+)</', $t->html(), $m) ? $m[1] : null;
     $lw = Livewire::actingAs(ieOwner())->test(Edit::class, ['invoice' => $inv]);
     expect($total($lw))->toBe('$150.00');
-    $lw->set('selected', [(string) $a->id]);
-    expect($total($lw))->toBe('$100.00');
+    $lw->call('removeEdit', $a->id)->assertCount('parkedGroups', 1);
+    expect($total($lw))->toBe('$50.00');
     $lw->set('taxPercent', '10');
-    expect($total($lw))->toBe('$110.00');
+    expect($total($lw))->toBe('$55.00');
+});
+
+it('edits with the same picker: adds completed work as a labelled item, keeps grouped labels, and drops removed work back to billable', function () {
+    $c = ieClient();
+    $a = ieLine($c, 10000, 'Setup');
+    $inv = ieInvoice($c, [$a->id]);
+    $more = ieLine($c, 2500, 'Hosting');
+    $t = Livewire::actingAs(ieOwner())->test(Edit::class, ['invoice' => $inv])->assertSet('tab', 'charges')->assertSee('Hosting')
+        ->set('pickCharges', [(string) $more->id])->call('addPicked')->assertSet('groups', [['label' => 'Hosting', 'lines' => [(string) $more->id]]])
+        ->set('groups.0.label', 'Hosting, 12 months')->call('removeEdit', $a->id)->call('forgetGroup', 0)
+        ->call('save')->assertHasNoErrors()->assertRedirect(route('invoices.show', $inv));
+    $inv->refresh();
+    expect(array_column($inv->lines_snapshot, 'description'))->toBe(['Hosting, 12 months'])->and($inv->total_cents)->toBe(2500)
+        ->and($a->fresh()->invoice_id)->toBeNull()->and($more->fresh()->invoice_label)->toBe('Hosting, 12 months');
+    // reopening shows the labelled item again, not the raw line
+    Livewire::actingAs(ieOwner())->test(Edit::class, ['invoice' => $inv])->assertSet('groups', [['label' => 'Hosting, 12 months', 'lines' => [(string) $more->id]]]);
+});
+
+it('changes the status from the invoice list', function () {
+    $c = ieClient();
+    $inv = ieInvoice($c, [ieLine($c, 10000)->id]);
+    $t = Livewire::actingAs(ieOwner())->test(App\Livewire\Invoices\Index::class)->assertSeeHtml('data-test="row-status"');
+    $t->call('setStatus', $inv->id, 'paid')->assertDispatched('toast', type: 'error');
+    expect($inv->fresh()->status)->toBe('sent');
+    $t->call('setStatus', $inv->id, 'draft');
+    expect($inv->fresh()->status)->toBe('draft');
+    $t->call('setStatus', $inv->id, 'void')->assertDispatched('toast', type: 'error');
+    expect($inv->fresh()->status)->toBe('draft');
 });

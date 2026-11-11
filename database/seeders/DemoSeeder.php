@@ -579,7 +579,7 @@ See the [gateway docs](https://example.com/docs).", 'client_visible' => true]);
                 $subtotal = $qty * $unit;
                 $tax = (int) round($subtotal * 0.10);
                 $invoice = Invoice::create([
-                    'number' => 'INV-'.$issued->format('Ymd').'-'.sprintf('%02d', $n * 3 + $i + 1),
+                    'number' => 'INV-'.$issued->format('Ym').'-'.sprintf('%02d', $n * 3 + $i + 1),
                     'client_id' => $client->id, 'status' => 'sent', 'issued_on' => $issued,
                     'due_on' => $issued->copy()->addDays((int) substr($terms, 4)), 'currency' => $currency,
                     'subtotal_cents' => $subtotal, 'tax_percent' => '10.00', 'tax_cents' => $tax, 'total_cents' => $subtotal + $tax,

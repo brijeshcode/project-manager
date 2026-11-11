@@ -55,7 +55,7 @@ it('creates an invoice with totals, attached lines and moves the balance', funct
         ->and($inv->total_cents)->toBe(33000)
         ->and($inv->status)->toBe('sent')
         ->and($inv->currency)->toBe('USD')
-        ->and($inv->number)->toMatch('/^INV-\d{8}-01$/')
+        ->and($inv->number)->toMatch('/^INV-\d{6}-01$/')
         ->and($inv->issued_on->toDateString())->toBe(now()->toDateString())
         ->and($inv->lines()->count())->toBe(2)
         ->and($a->fresh()->invoice_id)->toBe($inv->id)

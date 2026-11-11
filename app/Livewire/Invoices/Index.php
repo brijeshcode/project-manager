@@ -4,6 +4,7 @@ namespace App\Livewire\Invoices;
 
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Services\InvoiceService;
 use App\Services\LocalCurrency;
 use App\Livewire\Concerns\WithListSearch;
 use Livewire\Component;
@@ -19,6 +20,14 @@ class Index extends Component
         $this->authorize('manage-money');
     }
 
+    /** Status by hand from the list: not sent or sent. Cancelling stays on the invoice page. */
+    public function setStatus(int $invoiceId, string $status, InvoiceService $svc): void
+    {
+        $this->authorize('manage-money');
+        $ok = $svc->setStatus(Invoice::findOrFail($invoiceId), $status);
+        $this->dispatch('toast', type: $ok ? 'success' : 'error', message: $ok ? 'Status updated.' : 'This invoice cannot change status.');
+    }
+
     public function updatedClientFilter(): void
     {
         $this->resetPage();
@@ -29,6 +38,7 @@ class Index extends Component
         $this->authorize('manage-money');
 
         $like = $this->likeTerm();
+
         return view('livewire.invoices.index', [
             'invoices' => $this->fitPage(Invoice::with('client')
                 ->when($this->clientFilter !== '', fn ($q) => $q->where('client_id', (int) $this->clientFilter))
@@ -38,7 +48,6 @@ class Index extends Component
                 ->when(in_array($this->status, ['sent', 'draft', 'void']), fn ($q) => $q->where('invoices.status', $this->status))
                 ->orderByDesc('id'), \App\Support\Settings::pageSize()),
             'local' => LocalCurrency::code(),
-            'owing' => \App\Support\DashboardMoney::owingClientIds(),
             'stats' => \App\Support\MoneyStats::invoices(),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
         ]);

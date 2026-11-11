@@ -64,6 +64,11 @@ class Index extends Component
     {
         $this->authorize('manage-money');
         $this->paid_on = today()->toDateString();
+        $id = request()->query('client');
+        if (is_scalar($id) && Client::whereKey((int) $id)->exists()) {
+            $this->client_id = (int) $id;
+            $this->updatedClientId();
+        }
     }
 
     public function updatedClientFilter(): void

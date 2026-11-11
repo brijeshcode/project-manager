@@ -2,9 +2,12 @@
 
 namespace App\Livewire\Invoices;
 
+use App\Livewire\Concerns\BuildsInvoiceItems;
 use App\Models\BankAccount;
 use App\Models\BillableLine;
+use App\Models\Client;
 use App\Models\Invoice;
+use App\Services\BillableService;
 use App\Services\InvoiceService;
 use App\Services\LocalCurrency;
 use App\Support\Money;
@@ -14,14 +17,10 @@ use Livewire\Component;
 
 class Edit extends Component
 {
+    use BuildsInvoiceItems;
+
     #[Locked]
     public int $invoiceId;
-
-    /** @var array<int, string> ticked line ids: this invoice's task/recurring lines + pending lines */
-    public array $selected = [];
-
-    /** @var array<int, array{description:string, quantity:string, unit_price:string}> new lines */
-    public array $custom = [];
 
     /** @var array<int, array{description:string, quantity:string, unit_price:string}> manual lines on this invoice, by line id */
     public array $edits = [];
@@ -44,36 +43,46 @@ class Edit extends Component
         $this->issuedOn = $invoice->issued_on->toDateString();
         $this->dueOn = $invoice->due_on?->toDateString() ?? '';
         $this->terms = (string) $invoice->terms;
+        $this->showQuantity = (bool) $invoice->show_quantity;
+
+        // own manual lines stay editable rows; task / recurring lines become items, one per printed label
         $own = BillableLine::where('invoice_id', $invoice->id)->orderBy('id')->get();
-        $this->selected = $own->pluck('id')->map(fn ($i) => (string) $i)->all();
-        $this->edits = $own->whereNull('source_type')->mapWithKeys(fn ($l) => [$l->id => [
+        $manual = $own->whereNull('source_type')->whereNull('recurring_charge_id')->whereNull('invoice_label');
+        $this->edits = $manual->mapWithKeys(fn ($l) => [$l->id => [
             'description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price' => Money::toInput((int) $l->unit_price_cents),
         ]])->all();
+        $this->updatedShowQuantity();
+        $this->groups = $own->diff($manual)->groupBy(fn ($l) => $l->invoice_label ?? 'line:'.$l->id)
+            ->map(fn ($g) => ['label' => $g->first()->invoice_label ?? $g->first()->description, 'lines' => $g->pluck('id')->map(fn ($i) => (string) $i)->all()])
+            ->values()->all();
+
+        app(BillableService::class)->syncCompletedWork($invoice->client);
+        $this->pickFirstTab($invoice->client);
     }
 
-    public function addCustom(): void
+    protected function itemsClient(): Client
     {
-        $this->authorize('manage-money');
-        $this->custom[] = ['description' => '', 'quantity' => '1', 'unit_price' => ''];
+        return Invoice::findOrFail($this->invoiceId)->client;
     }
 
-    public function removeCustom(int $i): void
+    /** An existing manual line moves to "Set aside" as an item; put back, it prints its saved text and amount. */
+    public function removeEdit(int $lineId): void
     {
         $this->authorize('manage-money');
-        unset($this->custom[$i]);
-        $this->custom = array_values($this->custom);
+        if (isset($this->edits[$lineId])) {
+            $this->parkedGroups[] = ['label' => $this->edits[$lineId]['description'] ?: 'Item', 'lines' => [(string) $lineId]];
+            unset($this->edits[$lineId]);
+        }
     }
 
     public function save(InvoiceService $svc)
     {
         $this->authorize('manage-money');
         $invoice = Invoice::with('client')->findOrFail($this->invoiceId);
+        $this->flattenQuantities();
         $same = strtoupper($invoice->currency) === LocalCurrency::code();
         $positive = fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('Must be greater than zero.');
-        $this->validate([
-            'selected' => 'array|max:500',
-            'custom' => 'array|max:50',
-            'selected.*' => ['bail', 'regex:/^\d{1,18}$/'],
+        $this->validate($this->itemRules() + [
             'taxPercent' => ['bail', 'required', 'regex:/^\d{1,3}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) <= 10000 || $fail('Tax must be between 0 and 100.')],
             'bankAccountId' => ['nullable', 'regex:/^\d{1,18}$/', Rule::exists('bank_accounts', 'id')],
             'exchangeRate' => $same ? 'nullable' : ['bail', 'required', 'string', fn ($a, $v, $fail) => Money::isValidRate((string) $v) || $fail('Enter a positive rate with up to 6 decimals (max 999999.999999).')],
@@ -86,55 +95,34 @@ class Edit extends Component
             'custom.*.description' => ['bail', 'required', 'string', 'max:255'],
             'custom.*.quantity' => ['bail', 'required', 'regex:/^\d{1,6}(\.\d{1,2})?$/', $positive],
             'custom.*.unit_price' => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', $positive],
-        ]);
+        ], ['groups.*.label.required' => 'Give this item a label.']);
 
-        $svc->update($invoice, array_map('intval', $this->selected), array_values($this->custom), [
+        [$lineIds, $labels] = $this->groupLines();
+        $svc->update($invoice, [...$lineIds, ...array_map('intval', array_keys($this->edits))], array_values($this->custom), [
             'tax_percent' => $this->taxPercent, 'issued_on' => $this->issuedOn, 'due_on' => $this->dueOn ?: null,
-            'terms' => $this->terms ?: null, 'bank_account_id' => $this->bankAccountId === '' ? null : (int) $this->bankAccountId,
+            'terms' => $this->terms ?: null, 'show_quantity' => $this->showQuantity, 'bank_account_id' => $this->bankAccountId === '' ? null : (int) $this->bankAccountId,
             'exchange_rate' => $same ? null : $this->exchangeRate,
-        ], $this->edits);
+        ], $this->edits, $labels);
         session()->flash('toast', 'Invoice updated.');
 
         return $this->redirectRoute('invoices.show', $invoice);
-    }
-
-    /** Live preview of the totals; same math as InvoiceService::update, invalid inputs count as 0. */
-    private function summary(Invoice $invoice, $lines): array
-    {
-        $num = fn ($v, $d = 7) => preg_match('/^\d{1,'.$d.'}(\.\d+)?$/', trim((string) $v)) ? Money::toCents($v) : 0;
-        $amount = fn ($r) => intdiv($num($r['quantity'] ?? '') * $num($r['unit_price'] ?? '') + 50, 100);
-        $cur = strtoupper($invoice->currency);
-        $rate = $cur === LocalCurrency::code() ? '1' : (Money::isValidRate($this->exchangeRate) ? $this->exchangeRate : ($invoice->exchange_rate !== null ? (string) $invoice->exchange_rate : LocalCurrency::rateFor($cur)));
-        $conv = app(InvoiceService::class)->lineConverter($cur, $rate);
-        $edits = array_map($amount, $this->edits);
-        $picked = $lines->whereIn('id', array_map('intval', $this->selected));
-        $custom = array_map($amount, $this->custom);
-        $subtotal = (int) $picked->sum(fn ($l) => $conv($edits[$l->id] ?? (int) $l->amount_cents, $l->lineCurrency())) + array_sum($custom);
-
-        return [
-            'currency' => $cur,
-            'count' => $picked->count() + count($custom),
-            'edits' => $edits,
-            'custom' => $custom,
-            'subtotal' => $subtotal,
-            'tax' => $subtotal < intdiv(PHP_INT_MAX, 20000) ? intdiv($subtotal * min($num($this->taxPercent, 3), 10000) + 5000, 10000) : 0,
-        ];
     }
 
     public function render()
     {
         $this->authorize('manage-money');
         $invoice = Invoice::with('client')->findOrFail($this->invoiceId);
-        $ownLines = BillableLine::where('invoice_id', $invoice->id)->orderBy('id')->get();
-        $lines = $ownLines->concat(BillableLine::pending()->where('client_id', $invoice->client_id)->orderBy('id')->get());
+        $cur = strtoupper($invoice->currency);
+        $rate = $cur === LocalCurrency::code() ? '1' : (Money::isValidRate($this->exchangeRate) ? $this->exchangeRate : ($invoice->exchange_rate !== null ? (string) $invoice->exchange_rate : LocalCurrency::rateFor($cur)));
+        $edits = array_map(fn ($r) => $this->rowAmount($r), $this->edits);
 
         return view('livewire.invoices.edit', [
-            'summary' => $this->summary($invoice, $lines),
+            'summary' => ['edits' => $edits] + $this->itemsSummary($invoice->client, $cur, $rate, array_sum($edits), count($edits)),
+            'picker' => $this->picker($invoice->client),
             'invoice' => $invoice,
             'client' => $invoice->client,
             'local' => LocalCurrency::code(),
-            'sameCurrency' => strtoupper($invoice->currency) === LocalCurrency::code(),
-            'lines' => $lines,
+            'sameCurrency' => $cur === LocalCurrency::code(),
             'banks' => BankAccount::orderBy('label')->get(['id', 'label', 'bank_name']),
         ]);
     }

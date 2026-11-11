@@ -69,22 +69,22 @@ class ProjectEconomics
     }
 
     /**
-     * [task_id => 'draft'|'sent'|'paid'] for the given tasks that sit on a live invoice, through their own line or a
-     * sprint line naming them (same match as BillableService); 'paid' = a sent invoice marked paid. Void invoices
+     * [task_id => 'draft'|'sent'] for the given tasks that sit on a live invoice, through their own line or a
+     * sprint line naming them (same match as BillableService). Payments settle the client balance, not an invoice. Void invoices
      * release their lines, so they never show.
      */
     public static function invoicedTasks(Project $project, Collection $tasks): array
     {
         $lines = BillableLine::with('invoice')->where('project_id', $project->id)->whereNotNull('invoice_id')
             ->whereIn('source_type', [Task::class, Sprint::class])->get();
-        $rank = ['draft' => 1, 'sent' => 2, 'paid' => 3];
+        $rank = ['draft' => 1, 'sent' => 2];
         $out = [];
         foreach ($tasks as $t) {
             foreach ($lines as $l) {
                 // ponytail: tasks x lines scan, index lines by source_id if a project reaches thousands of lines
                 $hit = $l->source_type === Task::class ? (int) $l->source_id === $t->id
                     : (int) $l->source_id === (int) $t->sprint_id && preg_match('/\b'.preg_quote($t->code(), '/').'\b/', $l->description);
-                $s = $l->invoice->status === 'sent' && $l->invoice->marked_paid_at ? 'paid' : $l->invoice->status;
+                $s = $l->invoice->status;
                 if ($hit && $rank[$s] > ($rank[$out[$t->id] ?? ''] ?? 0)) {
                     $out[$t->id] = $s;
                 }

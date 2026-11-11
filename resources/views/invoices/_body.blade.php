@@ -36,7 +36,7 @@
             @if ($__client->contact_phone)<div>{{ $__client->contact_phone }}</div>@endif
         </td>
         <td style="padding:{{ $__g }};vertical-align:top;">
-            <table style="border-collapse:collapse;margin-left:auto;">
+            <table align="right" style="border-collapse:collapse;margin-left:auto;">
                 <tr><td style="padding:0 16px 4px 0;color:#64748b;">Invoice no.</td><td style="padding:0 0 4px;text-align:right;">{{ $invoice->number }}</td></tr>
                 <tr><td style="padding:0 16px 4px 0;color:#64748b;">Issued</td><td style="padding:0 0 4px;text-align:right;">{{ $invoice->issued_on->toFormattedDateString() }}</td></tr>
                 @if ($invoice->due_on)<tr><td style="padding:0 16px 4px 0;color:#64748b;">Due</td><td style="padding:0 0 4px;text-align:right;font-weight:bold;">{{ $invoice->due_on->toFormattedDateString() }}</td></tr>@endif
@@ -50,8 +50,8 @@
                 <tr>
                     <th style="{{ $__th }}padding-left:0;text-align:left;width:28px;">#</th>
                     <th style="{{ $__th }}text-align:left;">Description</th>
-                    <th style="{{ $__th }}text-align:right;">Qty</th>
-                    <th style="{{ $__th }}text-align:right;">Unit price</th>
+                    @if ($invoice->show_quantity)<th style="{{ $__th }}text-align:right;">Qty</th>
+                    <th style="{{ $__th }}text-align:right;">Unit price</th>@endif
                     <th style="{{ $__th }}padding-right:0;text-align:right;">Amount</th>
                 </tr>
             </thead>
@@ -60,19 +60,20 @@
                     <tr>
                         <td style="{{ $__td }}padding-left:0;color:#64748b;">{{ $loop->iteration }}</td>
                         <td style="{{ $__td }}">{{ $line['description'] }}</td>
-                        <td style="{{ $__td }}text-align:right;white-space:nowrap;">{{ rtrim(rtrim((string) $line['quantity'], '0'), '.') }}</td>
-                        <td style="{{ $__td }}text-align:right;white-space:nowrap;">{{ \App\Support\Money::format($line['unit_price_cents'], $__cur) }}</td>
+                        @if ($invoice->show_quantity)<td style="{{ $__td }}text-align:right;white-space:nowrap;">{{ rtrim(rtrim((string) $line['quantity'], '0'), '.') }}</td>
+                        <td style="{{ $__td }}text-align:right;white-space:nowrap;">{{ \App\Support\Money::format($line['unit_price_cents'], $__cur) }}</td>@endif
                         <td style="{{ $__td }}padding-right:0;text-align:right;white-space:nowrap;">{{ \App\Support\Money::format($line['amount_cents'], $__cur) }}</td>
                     </tr>
                 @endforeach
             </tbody>
         </table>
 
-        <table style="border-collapse:collapse;margin:16px 0 0 auto;min-width:260px;">
+        <table align="right" style="border-collapse:collapse;margin:16px 0 0 auto;min-width:260px;">
             <tr><td style="padding:4px 24px 4px 0;color:#64748b;">Subtotal</td><td style="padding:4px 0;text-align:right;white-space:nowrap;">{{ \App\Support\Money::format($invoice->subtotal_cents, $__cur) }}</td></tr>
             <tr><td style="padding:4px 24px 4px 0;color:#64748b;">Tax ({{ rtrim(rtrim((string) $invoice->tax_percent, '0'), '.') ?: '0' }}%)</td><td style="padding:4px 0;text-align:right;white-space:nowrap;">{{ \App\Support\Money::format($invoice->tax_cents, $__cur) }}</td></tr>
             <tr><td style="padding:10px 24px 0 0;border-top:2px solid #0f172a;font-size:15px;font-weight:bold;">Total due</td><td style="padding:10px 0 0;border-top:2px solid #0f172a;text-align:right;font-size:15px;font-weight:bold;white-space:nowrap;">{{ \App\Support\Money::format($invoice->total_cents, $__cur) }}</td></tr>
         </table>
+        <div style="clear:both;"></div>
     </div>
 
     <table style="width:100%;border-collapse:collapse;margin-top:{{ $__g }};border-top:1px solid #e2e8f0;"><tr>

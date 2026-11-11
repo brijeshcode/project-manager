@@ -9,6 +9,7 @@ use App\Models\Client;
 use App\Models\Invoice;
 use App\Support\Money;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -23,9 +24,11 @@ class InvoiceService
     /**
      * @param  array<int>  $lineIds  pending lines of this client
      * @param  array<int, array{description:string, quantity:mixed, unit_price:mixed}>  $customLines
+     * @param  array<int, string>  $labels  line id => label; lines sharing a label print as one row
      */
-    public function create(Client $client, array $lineIds, array $customLines = [], float $taxPercent = 0.0, ?int $bankAccountId = null, ?string $exchangeRate = null, ?string $currency = null, bool $draft = false, ?string $issuedOn = null): Invoice
+    public function create(Client $client, array $lineIds, array $customLines = [], float $taxPercent = 0.0, ?int $bankAccountId = null, ?string $exchangeRate = null, ?string $currency = null, bool $draft = false, ?string $issuedOn = null, array $labels = [], bool $showQuantity = false): Invoice
     {
+        $labels = array_filter(array_map(fn ($l) => mb_substr(trim((string) $l), 0, 500), $labels), fn ($l) => $l !== '');
         if ($exchangeRate !== null && ! Money::isValidRate($exchangeRate)) {
             throw ValidationException::withMessages(['exchangeRate' => 'Enter a positive rate with up to 6 decimals.']);
         }
@@ -41,8 +44,10 @@ class InvoiceService
             throw ValidationException::withMessages(['lines' => 'Add at least one line.']);
         }
 
-        $invoice = DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $cur, $rate, $conv, $draft, $issuedOn) {
-            $picked = BillableLine::pending()->where('client_id', $client->id)->whereIn('id', $lineIds)->lockForUpdate()->get();
+        $invoice = DB::transaction(function () use ($client, $lineIds, $custom, $pctHundredths, $bankAccountId, $cur, $rate, $conv, $draft, $issuedOn, $labels, $showQuantity) {
+            $order = array_flip($lineIds);
+            $picked = BillableLine::pending()->where('client_id', $client->id)->whereIn('id', $lineIds)->lockForUpdate()->get()
+                ->sortBy(fn ($l) => $order[$l->id])->values();
             if ($picked->count() !== count($lineIds)) {
                 throw ValidationException::withMessages(['lines' => 'Some lines are not pending lines of this client.']);
             }
@@ -76,21 +81,22 @@ class InvoiceService
                 'exchange_rate' => $rate,
                 'local_total_cents' => $rate === null ? null : Money::convert($subtotal + $tax, $rate),
                 'terms' => $terms,
-            ], $issued->format('Ymd'));
+                'show_quantity' => $showQuantity,
+            ], $issued->format('Ym'));
 
             $claimed = BillableLine::whereIn('id', $picked->pluck('id'))->whereNull('invoice_id')->update(['invoice_id' => $invoice->id]);
             if ($claimed !== $picked->count()) {
                 throw ValidationException::withMessages(['lines' => 'Some lines were just invoiced elsewhere. Reload and retry.']);
             }
+            foreach ($picked as $l) {
+                $l->invoice_label = $labels[$l->id] ?? null;
+            }
+            foreach ($picked->whereNotNull('invoice_label')->groupBy('invoice_label') as $label => $group) {
+                BillableLine::whereIn('id', $group->pluck('id'))->update(['invoice_label' => $label]);
+            }
             $created = collect($custom)->map(fn ($line) => BillableLine::create($line + ['client_id' => $client->id, 'invoice_id' => $invoice->id]));
             // frozen copy so a voided invoice (whose lines return to pending) and later line edits never change what it shows
-            $invoice->update(['lines_snapshot' => $picked->map(fn ($l) => [
-                'description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price_cents' => $conv((int) $l->unit_price_cents, $l->lineCurrency()),
-                'amount_cents' => $conv((int) $l->amount_cents, $l->lineCurrency()), 'project_id' => $l->project_id,
-            ])->concat($created->map(fn ($l) => [
-                'description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price_cents' => (int) $l->unit_price_cents,
-                'amount_cents' => (int) $l->amount_cents, 'project_id' => $l->project_id,
-            ]))->values()->all()]);
+            $invoice->update(['lines_snapshot' => $this->snapshotRows($picked, $created, $conv)]);
 
             return $invoice;
         });
@@ -173,7 +179,7 @@ class InvoiceService
             $locked->update(['status' => 'void']);
             // All lines (picked or custom) go back to pending. Payments linked to this invoice stay:
             // they are real money received and keep counting toward the client balance.
-            BillableLine::where('invoice_id', $locked->id)->update(['invoice_id' => null]);
+            BillableLine::where('invoice_id', $locked->id)->update(['invoice_id' => null, 'invoice_label' => null]);
         });
         $invoice->refresh();
     }
@@ -186,7 +192,7 @@ class InvoiceService
      * @param  array<int, array{description:string, quantity:mixed, unit_price:mixed}>  $lineEdits  keyed by own line id
      * @param  array{tax_percent:mixed, issued_on:string, due_on:?string, terms:?string, bank_account_id:?int, exchange_rate:?string}  $h
      */
-    public function update(Invoice $invoice, array $lineIds, array $customLines, array $h, array $lineEdits = []): Invoice
+    public function update(Invoice $invoice, array $lineIds, array $customLines, array $h, array $lineEdits = [], ?array $labels = null): Invoice
     {
         $rate = $h['exchange_rate'] ?? null;
         if ($rate !== null && ! Money::isValidRate($rate)) {
@@ -205,7 +211,7 @@ class InvoiceService
             throw ValidationException::withMessages(['lines' => 'Add at least one line.']);
         }
 
-        DB::transaction(function () use ($invoice, $lineIds, $custom, $pct, $h, $rate, $edits, $editKeys, $conv) {
+        DB::transaction(function () use ($invoice, $lineIds, $custom, $pct, $h, $rate, $edits, $editKeys, $conv, $labels) {
             $locked = Invoice::lockForUpdate()->findOrFail($invoice->id);
             if ($locked->status === 'void') {
                 throw ValidationException::withMessages(['lines' => 'A cancelled invoice cannot be edited.']);
@@ -225,7 +231,8 @@ class InvoiceService
             if ($added->count() !== count($addIds)) {
                 throw ValidationException::withMessages(['lines' => 'Some lines are not pending lines of this client.']);
             }
-            $picked = $keep->concat($added);
+            $order = array_flip($lineIds);
+            $picked = $keep->concat($added)->sortBy(fn ($l) => $order[$l->id] ?? PHP_INT_MAX)->values();
             if ($picked->max('amount_cents') > self::MAX_LINE_CENTS) {
                 throw ValidationException::withMessages(['lines' => 'A line amount is too large to invoice.']);
             }
@@ -235,9 +242,18 @@ class InvoiceService
             }
             $tax = intdiv($subtotal * $pct + 5000, 10000);
 
-            BillableLine::whereIn('id', $own->pluck('id')->diff($keep->pluck('id')))->update(['invoice_id' => null]);
+            BillableLine::whereIn('id', $own->pluck('id')->diff($keep->pluck('id')))->update(['invoice_id' => null, 'invoice_label' => null]);
+            // labels: line id => printed row; null keeps the labels the lines already have (new lines print on their own)
+            if ($labels !== null) {
+                $labels = array_filter(array_map(fn ($l) => mb_substr(trim((string) $l), 0, 500), $labels), fn ($l) => $l !== '');
+                $keep->each(fn ($l) => $l->invoice_label = $labels[$l->id] ?? null);
+                $added->each(fn ($l) => $l->invoice_label = $labels[$l->id] ?? null);
+            }
             $keep->each->save();
             BillableLine::whereIn('id', $added->pluck('id'))->update(['invoice_id' => $locked->id]);
+            foreach ($added->whereNotNull('invoice_label')->groupBy('invoice_label') as $label => $group) {
+                BillableLine::whereIn('id', $group->pluck('id'))->update(['invoice_label' => $label]);
+            }
             $created = collect($custom)->map(fn ($line) => BillableLine::create($line + ['client_id' => $locked->client_id, 'invoice_id' => $locked->id]));
 
             $bankId = $h['bank_account_id'] ?? null;
@@ -250,13 +266,8 @@ class InvoiceService
                 'bank_account_id' => $bank?->id,
                 // keep the frozen snapshot unless the account itself changed
                 'bank_snapshot' => $bank?->id === $locked->bank_account_id ? $locked->bank_snapshot : ($bank ? $bank->only(['account_name', 'bank_name', 'account_number', 'ifsc_swift', 'email']) : null),
-                'lines_snapshot' => $picked->map(fn ($l) => [
-                    'description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price_cents' => $conv((int) $l->unit_price_cents, $l->lineCurrency()),
-                    'amount_cents' => $conv((int) $l->amount_cents, $l->lineCurrency()), 'project_id' => $l->project_id,
-                ])->concat($created->map(fn ($l) => [
-                    'description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price_cents' => (int) $l->unit_price_cents,
-                    'amount_cents' => (int) $l->amount_cents, 'project_id' => $l->project_id,
-                ]))->values()->all(),
+                'lines_snapshot' => $this->snapshotRows($picked, $created, $conv),
+                'show_quantity' => (bool) ($h['show_quantity'] ?? $locked->show_quantity),
             ]);
         });
         $invoice->refresh();
@@ -265,12 +276,51 @@ class InvoiceService
         return $invoice;
     }
 
+    /** Printed rows: lines sharing an invoice_label merge into one row with that label (qty 1, summed amount); others print as they are. */
+    private function snapshotRows(Collection $picked, Collection $created, \Closure $conv): array
+    {
+        $rows = [];
+        foreach ($picked as $l) {
+            $amount = $conv((int) $l->amount_cents, $l->lineCurrency());
+            if ($l->invoice_label === null) {
+                $rows['l'.$l->id] = ['description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price_cents' => $conv((int) $l->unit_price_cents, $l->lineCurrency()), 'amount_cents' => $amount, 'project_id' => $l->project_id];
+                continue;
+            }
+            $key = 'g'.$l->invoice_label;
+            $rows[$key] ??= ['description' => $l->invoice_label, 'quantity' => '1.00', 'unit_price_cents' => 0, 'amount_cents' => 0, 'project_id' => $l->project_id];
+            $rows[$key]['unit_price_cents'] += $amount;
+            $rows[$key]['amount_cents'] += $amount;
+        }
+        foreach ($created as $l) {
+            $rows[] = ['description' => $l->description, 'quantity' => (string) $l->quantity, 'unit_price_cents' => (int) $l->unit_price_cents, 'amount_cents' => (int) $l->amount_cents, 'project_id' => $l->project_id];
+        }
+
+        return array_values($rows);
+    }
+
+    /**
+     * Not sent <-> sent by hand. Sending goes through markSent (counts in the balance, emailed once); back to not sent
+     * takes it out of the balance. Payments settle the client balance, never a single invoice, so there is no "paid".
+     */
+    public function setStatus(Invoice $invoice, string $status): bool
+    {
+        if ($status === 'sent') {
+            return $this->markSent($invoice);
+        }
+        if ($status !== 'draft' || Invoice::whereKey($invoice->id)->where('status', 'sent')->update(['status' => 'draft']) !== 1) {
+            return false;
+        }
+        Log::info('invoice set back to draft', ['id' => $invoice->id, 'user_id' => auth()->id()]);
+
+        return true;
+    }
+
     /** Hard delete: lines return to pending; the client balance follows automatically. */
     public function delete(Invoice $invoice): void
     {
         DB::transaction(function () use ($invoice) {
             $locked = Invoice::lockForUpdate()->findOrFail($invoice->id);
-            BillableLine::where('invoice_id', $locked->id)->update(['invoice_id' => null]);
+            BillableLine::where('invoice_id', $locked->id)->update(['invoice_id' => null, 'invoice_label' => null]);
             $locked->delete();
         });
         Log::info('invoice deleted', ['id' => $invoice->id, 'number' => $invoice->number, 'client_id' => $invoice->client_id, 'total_cents' => $invoice->total_cents, 'user_id' => auth()->id()]);
@@ -294,9 +344,10 @@ class InvoiceService
     }
 
     /** Assign INV-YYYYMMDD-NN from the highest used sequence (voided numbers stay used); retry on unique collision. */
-    private function insertNumbered(array $attrs, string $day): Invoice
+    /** INV-YYYYMM-NN: sequence per month of the invoice date. */
+    private function insertNumbered(array $attrs, string $month): Invoice
     {
-        $prefix = "INV-{$day}-";
+        $prefix = "INV-{$month}-";
         for ($try = 0; $try < 5; $try++) {
             $last = Invoice::where('number', 'like', $prefix.'%')->orderByRaw('LENGTH(number) desc')->orderByDesc('number')->value('number');
             $next = $last ? (int) substr($last, strlen($prefix)) + 1 : 1;

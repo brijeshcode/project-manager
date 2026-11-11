@@ -1,6 +1,7 @@
 <div>
-    <x-ui.page-header title="Invoices">
+    <x-ui.page-header title="Invoices" subtitle="Bill clients for completed work. Payments settle the client balance.">
         <x-slot:actions>
+            <a href="{{ route('payments.index') }}" class="btn btn-secondary">Record payment</a>
             <a href="{{ route('invoices.create') }}" class="btn btn-primary">New invoice</a>
         </x-slot:actions>
     </x-ui.page-header>
@@ -15,28 +16,27 @@
         <x-ui.stat label="Future invoices" :value="$fmt($stats['draft_total'])" color="purple" :hint="$stats['draft'].' not sent (estimate) · '.$stats['cancelled'].' cancelled'" />
     </div>
 
-    <x-ui.filter-card>
-        <div class="sm:col-span-2">
-            <label for="search" class="sr-only">Search invoices</label>
-            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by number or client..." class="input" />
+    <div class="card mb-6 p-4">
+        <div class="-mx-1 mb-4 flex gap-1 overflow-x-auto border-b border-slate-100 px-1 pb-3 dark:border-gray-700" role="tablist" aria-label="Filter by status">
+            @foreach (['' => 'All', 'draft' => 'Not sent', 'sent' => 'Sent', 'void' => 'Cancelled'] as $value => $text)
+                <button type="button" wire:click="$set('status', '{{ $value }}')" role="tab" aria-selected="{{ $status === $value ? 'true' : 'false' }}"
+                    class="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition {{ $status === $value ? 'bg-brand-50 text-brand-700 dark:bg-blue-900/30 dark:text-blue-300' : 'text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-700' }}">{{ $text }}</button>
+            @endforeach
         </div>
-        <div>
-            <label for="clientFilter" class="sr-only">Client</label>
-            <select wire:model.live="clientFilter" id="clientFilter" class="select">
-                <option value="">All clients</option>
-                @foreach ($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
-            </select>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="sm:col-span-2">
+                <label for="search" class="sr-only">Search invoices</label>
+                <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by number or client..." class="input" />
+            </div>
+            <div>
+                <label for="clientFilter" class="sr-only">Client</label>
+                <select wire:model.live="clientFilter" id="clientFilter" class="select">
+                    <option value="">All clients</option>
+                    @foreach ($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
+                </select>
+            </div>
         </div>
-        <div>
-            <label for="status" class="sr-only">Status</label>
-            <select wire:model.live="status" id="status" class="select">
-                <option value="">All statuses</option>
-                <option value="sent">Sent</option>
-                <option value="draft">Not sent</option>
-                <option value="void">Cancelled</option>
-            </select>
-        </div>
-    </x-ui.filter-card>
+    </div>
 
     @if ($invoices->isEmpty())
         @if ($search !== '' || $status !== '' || $clientFilter !== '')
@@ -44,31 +44,63 @@
                 <x-slot name="action"><button type="button" wire:click="clearFilters" class="btn btn-secondary">Clear filters</button></x-slot>
             </x-ui.empty-state>
         @else
-            <x-ui.empty-state title="No invoices" message="Create one from a client's pending work." />
+            <x-ui.empty-state title="No invoices yet" message="Create one from a client's completed work.">
+                <x-slot name="action"><a href="{{ route('invoices.create') }}" class="btn btn-primary">New invoice</a></x-slot>
+            </x-ui.empty-state>
         @endif
     @else
         <x-ui.table-card>
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
                 <thead>
-                    <tr><th class="table-th">Number</th><th class="table-th">Client</th><th class="table-th">Issued</th><th class="table-th">Total</th><th class="table-th">Status</th></tr>
+                    <tr>
+                        <th class="table-th">Invoice</th>
+                        <th class="table-th">Client</th>
+                        <th class="table-th">Issued</th>
+                        <th class="table-th">Due</th>
+                        <th class="table-th text-right">Amount</th>
+                        <th class="table-th">Status</th>
+                        <th class="table-th"><span class="sr-only">Actions</span></th>
+                    </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
                     @foreach ($invoices as $i)
-                        @php
-                            $state = \App\Support\DashboardMoney::invoiceState($i, $owing);
-                            [$label, $color] = match ($state) { 'void' => ['cancelled', 'rose'], 'draft' => ['not sent', 'amber'], 'overdue' => ['overdue', 'rose'], default => ['sent', 'green'] };
-                        @endphp
-                        <tr wire:key="inv-{{ $i->id }}">
-                            <td class="table-td"><a href="{{ route('invoices.show', $i) }}" class="link">{{ $i->number }}</a></td>
+                        @php [$label, $color] = match ($i->status) { 'void' => ['Cancelled', 'rose'], 'draft' => ['Not sent', 'amber'], default => ['Sent', 'brand'] }; @endphp
+                        <tr wire:key="inv-{{ $i->id }}" class="hover:bg-slate-50 dark:hover:bg-gray-700/40">
+                            <td class="table-td whitespace-nowrap"><a href="{{ route('invoices.show', $i) }}" class="link font-medium">{{ $i->number }}</a></td>
                             <td class="table-td">{{ $i->client->name }}</td>
-                            <td class="table-td">{{ $i->issued_on->toFormattedDateString() }}</td>
-                            <td class="table-td">
-                                {{ \App\Support\Money::format($i->total_cents, $i->currency) }}
+                            <td class="table-td whitespace-nowrap">{{ $i->issued_on->toFormattedDateString() }}</td>
+                            <td class="table-td whitespace-nowrap">
+                                @if ($i->due_on)
+                                    <span>{{ $i->due_on->toFormattedDateString() }}</span>
+                                @else
+                                    <span class="text-slate-400 dark:text-gray-500">On receipt</span>
+                                @endif
+                            </td>
+                            <td class="table-td whitespace-nowrap text-right tabular-nums">
+                                <span class="font-medium text-gray-900 dark:text-white">{{ \App\Support\Money::format($i->total_cents, $i->currency) }}</span>
                                 @if ($i->localTotalCents() !== null && strtoupper($i->currency) !== $local)
                                     <div class="text-xs text-slate-500 dark:text-gray-400">{{ \App\Support\Money::format($i->localTotalCents(), $local) }}</div>
                                 @endif
                             </td>
-                            <td class="table-td"><x-ui.badge :color="$color">{{ $label }}</x-ui.badge></td>
+                            <td class="table-td">
+                                @if ($i->status === 'void')
+                                    <x-ui.badge :color="$color">{{ $label }}</x-ui.badge>
+                                @else
+                                    @php $pickValue = $i->status; @endphp
+                                    <label for="status-{{ $i->id }}" class="sr-only">Status of {{ $i->number }}</label>
+                                    <select id="status-{{ $i->id }}" wire:change="setStatus({{ $i->id }}, $event.target.value)" wire:confirm="Change this invoice's status? Sent counts in the client's balance and is emailed once." wire:key="status-{{ $i->id }}-{{ $pickValue }}" class="badge badge-{{ $color }} cursor-pointer border-0 py-1 pl-2.5 pr-7 text-xs focus:ring-2 focus:ring-brand-500" data-test="row-status">
+                                        <option value="draft" @selected($pickValue === 'draft')>Not sent</option>
+                                        <option value="sent" @selected($pickValue === 'sent')>Sent</option>
+                                    </select>
+                                @endif
+                            </td>
+                            <td class="table-td whitespace-nowrap text-right">
+                                <a href="{{ route('invoices.pdf', $i) }}" target="_blank" class="btn btn-ghost px-2" title="Download PDF" aria-label="Download PDF for {{ $i->number }}"><x-icon name="file-text" class="h-4 w-4" /></a>
+                                @if ($i->status !== 'void')
+                                    <a href="{{ route('invoices.edit', $i) }}" class="btn btn-ghost px-2" title="Edit" aria-label="Edit {{ $i->number }}"><x-icon name="pencil" class="h-4 w-4" /></a>
+                                @endif
+                                <a href="{{ route('invoices.show', $i) }}" class="btn btn-ghost px-2">View</a>
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>

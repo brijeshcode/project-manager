@@ -80,12 +80,11 @@ it('reports draft, sent and sprint-line invoicing per task', function () {
         'description' => 'Sprint 1: completed '.$sp->code(), 'quantity' => 1, 'unit_price_cents' => 1000, 'amount_cents' => 1000]);
     app(InvoiceService::class)->create($this->client, [$l->id]);
 
-    $pd = erTask($this->a, $this->admin, ['title' => 'Paid one', 'budget_amount' => '10', 'board_column_id' => $this->done]);
+    $pd = erTask($this->a, $this->admin, ['title' => 'Sent one', 'budget_amount' => '10', 'board_column_id' => $this->done]);
     erInvoice($this->p, $pd);
-    \App\Models\Invoice::latest('id')->first()->forceFill(['marked_paid_at' => now()])->save();
 
     $tasks = Task::whereIn('id', [$d->id, $s->id, $sp->id, $other->id, $pd->id])->get();
-    expect(ProjectEconomics::invoicedTasks($this->p, $tasks))->toBe([$d->id => 'draft', $s->id => 'sent', $sp->id => 'sent', $pd->id => 'paid']);
+    expect(ProjectEconomics::invoicedTasks($this->p, $tasks))->toBe([$d->id => 'draft', $s->id => 'sent', $sp->id => 'sent', $pd->id => 'sent']); // no per-invoice paid: payments settle the client balance
 });
 
 it('keeps billing and cost out of the client budget tab but shows status and order', function () {

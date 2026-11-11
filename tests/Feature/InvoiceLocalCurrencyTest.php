@@ -35,7 +35,7 @@ function ilLine(Client $c, int $cents = 100000): BillableLine
 
 function ilCreate(Client $c)
 {
-    return Livewire::withQueryParams(['client' => $c->id])->actingAs(test()->owner)->test(Create::class)->assertOk();
+    return Livewire::withQueryParams(['client' => $c->id])->actingAs(test()->owner)->test(Create::class)->assertOk()->call('addAllWork');
 }
 
 it('stores the frozen rate and shows the local total on the list', function () {

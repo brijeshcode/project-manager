@@ -406,62 +406,78 @@ function mbSprint(Project $p, string $name = 'Sprint 3', ?string $from = null): 
     return $p->sprints()->create(['name' => $name, 'status' => 'active', 'starts_on' => $from, 'ends_on' => $from->copy()->addDays(14)]);
 }
 
-it('completing a sprint bills its done tasks as ONE line with codes, dates and the summed value', function () {
+function mbOwnerCreate(Client $c)
+{
+    return Livewire::withQueryParams(['client' => $c->id])->actingAs(test()->admin)->test(App\Livewire\Invoices\Create::class);
+}
+
+it('done tasks keep one line each, also after their sprint completes; a stale pending sprint line is removed', function () {
     [$p, $m] = mbSetup();
     $s = mbSprint($p);
-    $a = mbTask($m, $this->admin, ['budget_amount' => '10', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
-    $b = mbTask($m, $this->admin, ['budget_amount' => '15.50', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
+    mbTask($m, $this->admin, ['budget_amount' => '10', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
+    mbTask($m, $this->admin, ['budget_amount' => '15.50', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
     $open = mbTask($m, $this->admin, ['budget_amount' => '99', 'sprint_id' => $s->id]);
-    (new BillableService)->syncCompletedWork($p->client); // per-task lines exist before the sprint completes
-    expect(BillableLine::where('source_type', Task::class)->count())->toBe(2);
-
+    BillableLine::create(['client_id' => $p->client_id, 'source_type' => Sprint::class, 'source_id' => $s->id, 'description' => 'old', 'quantity' => 1, 'unit_price_cents' => 1, 'amount_cents' => 1]);
     $s->complete('backlog');
+    (new BillableService)->syncCompletedWork($p->client);
     $lines = BillableLine::where('client_id', $p->client_id)->get();
-    expect($lines)->toHaveCount(1)
-        ->and($lines[0]->source_type)->toBe(Sprint::class)->and($lines[0]->amount_cents)->toBe(2550)
-        ->and($lines[0]->description)->toBe('Sprint 3 (Nov 4 – Nov 18): completed NWS-1, NWS-2')
-        ->and($lines[0]->invoice_id)->toBeNull();
+    expect($lines)->toHaveCount(2)->and($lines->pluck('source_type')->unique()->all())->toBe([Task::class])->and((int) $lines->sum('amount_cents'))->toBe(2550);
     expect($open->fresh()->sprint_id)->toBeNull(); // carried-over work is not billed
 });
 
-it('the sprint line is refreshed before it is invoiced and frozen after; a late task bills on its own', function () {
+it('tasks named in an already invoiced sprint line stay billed; a late task bills on its own', function () {
     [$p, $m] = mbSetup();
     $s = mbSprint($p);
     $a = mbTask($m, $this->admin, ['budget_amount' => '10', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
-    $s->complete('backlog');
-    $svc = new BillableService;
-    // another done task appears in the completed sprint before it is invoiced -> the line is refreshed
-    $b = mbTask($m, $this->admin, ['budget_amount' => '5', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
-    $svc->syncCompletedWork($p->client);
-    $svc->syncCompletedWork($p->client);
-    $line = BillableLine::where('source_type', Sprint::class)->firstOrFail();
-    expect(BillableLine::count())->toBe(1)->and($line->amount_cents)->toBe(1500)->and($line->description)->toEndWith('completed NWS-1, NWS-2');
-
-    $line->update(['invoice_id' => App\Models\Invoice::create(['number' => 'INV-1', 'client_id' => $p->client_id, 'status' => 'sent', 'issued_on' => today(), 'due_on' => today(), 'currency' => 'USD', 'subtotal_cents' => 1500, 'tax_percent' => 0, 'tax_cents' => 0, 'total_cents' => 1500])->id]);
-    // frozen: more value in the sprint does not change it; the late task has its own line
+    $inv = App\Models\Invoice::create(['number' => 'INV-1', 'client_id' => $p->client_id, 'status' => 'sent', 'issued_on' => today(), 'due_on' => today(), 'currency' => 'USD', 'subtotal_cents' => 1000, 'tax_percent' => 0, 'tax_cents' => 0, 'total_cents' => 1000]);
+    BillableLine::create(['client_id' => $p->client_id, 'source_type' => Sprint::class, 'source_id' => $s->id, 'description' => 'Sprint 3 (Nov 4 – Nov 18): completed '.$a->code(), 'quantity' => 1, 'unit_price_cents' => 1000, 'amount_cents' => 1000, 'invoice_id' => $inv->id]);
     $late = mbTask($m, $this->admin, ['budget_amount' => '7', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
-    $svc->syncCompletedWork($p->client);
-    $line->refresh();
-    expect($line->amount_cents)->toBe(1500)->and($line->description)->not->toContain('NWS-3');
+    (new BillableService)->syncCompletedWork($p->client);
     $own = BillableLine::where('source_type', Task::class)->get();
-    expect($own)->toHaveCount(1)->and($own[0]->source_id)->toBe($late->id)->and($own[0]->amount_cents)->toBe(700);
-    // a task never sits in two lines
-    $svc->syncCompletedWork($p->client);
-    expect(BillableLine::where('source_type', Task::class)->where('source_id', $a->id)->exists())->toBeFalse();
+    expect($own)->toHaveCount(1)->and($own[0]->source_id)->toBe($late->id)->and(BillableLine::where('source_type', Sprint::class)->value('invoice_id'))->toBe($inv->id);
 });
 
-it('a task already invoiced on its own stays out of the sprint line', function () {
+it('the invoice picker groups a whole sprint, a whole module or single tasks, and never offers a task twice', function () {
     [$p, $m] = mbSetup();
+    $m2 = Module::create(['project_id' => $p->id, 'name' => 'Search', 'position' => 2, 'budget_amount' => '100']);
     $s = mbSprint($p);
     $a = mbTask($m, $this->admin, ['budget_amount' => '10', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
     $b = mbTask($m, $this->admin, ['budget_amount' => '20', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
-    (new BillableService)->syncCompletedWork($p->client);
-    $inv = App\Models\Invoice::create(['number' => 'INV-2', 'client_id' => $p->client_id, 'status' => 'sent', 'issued_on' => today(), 'due_on' => today(), 'currency' => 'USD', 'subtotal_cents' => 1000, 'tax_percent' => 0, 'tax_cents' => 0, 'total_cents' => 1000]);
-    BillableLine::where('source_id', $a->id)->update(['invoice_id' => $inv->id]);
-    $s->complete('backlog');
-    $sprintLine = BillableLine::where('source_type', Sprint::class)->first();
-    expect($sprintLine->amount_cents)->toBe(2000)->and($sprintLine->description)->toContain('NWS-2')->and($sprintLine->description)->not->toContain('NWS-1');
-    expect(BillableLine::where('source_id', $a->id)->where('source_type', Task::class)->value('invoice_id'))->toBe($inv->id); // untouched
+    $c = mbTask($m, $this->admin, ['budget_amount' => '30', 'board_column_id' => mbDone($p)]);
+    $d = mbTask($m2, $this->admin, ['budget_amount' => '40', 'board_column_id' => mbDone($p), 'completed_at' => '2026-11-02']);
+    $e = mbTask($m2, $this->admin, ['budget_amount' => '50', 'board_column_id' => mbDone($p), 'completed_at' => '2026-11-30']);
+    mbTask($m2, $this->admin, ['budget_amount' => '99']); // not done: never offered
+
+    $t = mbOwnerCreate($p->client)->assertSet('tab', 'sprints')->assertSee('Sprint 3');
+    $line = fn (Task $x) => (string) BillableLine::where('source_type', Task::class)->where('source_id', $x->id)->value('id');
+    $t->set('pickSprints', [(string) $s->id])->set('tab', 'modules')->assertSee('1 completed: NWS-3')
+        ->set('tab', 'tasks')->assertSee('in a ticked sprint');
+    // a sprint task also ticked on its own is still billed once, through the sprint
+    $t->set('pickModules', [(string) $m->id])->set('pickTasks', [$line($a), $line($d), $line($e)])->call('addPicked');
+    expect(array_column($t->get('groups'), 'label'))->toBe([
+        'Sprint 3 (Nov 4 – Nov 18): completed NWS-1, NWS-2',
+        'Checkout: completed NWS-3',
+        'Tasks (Nov 2 – Nov 30): completed NWS-4, NWS-5',
+    ]);
+    $t->set('groups.2.label', 'November work: NWS-4, NWS-5')->set('exchangeRate', '83.5')->call('save')->assertHasNoErrors();
+    $inv = App\Models\Invoice::firstOrFail();
+    expect(array_column($inv->lines_snapshot, 'description'))->toBe(['Sprint 3 (Nov 4 – Nov 18): completed NWS-1, NWS-2', 'Checkout: completed NWS-3', 'November work: NWS-4, NWS-5'])
+        ->and(array_column($inv->lines_snapshot, 'amount_cents'))->toBe([3000, 3000, 9000])
+        ->and($inv->lines()->count())->toBe(5);
+    // grouping survives an edit
+    app(App\Services\InvoiceService::class)->update($inv, $inv->lines()->pluck('id')->all(), [], ['tax_percent' => 0, 'issued_on' => $inv->issued_on->toDateString()]);
+    expect($inv->fresh()->lines_snapshot)->toHaveCount(3);
+    // voiding frees the tasks again, one line each
+    app(App\Services\InvoiceService::class)->void($inv->fresh());
+    expect(BillableLine::pending()->whereNotNull('invoice_label')->count())->toBe(0);
+});
+
+it('a single ticked task keeps its own description as the label', function () {
+    [$p, $m] = mbSetup();
+    $a = mbTask($m, $this->admin, ['title' => 'Login page', 'budget_amount' => '10', 'board_column_id' => mbDone($p)]);
+    $t = mbOwnerCreate($p->client);
+    $id = (string) BillableLine::where('source_id', $a->id)->value('id');
+    $t->set('pickTasks', [$id])->call('addPicked')->assertSet('groups', [['label' => 'NWS-1 Login page', 'lines' => [$id]]]);
 });
 
 it('completing a sprint freezes its planned, done and carried-over values and shows them to the owner only', function () {
@@ -491,7 +507,7 @@ it('sprint plan list headers show the total task value to the owner', function (
 });
 
 
-it('the sprint line totals the done tasks of every kind: typed fixed, hourly by billed hours, and unpriced ones are left out and listed', function () {
+it('done tasks of every kind are billable: typed fixed, hourly by billed hours; unpriced ones are left out and listed', function () {
     [$p, $m] = mbSetup('fixed', ['budget_amount' => '1000']);
     $s = mbSprint($p);
     mbTask($m, $this->admin, ['budget_amount' => '10', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
@@ -502,22 +518,10 @@ it('the sprint line totals the done tasks of every kind: typed fixed, hourly by 
     Livewire::actingAs($this->admin)->test(SprintPanel::class, ['project' => $p])->call('openComplete', $s->id)
         ->assertSeeHtml('data-test="sum-unpriced"')->assertSee('1 done task without a value will not be billed: NWS-3')->assertSee('$110.00');
     $s->complete('backlog');
-    $line = BillableLine::where('client_id', $p->client_id)->firstOrFail();
-    expect(BillableLine::count())->toBe(1)->and($line->amount_cents)->toBe(11000)->and($line->description)->toBe('Sprint 3 (Nov 4 – Nov 18): completed NWS-1, NWS-2');
+    (new BillableService)->syncCompletedWork($p->client);
+    expect(BillableLine::count())->toBe(2)->and((int) BillableLine::sum('amount_cents'))->toBe(11000);
     expect($s->fresh()->done_value_cents)->toBe(11000);
     Livewire::actingAs(mbMember($p, 'developer'))->test(SprintPanel::class, ['project' => $p])->assertDontSeeHtml('data-test="sum-unpriced"');
-});
-
-it('done tasks outside a completed sprint keep their own lines, priced from their own value', function () {
-    [$p, $m] = mbSetup();
-    $s = mbSprint($p);
-    mbTask($m, $this->admin, ['budget_amount' => '10', 'board_column_id' => mbDone($p), 'sprint_id' => $s->id]);
-    mbTask($m, $this->admin, ['title' => 'Loose', 'budget_amount' => '8', 'board_column_id' => mbDone($p)]);
-    mbTask($m, $this->admin, ['title' => 'Active sprint', 'budget_amount' => '6', 'board_column_id' => mbDone($p), 'sprint_id' => mbSprint($p, 'Sprint 4', '2026-11-20')->id]);
-    $s->complete('backlog');
-    $lines = BillableLine::orderBy('id')->get();
-    expect($lines->pluck('description')->all())->toContain('NWS-2 Loose', 'NWS-3 Active sprint')
-        ->and($lines->where('source_type', Sprint::class))->toHaveCount(1)->and($lines->pluck('amount_cents')->sort()->values()->all())->toBe([600, 800, 1000]);
 });
 
 // ── project budget (typed again) ─────────────────────────────────────────────
@@ -571,10 +575,12 @@ it('the demo seeder builds a fixed module, an hourly module with adjusted hours,
         ->and($alerts->billing_mode)->toBe('fixed')->and((float) $alerts->budget_amount)->toBe(1200.0);
     $p->refresh();
     expect((float) $p->initial_budget)->toBe(10000.0)->and((float) $p->addons_amount)->toBe(800.0)->and((float) $p->final_budget)->toBe(10800.0);
-    $line = BillableLine::where('source_type', Sprint::class)->firstOrFail();
-    expect($line->description)->toContain('Sprint 1')->toContain('completed FLE-1, FLE-2, FLE-3')->and($line->amount_cents)->toBe(520000)->and($line->invoice_id)->toBeNull();
+    // Sprint 1's done tasks are billable one by one; the invoice groups them into "Sprint 1 (...): completed FLE-1, FLE-2, FLE-3"
+    $sprint = $p->sprints()->where('name', 'Sprint 1')->firstOrFail();
+    $sprintLines = BillableLine::pending()->where('source_type', Task::class)->whereIn('source_id', $sprint->tasks()->pluck('id'))->get();
+    expect(BillableLine::where('source_type', Sprint::class)->count())->toBe(0)->and((int) $sprintLines->sum('amount_cents'))->toBe(520000);
     $this->seed(Database\Seeders\DemoSeeder::class); // idempotent
-    expect(BillableLine::where('source_type', Sprint::class)->count())->toBe(1);
+    expect(BillableLine::pending()->where('source_type', Task::class)->whereIn('source_id', $sprint->tasks()->pluck('id'))->count())->toBe($sprintLines->count());
 });
 
 it('shows the project budget cards on Details to the owner only', function () {

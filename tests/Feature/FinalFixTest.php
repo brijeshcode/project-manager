@@ -88,7 +88,7 @@ it('discards a pending custom line', function () {
     $c = ffClient();
     $l = ffLine($c, ['description' => 'Stray custom']);
     Livewire::actingAs(ffOwner())->withQueryParams(['client' => $c->id])->test(Create::class)
-        ->assertSee('Stray custom')->call('discardLine', $l->id)->assertDontSee('Stray custom')->assertSet('selected', []);
+        ->assertSee('Stray custom')->call('discardLine', $l->id)->assertDontSee('Stray custom')->assertSet('pickCharges', []);
     expect(BillableLine::find($l->id))->toBeNull();
 });
 
