@@ -3,6 +3,7 @@
 namespace App\Livewire\Tasks;
 
 use App\Livewire\Concerns\TogglesTaskAssignee;
+use App\Enums\TaskStatus;
 use App\Models\BoardColumn;
 use App\Models\Label;
 use App\Models\Project;
@@ -52,6 +53,10 @@ class Board extends Component
     #[Locked]
     public bool $embedded = false;
 
+    /** A client user in the portal: read-only, published client-visible tasks of client-visible modules, no people or hours. Derived from the user, never passed in. */
+    #[Locked]
+    public bool $client = false;
+
     /** Board tab switch: all | sprint (the active sprint only). */
     #[Url(as: 'scope')]
     public string $scope = '';
@@ -73,7 +78,8 @@ class Board extends Component
 
     public function mount(Project $project): void
     {
-        $this->authorize('view', $project);
+        $this->client = auth()->user()->hasRole('client');
+        $this->authorize($this->client ? 'viewAsClient' : 'view', $project);
         $this->project = $project;
         $this->taskId = $this->openableTask($this->taskId)?->id;
         $this->updatedFilterModule();
@@ -87,6 +93,10 @@ class Board extends Component
     /** Same visibility as the task page: visible to the user, in this project, and viewable by policy. */
     private function openableTask(?int $id): ?Task
     {
+        if ($this->client) {
+            return null;
+        }
+
         $task = $id ? Task::visibleTo(auth()->user())->whereIn('module_id', $this->project->modules()->select('id'))->find($id) : null;
 
         return $task && auth()->user()->can('view', $task) ? $task : null;
@@ -172,14 +182,17 @@ class Board extends Component
     #[Computed]
     public function columns(): Collection
     {
-        return Task::visibleTo(auth()->user())
-            ->whereIn('module_id', $this->project->modules()->pluck('id'))
+        $tasks = $this->client
+            ? Task::where('status', TaskStatus::Published->value)->where('client_visible', true)->whereIn('module_id', $this->project->modules()->where('client_visible', true)->pluck('id'))
+            : Task::visibleTo(auth()->user())->whereIn('module_id', $this->project->modules()->pluck('id'));
+
+        return $tasks
             ->when($this->ints($this->moduleIds), fn ($q, $ids) => $q->whereIn('module_id', $ids))
             ->when(trim($this->search) !== '', fn ($q) => $q->search($this->search))
             ->when($this->prios, fn ($q) => $q->whereIn('priority', array_map('intval', $this->prios)))
             ->when($this->ints($this->typeIds), fn ($q, $ids) => $q->whereIn('task_type_id', $ids))
             ->when($this->ints($this->labelIds), fn ($q, $ids) => $q->whereHas('labels', fn ($l) => $l->whereIn('labels.id', $ids)))
-            ->when($this->assigneeIds, function ($q) {
+            ->when($this->assigneeIds && ! $this->client, function ($q) {
                 $ids = $this->ints($this->assigneeIds);
                 $none = in_array('none', $this->assigneeIds, true);
                 $q->where(function ($w) use ($ids, $none) {
@@ -201,6 +214,7 @@ class Board extends Component
      */
     public function taskMoved(int $taskId, int $column, int $position, array $order = []): void
     {
+        abort_if($this->client, 403);
         $this->authorize('view', $this->project);
 
         try {
@@ -332,16 +346,17 @@ class Board extends Component
 
     public function render()
     {
-        $modules = $this->project->modules()->get();
+        $modules = $this->project->modules()->when($this->client, fn ($q) => $q->where('client_visible', true))->get();
         $canManage = auth()->user()->can('update', $this->project);
 
         return view('livewire.tasks.board', [
             'modules'   => $modules,
             'lanes'     => $this->grouped ? $modules->when($this->ints($this->moduleIds), fn ($m, $ids) => $m->whereIn('id', $ids)) : collect([null]),
             'candidates' => $canManage ? $this->assignable() : null,
-            'people'    => $this->project->members()->orderBy('name')->get(),
+            'people'    => $this->client ? collect() : $this->project->members()->orderBy('name')->get(),
             'types'     => TaskType::orderBy('position')->get(),
-            'allLabels' => Label::orderBy('name')->get(),
+            'allLabels' => $this->client ? collect() : Label::orderBy('name')->get(),
+            'client'    => $this->client,
             'stages'    => BoardTemplates::STAGES,
             'canManage' => $canManage,
             'canMoney'  => auth()->user()->can('manage-money'),

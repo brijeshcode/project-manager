@@ -40,7 +40,7 @@ function portalProject(Client $client, string $status = 'active'): Project
 
 function portalModule(Project $project): Module
 {
-    return Module::create(['project_id' => $project->id, 'name' => 'PMod', 'position' => 1]);
+    return Module::create(['project_id' => $project->id, 'name' => 'PMod', 'position' => 1, 'client_visible' => true]);
 }
 
 /** Internal (creator) user — not client role. */
@@ -175,22 +175,41 @@ it('client does NOT see draft tasks on ProjectView', function () {
 
 // ── budget amount / cost never exposed ────────────────────────────────────────────────
 
-it('portal ProjectView response contains no budget amount field', function () {
+it('budget tab shows visible task budgets but never rates, and hides tasks of hidden modules', function () {
+    [$client, $clientUser] = portalClient();
+    $project  = portalProject($client);
+    $module   = portalModule($project);
+    $hidden   = Module::create(['project_id' => $project->id, 'name' => 'Hidden', 'position' => 2]);
+    $internal = internalUser();
+
+    portalTask($module, $internal, ['title' => 'Priced Task', 'budget_amount' => 9999.00, 'hourly_rate' => 77.00]);
+    portalTask($hidden, $internal, ['title' => 'Hidden Module Task', 'budget_amount' => 5555.00]);
+    portalTask($module, $internal, ['title' => 'Internal Priced', 'client_visible' => false, 'budget_amount' => 4444.00]);
+
+    Livewire::actingAs($clientUser)
+        ->test(ProjectView::class, ['project' => $project])
+        ->set('tab', 'budget')
+        ->assertSee('Priced Task')->assertSee('9,999.00')
+        ->assertDontSee('Hidden Module Task')->assertDontSee('5,555')
+        ->assertDontSee('Internal Priced')->assertDontSee('4,444')
+        ->assertDontSee('77.00');
+});
+
+it('board and sprints tabs list only visible tasks and skip empty columns and sprints', function () {
     [$client, $clientUser] = portalClient();
     $project  = portalProject($client);
     $module   = portalModule($project);
     $internal = internalUser();
+    $sprint   = $project->sprints()->create(['name' => 'Sprint 1', 'status' => 'planned', 'starts_on' => today(), 'ends_on' => today()->addDays(7)]);
+    $empty    = $project->sprints()->create(['name' => 'Sprint Empty', 'status' => 'planned', 'starts_on' => today(), 'ends_on' => today()->addDays(7)]);
 
-    portalTask($module, $internal, [
-        'title'          => 'Priced Task',
-        'client_visible' => true,
-        'budget_amount'          => 9999.00,
-    ]);
+    portalTask($module, $internal, ['title' => 'Shown Task', 'sprint_id' => $sprint->id]);
+    portalTask($module, $internal, ['title' => 'Secret Task', 'client_visible' => false, 'sprint_id' => $empty->id]);
 
-    // The rendered HTML must not contain the numeric budget amount value
-    Livewire::actingAs($clientUser)
-        ->test(ProjectView::class, ['project' => $project])
-        ->assertDontSee('9999');
+    $c = Livewire::actingAs($clientUser)->test(ProjectView::class, ['project' => $project]);
+    $c->set('tab', 'sprints')->assertSee('Sprint 1')->assertSee('Shown Task')->assertDontSee('Sprint Empty')->assertDontSee('Secret Task');
+    $c->set('tab', 'board')->assertSee('Shown Task')->assertDontSee('Secret Task');
+    $c->set('tab', 'planned')->assertDontSee('Secret Task');
 });
 
 it('portal dashboard response does not expose cost_rate_amount', function () {
@@ -232,7 +251,7 @@ it('client can add a comment to a client_visible task', function () {
 
     Livewire::actingAs($clientUser)
         ->test(ProjectView::class, ['project' => $project])
-        ->set('commentBody', 'Looks good to me!')
+        ->set('taskBody.'.$task->id, 'Looks good to me!')
         ->call('addComment', $task->id);
 
     expect($task->comments()->where('author_id', $clientUser->id)->count())->toBe(1);
@@ -328,4 +347,76 @@ it('client cannot approve a task from another client', function () {
         ->assertForbidden();
 
     expect($taskB->fresh()->client_approval)->toBeNull();
+});
+
+it('portal module rows share the admin design but hide developers and admin controls', function () {
+    [$client, $clientUser] = portalClient();
+    $project  = portalProject($client);
+    $module   = portalModule($project);
+    $dev      = User::factory()->create(['name' => 'Secret Developer']);
+    $task     = portalTask($module, internalUser(), ['title' => 'Row Task']);
+    $task->assignees()->attach($dev->id);
+    $module->assignees()->attach($dev->id);
+
+    Livewire::actingAs($clientUser)
+        ->test(ProjectView::class, ['project' => $project])
+        ->assertSeeHtml('data-test="module-row"')->assertSee('Row Task')
+        ->assertDontSee('Secret Developer')
+        ->assertDontSeeHtml('data-test="module-visibility"')
+        ->assertDontSeeHtml('data-test="module-handle"')
+        ->assertDontSeeHtml('wire:click="toggleTaskAssignee');
+});
+
+it('portal board is the admin board in read-only client mode', function () {
+    [$client, $clientUser] = portalClient();
+    $project  = portalProject($client);
+    $module   = portalModule($project);
+    $hidden   = Module::create(['project_id' => $project->id, 'name' => 'Hidden', 'position' => 2]);
+    $dev      = User::factory()->create(['name' => 'Secret Developer']);
+    $task     = portalTask($module, internalUser(), ['title' => 'Board Task', 'budget_amount' => 250.00, 'estimate_hours' => 9]);
+    $task->assignees()->attach($dev->id);
+    portalTask($module, internalUser(), ['title' => 'Internal Card', 'client_visible' => false]);
+    portalTask($hidden, internalUser(), ['title' => 'Hidden Module Card']);
+
+    Livewire::actingAs($clientUser)
+        ->test(\App\Livewire\Tasks\Board::class, ['project' => $project, 'embedded' => true])
+        ->assertSeeHtml('data-test="board-card"')->assertSee('Board Task')->assertSee('250')
+        ->assertDontSee('Internal Card')->assertDontSee('Hidden Module Card')
+        ->assertDontSee('Secret Developer')
+        ->assertDontSeeHtml('data-test="card-edit"')->assertDontSeeHtml('data-hours')
+        ->assertDontSeeHtml('x-board-drag')->assertDontSeeHtml('data-test="filter-assignees"')
+        ;
+
+    $board = fn () => Livewire::actingAs($clientUser)->test(\App\Livewire\Tasks\Board::class, ['project' => $project, 'embedded' => true]);
+    $board()->call('taskMoved', $task->id, 1, 0)->assertForbidden();
+    $board()->call('addColumn')->assertForbidden();
+});
+
+it('portal sprints are the admin sprint panel in read-only client mode', function () {
+    [$client, $clientUser] = portalClient();
+    $project  = portalProject($client);
+    $module   = portalModule($project);
+    $dev      = User::factory()->create(['name' => 'Secret Developer']);
+    $sprint   = $project->sprints()->create(['name' => 'Sprint One', 'goal' => 'Secret goal', 'status' => 'active', 'starts_on' => today(), 'ends_on' => today()->addDays(7)]);
+    $task     = portalTask($module, internalUser(), ['title' => 'Sprint Task', 'sprint_id' => $sprint->id, 'budget_amount' => 300.00, 'estimate_hours' => 7]);
+    $task->assignees()->attach($dev->id);
+    portalTask($module, internalUser(), ['title' => 'Backlog Task']);
+    portalTask($module, internalUser(), ['title' => 'Internal Sprint Task', 'client_visible' => false, 'sprint_id' => $sprint->id]);
+
+    $panel = fn () => Livewire::actingAs($clientUser)->test(\App\Livewire\Sprints\Panel::class, ['project' => $project]);
+    $panel()->assertSeeHtml('data-test="sprint-panel"')->assertSee('Sprint One')->assertSee('Sprint Task')->assertSee('300')
+        ->assertDontSee('Backlog Task')->assertDontSee('Internal Sprint Task')->assertDontSee('Secret goal')
+        ->assertDontSee('Secret Developer')->assertDontSeeHtml('data-test="sprint-toolbar"')
+        ->assertDontSeeHtml('data-test="new-sprint"')->assertDontSeeHtml('x-sortable');
+    $panel()->call('openCreate')->assertForbidden();
+    $panel()->call('moveTask', $task->id, 0)->assertForbidden();
+});
+
+it('portal resources show only on the Resources tab', function () {
+    [$client, $clientUser] = portalClient();
+    $project = portalProject($client);
+
+    $c = Livewire::actingAs($clientUser)->test(ProjectView::class, ['project' => $project])->assertDontSeeHtml('data-test="resource-search"');
+    $c->set('tab', 'board')->assertDontSeeHtml('data-test="resource-search"');
+    $c->set('tab', 'resources')->assertSeeHtml('data-test="resource-search"');
 });

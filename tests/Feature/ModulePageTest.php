@@ -408,9 +408,10 @@ it('lets clients comment and reply on modules, only in threads they can see', fu
 
 it('lets clients comment and reply on tasks with the same visibility rule', function () {
     $s = modSetup();
+    $s['module']->update(['client_visible' => true]);
     $task = Task::create(['module_id' => $s['module']->id, 'creator_id' => $s['admin']->id, 'title' => 'Shared task', 'status' => 'published', 'client_visible' => true]);
 
-    modPortal($s, $s['c1'])->set('commentBody', 'Task question')->call('addComment', $task->id);
+    modPortal($s, $s['c1'])->set('taskBody.'.$task->id, 'Task question')->call('addComment', $task->id);
     $root = $task->comments()->first();
     $task->addComment($s['admin'], 'Staff answer', $root->id);
     $task->addComment($s['admin'], 'Internal task note');

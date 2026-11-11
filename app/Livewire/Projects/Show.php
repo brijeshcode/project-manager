@@ -195,6 +195,14 @@ class Show extends Component
         $this->project->modules()->findOrFail($moduleId)->update(['priority' => $priority]);
     }
 
+    public function toggleModuleVisibility(int $moduleId): void
+    {
+        $this->authorize('update', $this->project);
+        $m = $this->project->modules()->findOrFail($moduleId);
+        $m->update(['client_visible' => ! $m->client_visible]);
+        $this->dispatch('toast', type: 'success', message: $m->client_visible ? "{$m->name} is now visible to the client." : "{$m->name} is now hidden from the client.");
+    }
+
     /** Add/remove one assignee straight from the list (same logging as the module page sidebar). */
     public function toggleModuleAssignee(int $moduleId, int $userId): void
     {

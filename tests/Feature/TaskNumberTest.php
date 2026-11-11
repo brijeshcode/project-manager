@@ -79,6 +79,7 @@ it('numbers tasks from quick-add and the portal', function () {
     expect(Task::where('title', 'Quick')->first()->code())->toBe('NWS-1');
     $cu = User::factory()->create(['client_id' => $this->client->id]);
     $cu->assignRole('client');
+    $this->module->update(['client_visible' => true]);
     Livewire::actingAs($cu)->test(PortalView::class, ['project' => $this->project])->set('newTitle', 'From client')->call('createTask');
     expect(Task::where('title', 'From client')->first()->code())->toBe('NWS-2');
 });
@@ -124,6 +125,7 @@ it('shows the code on the board card, panel, task page, Modules tab, module page
     Livewire::actingAs($this->admin)->test(SprintPanel::class, ['project' => $this->project])->assertSee('NWS-1');
     $cu = User::factory()->create(['client_id' => $this->client->id]);
     $cu->assignRole('client');
+    $this->module->update(['client_visible' => true]);
     Livewire::actingAs($cu)->test(PortalView::class, ['project' => $this->project])->assertSee('NWS-1');
 });
 

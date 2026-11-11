@@ -238,3 +238,16 @@ it('resend dispatches a success toast, and an error toast when it cannot send', 
     Livewire::actingAs(ibOwner())->test(Show::class, ['invoice' => $inv2])
         ->call('resend')->assertDispatched('toast', type: 'error');
 });
+
+it('previews the live total from ticked lines, custom lines and tax', function () {
+    $c = ibClient();
+    $a = ibLine($c, 10000);
+    ibLine($c, 5000);
+    $total = fn ($t) => preg_match('/data-test="invoice-total">([^<]+)</', $t->html(), $m) ? $m[1] : null;
+    $lw = Livewire::withQueryParams(['client' => $c->id])->actingAs(ibOwner())->test(Create::class);
+    expect($total($lw))->toBe('$150.00');
+    $lw->set('selected', [(string) $a->id])->call('addCustom')->set('custom.0.unit_price', '20')->set('custom.0.quantity', '1.5')->set('taxPercent', '10');
+    expect($total($lw))->toBe('$143.00');
+    $lw->set('custom.0.unit_price', 'abc');
+    expect($total($lw))->toBe('$110.00');
+});

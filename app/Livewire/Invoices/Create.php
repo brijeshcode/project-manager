@@ -135,18 +135,40 @@ class Create extends Component
         return $this->redirectRoute('invoices.show', $invoice);
     }
 
+    /** Live preview of the totals; same math as InvoiceService::create, invalid inputs count as 0. */
+    private function summary(Client $client, $lines): array
+    {
+        $num = fn ($v, $d = 7) => preg_match('/^\d{1,'.$d.'}(\.\d+)?$/', trim((string) $v)) ? Money::toCents($v) : 0;
+        $cur = $this->currency !== '' ? strtoupper($this->currency) : strtoupper($client->currency);
+        $rate = $cur === LocalCurrency::code() ? '1' : (Money::isValidRate($this->exchangeRate) ? $this->exchangeRate : LocalCurrency::rateFor($cur));
+        $conv = app(InvoiceService::class)->lineConverter($cur, $rate);
+        $picked = $lines->whereIn('id', array_map('intval', $this->selected));
+        $custom = array_map(fn ($r) => intdiv($num($r['quantity'] ?? '') * $num($r['unit_price'] ?? '') + 50, 100), $this->custom);
+        $subtotal = (int) $picked->sum(fn ($l) => $conv((int) $l->amount_cents, $l->lineCurrency())) + array_sum($custom);
+
+        return [
+            'currency' => $cur,
+            'count' => $picked->count() + count($custom),
+            'custom' => $custom,
+            'subtotal' => $subtotal,
+            'tax' => $subtotal < intdiv(PHP_INT_MAX, 20000) ? intdiv($subtotal * min($num($this->taxPercent, 3), 10000) + 5000, 10000) : 0,
+        ];
+    }
+
     public function render()
     {
         $this->authorize('manage-money');
         $client = $this->clientId ? Client::find($this->clientId) : null;
+        $lines = $client ? app(BillableService::class)->pendingFor($client) : collect();
 
         return view('livewire.invoices.create', [
+            'summary' => $client ? $this->summary($client, $lines) : null,
             'client' => $client,
             'local' => LocalCurrency::code(),
             'sameCurrency' => $client && ($this->currency !== '' ? strtoupper($this->currency) : strtoupper($client->currency)) === LocalCurrency::code(),
             'currencies' => $client ? $this->currencyOptions($client) : [],
             'clients' => Client::orderBy('name')->get(['id', 'name']),
-            'lines' => $client ? app(BillableService::class)->pendingFor($client) : collect(),
+            'lines' => $lines,
             'banks' => BankAccount::orderBy('label')->get(['id', 'label', 'bank_name']),
         ]);
     }

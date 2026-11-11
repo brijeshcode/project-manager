@@ -95,6 +95,16 @@ it('sets priority from the list, rejects bad values and non-managers', function 
     expect($s['module']->fresh()->priority)->toBe(0);
 });
 
+it('toggles client visibility from the list and rejects non-managers', function () {
+    $s = listSetup();
+    expect($s['module']->client_visible)->toBeFalse();
+    listPage($s)->assertSeeHtml('data-test="module-visibility"')->call('toggleModuleVisibility', $s['module']->id)->assertDispatched('toast');
+    expect($s['module']->fresh()->client_visible)->toBeTrue();
+    listPage($s)->call('toggleModuleVisibility', $s['module']->id);
+    expect($s['module']->fresh()->client_visible)->toBeFalse();
+    denied($s, listPage($s))->call('toggleModuleVisibility', $s['module']->id)->assertForbidden();
+});
+
 it('persists drag order and keeps modules outside a filtered view in place', function () {
     $s = listSetup();
     $a = $s['module'];

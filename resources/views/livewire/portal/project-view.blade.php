@@ -9,102 +9,94 @@
     <x-ui.page-header :title="$project->name"
                       subtitle="Your tasks on this project. Request work, add comments, or approve completed items." />
 
-    {{-- Request a new task --}}
-    <div class="mb-6">
-        <form wire:submit="createTask" class="flex gap-2">
-            <input wire:model="newTitle" type="text"
-                   placeholder="Request a new task…"
-                   class="input flex-1">
-            <button type="submit" class="btn btn-primary whitespace-nowrap">+ Request</button>
-        </form>
-        @error('newTitle') <p class="field-error mt-1">{{ $message }}</p> @enderror
+    @php($currency = $project->currency)
+
+    <div class="mb-6 flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist">
+        @foreach(\App\Livewire\Portal\ProjectView::TABS as $key => $label)
+            <button type="button" role="tab" wire:click="$set('tab', '{{ $key }}')" data-test="portal-tab-{{ $key }}"
+                    @class(['whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium', 'border-brand-600 text-brand-700' => $tab === $key, 'border-transparent text-slate-500 hover:text-slate-700' => $tab !== $key])>{{ $label }}</button>
+        @endforeach
     </div>
 
-    {{-- Modules shared with the client --}}
-    @foreach($modules as $module)
-        @php($status = $module->status())
-        <x-ui.card class="mb-4 space-y-3" data-test="portal-module">
-            <div class="flex items-start justify-between gap-3">
-                <h3 class="font-display text-sm font-semibold text-slate-900">{{ $module->name }}</h3>
-                <x-ui.badge :color="\App\Models\Module::STATUS_COLORS[$status]">{{ \App\Models\Module::STATUS_LABELS[$status] }}</x-ui.badge>
+    @if($tab === 'details')
+        <x-ui.card class="space-y-4" data-test="portal-details">
+            <div class="flex items-center justify-between gap-3">
+                <x-ui.badge color="brand">{{ ucfirst($project->status) }}</x-ui.badge>
+                @if($project->start_date)
+                    <span class="text-xs text-slate-500">Started {{ $project->start_date->format('M j, Y') }}</span>
+                @endif
             </div>
-            @if($module->description)
-                <x-ui.markdown :text="$module->description" />
+            @if($project->aim)
+                <p class="text-sm font-medium text-slate-700">{{ $project->aim }}</p>
             @endif
-            <x-ui.progress :pct="app(\App\Services\ProgressService::class)->forModule($module)" :label="false" />
-            @include('livewire.portal._threads', ['subject' => $module, 'kind' => 'module'])
-            <form wire:submit="addModuleComment({{ $module->id }})" class="space-y-2">
-                <x-ui.markdown-editor model="moduleBody.{{ $module->id }}" :rows="2" :uploads="false" placeholder="Comment on this module…" />
-                <button type="submit" class="btn btn-secondary h-8 px-3 py-1 text-xs">Post</button>
+            @if($project->description)
+                <x-ui.markdown :text="$project->description" />
+            @endif
+            <x-ui.progress :pct="app(\App\Services\ProgressService::class)->forProject($project)" :label="false" />
+        </x-ui.card>
+    @endif
+
+    @if($tab === 'modules')
+        <div class="mb-6">
+            <form wire:submit="createTask" class="flex gap-2">
+                <input wire:model="newTitle" type="text" placeholder="Request a new task…" class="input flex-1">
+                <button type="submit" class="btn btn-primary whitespace-nowrap">+ Request</button>
             </form>
-            @error('moduleBody.'.$module->id) <p class="field-error text-xs">{{ $message }}</p> @enderror
-        </x-ui.card>
-    @endforeach
+            @error('newTitle') <p class="field-error mt-1">{{ $message }}</p> @enderror
+        </div>
 
-    {{-- Task list --}}
-    @forelse($tasks as $task)
-        <x-ui.card class="mb-4 space-y-4" x-data="{ commenting: false }">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <h3 class="font-display text-sm font-semibold text-slate-900"><x-ui.task-code :task="$task" class="mr-1" />{{ $task->title }}</h3>
-                    @if($task->description)
-                        <x-ui.markdown :text="$task->description" class="mt-1" />
-                    @endif
-                    @if($task->deadline)
-                        <p class="mt-1 text-xs text-slate-500">Due {{ $task->deadline->format('M j, Y') }}</p>
-                    @endif
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                    <x-ui.badge color="slate">{{ $task->column?->name }}</x-ui.badge>
-                    @if($task->client_approval === 'approved')
-                        <x-ui.badge color="green">Approved</x-ui.badge>
-                    @elseif($task->column?->stage === 'done')
-                        <button wire:click="approveTask({{ $task->id }})"
-                                class="btn btn-primary h-7 px-3 py-1 text-xs">
-                            Approve
-                        </button>
-                    @endif
-                </div>
-            </div>
+        @forelse($modules as $module)
+            @php($mStatus = $module->status())
+            @include('livewire.projects._module-row', ['client' => true, 'canManage' => false, 'candidates' => null, 'budgetBlocked' => []])
+        @empty
+            <x-ui.empty-state title="No modules shared" message="Modules shared with you will appear here." />
+        @endforelse
+    @endif
 
-            {{-- Priority --}}
-            <div class="flex items-center gap-3">
-                <label class="text-xs font-medium text-slate-500">Priority</label>
-                <div class="flex items-center gap-1">
-                    @foreach([0 => 'Low', 1 => 'Med', 2 => 'High'] as $val => $label)
-                        <button type="button"
-                                wire:click="setPriority({{ $task->id }}, {{ $val }})"
-                                @class(['rounded px-2 py-0.5 text-xs font-medium',
-                                    'bg-brand-600 text-white' => $task->priority === $val,
-                                    'bg-slate-100 text-slate-600 hover:bg-slate-200' => $task->priority !== $val])>
-                            {{ $label }}
-                        </button>
+
+    @if($tab === 'sprints')
+        <livewire:sprints.panel :project="$project" :key="'sprints-'.$project->id" />
+    @endif
+
+    @if($tab === 'board')
+        <livewire:tasks.board :project="$project" :embedded="true" :key="'board-'.$project->id" />
+    @endif
+
+    @if($tab === 'budget')
+        @forelse($modules->filter(fn ($m) => $tasks->contains('module_id', $m->id)) as $module)
+            @php($mt = $tasks->where('module_id', $module->id))
+            <x-ui.card class="mb-4" data-test="portal-budget-module">
+                <h3 class="mb-2 font-display text-sm font-semibold text-slate-900">{{ $module->name }}</h3>
+                <table class="w-full text-sm">
+                    @foreach($mt as $task)
+                        <tr class="border-t border-slate-100">
+                            <td class="py-2"><x-ui.task-code :task="$task" class="mr-1" />{{ $task->title }}</td>
+                            <td class="py-2 text-right tabular-nums">{{ $task->budget_amount === null ? '—' : \App\Support\Money::format(\App\Support\Money::toCents((string) $task->budget_amount), $currency) }}</td>
+                        </tr>
                     @endforeach
-                </div>
-            </div>
+                    <tr class="border-t border-slate-200 font-semibold">
+                        <td class="py-2">Total</td>
+                        <td class="py-2 text-right tabular-nums">{{ \App\Support\Money::format(\App\Models\Sprint::value($mt), $currency) }}</td>
+                    </tr>
+                </table>
+            </x-ui.card>
+        @empty
+            <x-ui.empty-state title="No budgets yet" message="Task budgets will appear here." />
+        @endforelse
+    @endif
 
-            @include('livewire.portal._threads', ['subject' => $task, 'kind' => 'task'])
+    @if($tab === 'planned')
+        @forelse($planned as $task)
+            <x-ui.card class="mb-3 flex items-center justify-between gap-3 text-sm" data-test="portal-planned">
+                <span><x-ui.task-code :task="$task" class="mr-1" />{{ $task->title }}</span>
+                @if($task->deadline)<span class="text-xs text-slate-500">Due {{ $task->deadline->format('M j, Y') }}</span>@endif
+            </x-ui.card>
+        @empty
+            <x-ui.empty-state title="Nothing planned" message="Tasks not yet started will appear here." />
+        @endforelse
+    @endif
 
-            {{-- Comment toggle + form --}}
-            <div>
-                <button type="button" @click="commenting = !commenting"
-                        class="text-xs font-medium text-brand-600 hover:text-brand-700">
-                    Add a comment
-                </button>
-                <form x-show="commenting" style="display:none"
-                      wire:submit="addComment({{ $task->id }})"
-                      @submit="commenting = false"
-                      class="mt-2 space-y-2">
-                    <x-ui.markdown-editor model="commentBody" :rows="2" :uploads="false" placeholder="Your comment…" />
-                    <button type="submit" class="btn btn-secondary h-8 px-3 py-1 text-xs">Post</button>
-                </form>
-                @error('commentBody') <p class="field-error mt-1 text-xs">{{ $message }}</p> @enderror
-            </div>
-        </x-ui.card>
-    @empty
-        <x-ui.empty-state title="No tasks yet"
-                          message="Once tasks are marked visible to clients they'll appear here. You can also request a new task above." />
-    @endforelse
-
-    <livewire:resources.panel :project="$project" />
+    @if($tab === 'resources')
+        <livewire:resources.panel :project="$project" />
+    @endif
 </div>

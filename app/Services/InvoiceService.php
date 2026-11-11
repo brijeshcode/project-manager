@@ -280,7 +280,7 @@ class InvoiceService
      * Each line is priced in its own currency (its project's, else the client's). On an invoice in another currency the
      * amount is converted through the local currency (rate table, or 1 when a currency has none). Same currency = unchanged.
      */
-    private function lineConverter(string $invoiceCurrency, ?string $invoiceRate): \Closure
+    public function lineConverter(string $invoiceCurrency, ?string $invoiceRate): \Closure
     {
         $to = $invoiceRate ?? '1';
 

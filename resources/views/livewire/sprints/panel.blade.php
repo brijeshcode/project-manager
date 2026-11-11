@@ -2,6 +2,7 @@
     @php $fmt = fn ($h) => rtrim(rtrim(number_format($h, 1), '0'), '.').'h'; @endphp
 
     {{-- toolbar: filters, new sprint --}}
+    @unless ($client)
     <div class="mb-4 flex flex-wrap items-center gap-3" data-test="sprint-toolbar">
             <select wire:model.live="user" class="select h-9 w-40 text-sm" aria-label="Assigned to" data-test="sp-filter-user">
                 <option value="">Everyone</option>
@@ -19,13 +20,14 @@
             <button type="button" wire:click="openCreate" class="btn btn-primary ml-auto gap-1" data-test="new-sprint"><x-icon name="plus" /> New sprint</button>
         @endif
     </div>
+    @endunless
 
         <div class="space-y-5" data-test="plan-view">
             {{-- Active sprint --}}
             @if ($active)
-                @include('livewire.sprints._list', ['sprint' => $active, 'rows' => $activeTasks, 'empty' => 'Nothing in this sprint yet. Drag tasks here from the backlog.'])
+                @include('livewire.sprints._list', ['sprint' => $active, 'rows' => $activeTasks, 'empty' => $client ? 'No tasks yet.' : 'Nothing in this sprint yet. Drag tasks here from the backlog.'])
             @else
-                <x-ui.empty-state title="No active sprint" message="Plan a sprint, drag tasks into it, then start it. Only one sprint is active at a time." data-test="no-active">
+                <x-ui.empty-state title="No active sprint" :message="$client ? 'Nothing is in progress right now.' : 'Plan a sprint, drag tasks into it, then start it. Only one sprint is active at a time.'" data-test="no-active">
                     @if ($canManage)
                         <x-slot:action><button type="button" wire:click="openCreate" class="btn btn-primary gap-1" data-test="start-sprint-cta"><x-icon name="play" /> Start a sprint</button></x-slot:action>
                     @endif
@@ -34,13 +36,15 @@
 
             {{-- Next sprints --}}
             @forelse ($planned as $sprint)
-                @include('livewire.sprints._list', ['sprint' => $sprint, 'rows' => $tasks->where('sprint_id', $sprint->id)->values(), 'empty' => 'Empty. Drag tasks here from the backlog to plan this sprint.'])
+                @include('livewire.sprints._list', ['sprint' => $sprint, 'rows' => $tasks->where('sprint_id', $sprint->id)->values(), 'empty' => $client ? 'No tasks yet.' : 'Empty. Drag tasks here from the backlog to plan this sprint.'])
             @empty
                 <p class="text-sm text-slate-500" data-test="no-planned">No upcoming sprint planned.@if ($canManage) <button type="button" wire:click="openCreate" class="font-medium text-brand-600 hover:text-brand-700">Plan one</button>@endif</p>
             @endforelse
 
             {{-- Backlog --}}
+            @unless ($client)
             @include('livewire.sprints._list', ['sprint' => null, 'rows' => $backlog, 'empty' => 'The backlog is empty. Open tasks that are not in a sprint show up here.'])
+            @endunless
 
             {{-- Past sprints --}}
             @if ($past->isNotEmpty())
@@ -57,7 +61,7 @@
                                     <span class="font-display text-sm font-semibold text-slate-900">{{ $p->name }}</span>
                                     <span class="text-xs text-slate-500">{{ $p->starts_on->format('M j') }} – {{ $p->ends_on->format('M j, Y') }}</span>
                                     <span class="ml-auto text-xs text-slate-500" data-test="past-done">{{ $pt->count() }} done</span>
-                                    <span class="text-xs font-medium text-slate-700">{{ $fmt(\App\Models\Sprint::hours($pt)) }}</span>
+                                    @unless ($client)<span class="text-xs font-medium text-slate-700">{{ $fmt(\App\Models\Sprint::hours($pt)) }}</span>@endunless
                                     @can('manage-money')
                                         @if ($p->planned_value_cents !== null)
                                             <span class="text-xs tabular-nums text-slate-500" data-test="past-values">Planned {{ \App\Support\Money::format($p->planned_value_cents, $project->currency) }} &middot; Done {{ \App\Support\Money::format($p->done_value_cents, $project->currency) }} &middot; Carried over {{ \App\Support\Money::format($p->carried_value_cents, $project->currency) }}</span>

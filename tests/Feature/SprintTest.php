@@ -521,16 +521,17 @@ it('task page sprint change is forbidden for outsiders', function () {
     $p->call('setSprint', $a->id)->assertForbidden();
 });
 
-it('portal output does not expose sprints', function () {
+it('portal shows sprint names only on the Sprints tab and never their goal', function () {
     $s = spSetup();
     $a = spSprint($s, 'active', ['name' => 'SecretSprintName', 'goal' => 'SecretGoal']);
     spTask($s, $s['m1'], 'Visible task', 'active', ['sprint_id' => $a->id, 'client_visible' => true]);
+    $s['m1']->update(['client_visible' => true]);
     $clientUser = User::factory()->create(['client_id' => $s['client']->id]);
     $clientUser->assignRole('client');
 
     $c = Livewire::actingAs($clientUser)->test(ProjectView::class, ['project' => $s['project']])->assertSee('Visible task')
         ->assertDontSee('SecretSprintName')->assertDontSee('SecretGoal');
-    expect($c->tasks->first()->getAttributes())->not->toHaveKey('sprint_id');
+    $c->set('tab', 'sprints')->assertSee('SecretSprintName')->assertDontSee('SecretGoal');
 });
 
 it('plan view runs a constant number of queries for about 100 tasks', function () {

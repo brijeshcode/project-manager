@@ -39,7 +39,7 @@ it('shows the portal menu to a client user', function () {
 
     $r = actingAs($u)->get('/portal');
     $r->assertOk();
-    $r->assertSee('Dashboard')->assertSee('Invoices')->assertSee('Payments');
+    $r->assertSee('Projects')->assertSee('Invoices')->assertSee('Payments');
     $r->assertDontSee('Clients')->assertDontSee('Recurring')->assertDontSee('Bank accounts');
     $r->assertSee('Sign out')->assertSee('Dark mode')->assertSee($u->email);
 });

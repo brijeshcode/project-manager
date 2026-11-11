@@ -247,8 +247,8 @@ it('the project Resources tab renders and the client portal shows only the clien
     $f = resFix();
     $this->actingAs($f['creator'])->get(route('projects.show', ['project' => $f['project'], 'tab' => 'resources']))
         ->assertOk()->assertSee('Prod DB')->assertSee('Add resource')->assertDontSee(SECRET);
-    $this->actingAs($f['clientViewer'])->get(route('portal.project', $f['project']))->assertOk()->assertSee('Prod DB')->assertDontSee('Add resource');
-    $this->actingAs($f['clientNon'])->get(route('portal.project', $f['project']))->assertOk()->assertDontSee('Prod DB');
+    $this->actingAs($f['clientViewer'])->get(route('portal.project', [$f['project'], 'tab' => 'resources']))->assertOk()->assertSee('Prod DB')->assertDontSee('Add resource');
+    $this->actingAs($f['clientNon'])->get(route('portal.project', [$f['project'], 'tab' => 'resources']))->assertOk()->assertDontSee('Prod DB');
 });
 
 it('removed the old resource items structure', function () {

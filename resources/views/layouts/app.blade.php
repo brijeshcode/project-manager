@@ -20,7 +20,7 @@
             // [label, route, active pattern, icon, visible]
             $nav = collect([
                 ['Dashboard',     'dashboard',             'dashboard',                            'home',        $u && ! $client],
-                ['Dashboard',     'portal.dashboard',      ['portal.dashboard', 'portal.project'], 'home',        $client],
+                ['Projects',      'portal.dashboard',      ['portal.dashboard', 'portal.project'], 'folder',      $client],
                 ['Clients',       'clients.index',         'clients.*',                            'users',       $u && $u->hasRole('super_admin')],
                 ['Projects',      'projects.index',        'projects.*',                           'folder',      $u && ! $client],
                 ['Invoices',      'invoices.index',        'invoices.*',                           'document',    $money],

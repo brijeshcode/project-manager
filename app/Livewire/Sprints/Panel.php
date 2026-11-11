@@ -29,6 +29,10 @@ class Panel extends Component
     #[Locked]
     public bool $canManage = false;
 
+    /** A client user in the portal: read-only, client-visible tasks only, no backlog, people or hours. Derived from the user, never passed in. */
+    #[Locked]
+    public bool $client = false;
+
     #[Url(as: 'spUser')]
     public string $user = '';
 
@@ -63,9 +67,10 @@ class Panel extends Component
 
     public function mount(Project $project): void
     {
-        $this->authorize('view', $project);
+        $this->client = auth()->user()->hasRole('client');
+        $this->authorize($this->client ? 'viewAsClient' : 'view', $project);
         $this->project = $project;
-        $this->canManage = auth()->user()->can('update', $project);
+        $this->canManage = ! $this->client && auth()->user()->can('update', $project);
     }
 
     // ── sprint form: create / edit / start ───────────────────────────────────
@@ -221,13 +226,20 @@ class Panel extends Component
 
     // ── data ─────────────────────────────────────────────────────────────────
 
+    /** Counted tasks this user may see: a client only gets client-visible tasks of client-visible modules. */
+    private function visibleTasks()
+    {
+        return $this->client
+            ? Task::counted()->where('client_visible', true)->whereIn('module_id', $this->project->modules()->where('client_visible', true)->pluck('id'))
+            : Task::visibleTo(auth()->user())->counted()->whereIn('module_id', $this->project->modules()->pluck('id'));
+    }
+
     /** Counted tasks the user may see that are in an open sprint or the backlog, filtered, grouped by module then position. */
     private function openTasks(Collection $openSprints): Collection
     {
         $ids = $openSprints->pluck('id');
 
-        return Task::visibleTo(auth()->user())->counted()
-            ->whereIn('module_id', $this->project->modules()->pluck('id'))
+        return $this->visibleTasks()
             ->where(fn ($q) => $q->whereNull('sprint_id')->orWhereIn('sprint_id', $ids))
             ->when($this->user !== '', fn ($q) => $q->whereHas('assignees', fn ($a) => $a->where('users.id', (int) $this->user)))
             ->when($this->type !== '', fn ($q) => $q->where('task_type_id', (int) $this->type))
@@ -244,24 +256,28 @@ class Panel extends Component
         $sprints = $this->project->sprints()->get();
         $tasks = $this->openTasks($sprints->whereIn('status', ['planned', 'active']));
         $past = $sprints->where('status', 'completed')->sortByDesc('ends_on')->values();
-        $pastTasks = $past->isEmpty() ? collect() : Task::visibleTo(auth()->user())->counted()
+        $pastTasks = $past->isEmpty() ? collect() : $this->visibleTasks()
             ->whereIn('sprint_id', $past->pluck('id'))->with(['project', 'module.project.client', 'type', 'labels', 'assignees', 'column', 'subtasks'])
             ->orderBy('position')->get()->groupBy('sprint_id');
+        $past = $this->client ? $past->filter(fn ($p) => $pastTasks->has($p->id))->values() : $past;
         $active = $sprints->firstWhere('status', 'active');
+        $hasTasks = fn ($s) => ! $this->client || $tasks->contains('sprint_id', $s->id);
+        $active = $active && $hasTasks($active) ? $active : null;
 
         return view('livewire.sprints.panel', [
             'active'      => $active,
             'activeTasks' => $active ? $tasks->where('sprint_id', $active->id)->values() : collect(),
-            'planned'     => $sprints->where('status', 'planned')->values(),
+            'planned'     => $sprints->where('status', 'planned')->filter($hasTasks)->values(),
+            'client'      => $this->client,
             'backlog'     => $tasks->whereNull('sprint_id')->reject(fn (Task $t) => $t->column?->stage === 'done')->values(),
             'tasks'       => $tasks,
             'past'        => $past,
             'pastTasks'   => $pastTasks,
             'progress'    => app(ProgressService::class),
-            'users'       => $this->project->members()->orderBy('name')->get(),
-            'candidates'  => $this->assignable(),
+            'users'       => $this->client ? collect() : $this->project->members()->orderBy('name')->get(),
+            'candidates'  => $this->client ? null : $this->assignable(),
             'types'       => TaskType::orderBy('position')->get(),
-            'labels'      => Label::orderBy('name')->get(),
+            'labels'      => $this->client ? collect() : Label::orderBy('name')->get(),
             'completing'  => $this->completeId ? $sprints->firstWhere('id', $this->completeId) : null,
         ]);
     }

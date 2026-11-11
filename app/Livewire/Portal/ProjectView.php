@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Url;
 use App\Livewire\Concerns\HandlesMarkdownUploads;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Component;
@@ -22,15 +23,19 @@ class ProjectView extends Component
         abort(403);
     }
 
+    public const TABS = ['details' => 'Details', 'modules' => 'Modules', 'sprints' => 'Sprints', 'board' => 'Board', 'budget' => 'Budget', 'planned' => 'Planned', 'resources' => 'Resources'];
+
     public Project $project;
+
+    #[Url]
+    public string $tab = 'modules';
 
     /** New task title (create form). */
     public string $newTitle = '';
 
-    /** Comment body for adding a comment. */
-    public string $commentBody = '';
+    /** Keyed by task id / module id / parent comment id. */
+    public array $taskBody = [];
 
-    /** Keyed by module id / parent comment id. */
     public array $moduleBody = [];
 
     public array $replyBody = [];
@@ -40,19 +45,24 @@ class ProjectView extends Component
         $this->authorize('viewAsClient', $project);
 
         $this->project = $project;
+        $this->tab = array_key_exists($this->tab, self::TABS) ? $this->tab : 'modules';
+    }
+
+    /** Modules shared with the client; tasks of any other module are hidden too. */
+    private function visibleModuleIds(): Collection
+    {
+        return $this->project->modules()->where('client_visible', true)->pluck('id');
     }
 
     /**
      * Only published, client_visible tasks for this project.
-     * Price and cost fields are never included in the select.
-     * ponytail: explicit column list guarantees no money field leaks.
+     * Only the task's own budget amount is selected; rates, hours and cost fields never are.
+     * ponytail: explicit column list guarantees no other money field leaks.
      */
     #[Computed]
     public function tasks(): Collection
     {
-        $moduleIds = $this->project->modules()->pluck('id');
-
-        return Task::whereIn('module_id', $moduleIds)
+        return Task::whereIn('module_id', $this->visibleModuleIds())
             ->where('status', TaskStatus::Published->value)
             ->where('client_visible', true)
             ->with('column')
@@ -61,8 +71,8 @@ class ProjectView extends Component
             ->get([
                 'id', 'project_id', 'number', 'module_id', 'creator_id', 'title', 'description',
                 'status', 'priority', 'board_column_id', 'position',
-                'client_visible', 'client_approval', 'scope', 'section', 'deadline',
-                // Deliberately omits: budget amount, estimate_hours, testing_*, cost fields
+                'client_visible', 'client_approval', 'scope', 'section', 'deadline', 'sprint_id', 'budget_amount',
+                // Deliberately omits: estimate_hours, hourly_rate, billing_mode, testing_*, cost fields
             ])->each->setRelation('project', $this->project);
     }
 
@@ -76,7 +86,7 @@ class ProjectView extends Component
     {
         $this->validate(['newTitle' => 'required|string|max:255']);
 
-        $module = $this->project->modules()->first();
+        $module = $this->project->modules()->where('client_visible', true)->first();
         abort_unless($module, 422, 'Project has no modules.');
 
         Task::create([
@@ -101,13 +111,13 @@ class ProjectView extends Component
      */
     public function addComment(int $taskId): void
     {
-        $this->validate(['commentBody' => 'required|string|max:5000']);
+        $this->validate(['taskBody.'.$taskId => 'required|string|max:5000']);
 
         $task = $this->guardTask($taskId);
 
-        $task->addComment(auth()->user(), $this->commentBody);
+        $task->addComment(auth()->user(), $this->taskBody[$taskId]);
 
-        $this->commentBody = '';
+        unset($this->taskBody[$taskId]);
     }
 
     /** Comment on a client-visible module of this project. */
@@ -177,9 +187,7 @@ class ProjectView extends Component
      */
     private function guardTask(int $taskId): Task
     {
-        $moduleIds = $this->project->modules()->pluck('id');
-
-        $task = Task::whereIn('module_id', $moduleIds)
+        $task = Task::whereIn('module_id', $this->visibleModuleIds())
             ->where('status', TaskStatus::Published->value)
             ->where('client_visible', true)
             ->find($taskId);
@@ -193,9 +201,15 @@ class ProjectView extends Component
     {
         $client = auth()->user();
 
+        $tasks = $this->tasks;
+
         return view('livewire.portal.project-view', [
-            'tasks' => $this->tasks,
-            'modules' => $this->project->modules()->where('client_visible', true)->orderBy('position')->get(),
+            'tasks' => $tasks,
+            'modules' => $this->project->modules()->where('client_visible', true)->orderBy('position')
+                ->with(['tasks' => fn ($q) => $q->where('status', TaskStatus::Published->value)->where('client_visible', true)->orderBy('position')->orderBy('id'), 'tasks.project', 'tasks.subtasks', 'tasks.labels', 'tasks.type', 'tasks.column', 'labels', 'project.client'])->get(),
+            'progress' => app(\App\Services\ProgressService::class),
+            // sprints and columns with no visible task are left out
+            'planned' => $tasks->filter(fn ($t) => $t->column?->stage === 'not_started')->values(),
             'threads' => fn ($subject) => $subject->commentThreads($client),
         ])->layout('layouts.app');
     }

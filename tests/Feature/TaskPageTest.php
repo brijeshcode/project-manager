@@ -279,6 +279,7 @@ it('deletes task comments, activity and files with the task and its subtasks', f
 
 it('shows clients only client-visible tasks and never activity, attachments or the staff page', function () {
     $s = tpSetup();
+    $s['module']->update(['client_visible' => true]);
     $this->actingAs($s['admin']);
     Task::create(['module_id' => $s['module']->id, 'creator_id' => $s['admin']->id, 'title' => 'Internal only', 'status' => 'published', 'client_visible' => false]);
     $s['task']->update(['title' => 'Shown to client']);
@@ -290,9 +291,10 @@ it('shows clients only client-visible tasks and never activity, attachments or t
 
 it('lets clients comment and reply on tasks, own thread only, with the markdown box', function () {
     $s = tpSetup();
+    $s['module']->update(['client_visible' => true]);
     $t = $s['task'];
     tpPortal($s, $s['c1'])->assertSee('data-test="threads-task-'.$t->id.'"', false)->assertSeeHtml('Your comment');
-    tpPortal($s, $s['c1'])->set('commentBody', '**Q**')->call('addComment', $t->id);
+    tpPortal($s, $s['c1'])->set('taskBody.'.$t->id, '**Q**')->call('addComment', $t->id);
     $root = $t->comments()->first();
     $t->addComment($s['admin'], 'Answer', $root->id);
     $t->addComment($s['admin'], 'Internal');
@@ -308,7 +310,7 @@ it('lets clients comment and reply on tasks, own thread only, with the markdown 
 it('keeps clients from commenting on tasks that are not client-visible', function () {
     $s = tpSetup();
     $s['task']->update(['client_visible' => false]);
-    tpPortal($s, $s['c1'])->set('commentBody', 'x')->call('addComment', $s['task']->id)->assertForbidden();
+    tpPortal($s, $s['c1'])->set('taskBody.'.$s['task']->id, 'x')->call('addComment', $s['task']->id)->assertForbidden();
 });
 
 // ── modules tab ──────────────────────────────────────────────────────────────

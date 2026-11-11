@@ -6,8 +6,8 @@
     </x-ui.page-header>
 
     <form wire:submit="save" class="space-y-6">
-        <div class="card">
-            <h2 class="mb-3 font-semibold">Work on this invoice</h2>
+        <div class="card p-6">
+            <h2 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Work on this invoice</h2>
             @forelse ($lines as $l)
                 <div wire:key="line-{{ $l->id }}" class="border-b border-slate-100 py-2 text-sm dark:border-gray-700">
                     <div class="flex items-center gap-3">
@@ -42,9 +42,9 @@
             @error('selected.*') <p class="mt-2 field-error">{{ $message }}</p> @enderror
         </div>
 
-        <div class="card">
-            <div class="mb-3 flex items-center justify-between">
-                <h2 class="font-semibold">New lines</h2>
+        <div class="card p-6">
+            <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-lg font-medium text-gray-900 dark:text-white">New lines</h2>
                 <button type="button" wire:click="addCustom" class="btn btn-ghost">Add line</button>
             </div>
             @foreach ($custom as $i => $row)
@@ -66,7 +66,7 @@
             @endforeach
         </div>
 
-        <div class="card grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="card grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-3">
             <div>
                 <label for="issuedOn" class="label">Issued on</label>
                 <input wire:model="issuedOn" id="issuedOn" type="date" class="input" />

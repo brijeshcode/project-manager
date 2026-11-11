@@ -1,4 +1,5 @@
 {{-- A plan list: header (count, hours, done/total for the active sprint) and a drop zone. $sprint (null = backlog), $rows, $progress, $canManage, $active, $empty. --}}
+@php $client ??= false; @endphp
 @php
     $fmt = fn ($h) => rtrim(rtrim(number_format($h, 1), '0'), '.').'h';
     $doneN = $rows->filter(fn ($t) => $t->column?->stage === 'done')->count();
@@ -16,10 +17,12 @@
                     <span class="text-xs text-slate-500">Open tasks that are not in a sprint</span>
                 @endif
             </div>
-            @if ($sprint?->goal)<p class="mt-1 text-xs text-slate-500" data-test="sprint-goal">{{ $sprint->goal }}</p>@endif
+            @if ($sprint?->goal && ! $client)<p class="mt-1 text-xs text-slate-500" data-test="sprint-goal">{{ $sprint->goal }}</p>@endif
         </div>
         <span class="text-xs text-slate-500" data-test="list-count">@if ($sprint?->isActive()){{ $doneN }}/{{ $rows->count() }} done &middot; @endif{{ $rows->count() }} {{ Str::plural('task', $rows->count()) }}</span>
+        @unless ($client)
         <span class="text-xs font-medium text-slate-700" data-test="list-hours">{{ $fmt(\App\Models\Sprint::hours($rows)) }}</span>
+        @endunless
         @can('manage-money')
             <span class="text-xs tabular-nums text-slate-500" data-test="list-value">{{ \App\Support\Money::format(\App\Models\Sprint::value($rows), $project->currency) }}</span>
         @endcan

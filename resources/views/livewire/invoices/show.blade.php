@@ -25,5 +25,5 @@
     @if ($invoice->localTotalCents() !== null && strtoupper($invoice->currency) !== \App\Services\LocalCurrency::code())
         <p class="mb-3 text-sm text-slate-600 dark:text-gray-300">Frozen rate {{ $invoice->exchange_rate }} &middot; local total {{ \App\Support\Money::format($invoice->localTotalCents(), \App\Services\LocalCurrency::code()) }} (owner only; not on the PDF or email)</p>
     @endif
-    <div class="card overflow-x-auto p-0">@include('invoices._body', ['invoice' => $invoice])</div>
+    <div class="card mx-auto max-w-4xl overflow-hidden p-0"><div class="overflow-x-auto">@include('invoices._body', ['invoice' => $invoice])</div></div>
 </div>

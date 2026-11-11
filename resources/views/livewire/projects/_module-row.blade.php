@@ -1,4 +1,4 @@
-                    @php $mPct = round($progress->forModule($module)); $isDone = $mStatus === 'completed'; @endphp
+                    @php $client ??= false; $mPct = round($progress->forModule($module)); $isDone = $mStatus === 'completed'; @endphp
                     <x-ui.card :class="'mb-4 '.($isDone ? 'ring-1 ring-green-500/40' : '')" padding="p-0" data-test="module-row" data-id="{{ $module->id }}" wire:key="module-{{ $module->id }}" x-data="{ open: false }">
                         <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
                             @if ($canManage && ! $isDone)
@@ -7,7 +7,7 @@
                             <button type="button" @click="open = !open" class="shrink-0 text-slate-400 hover:text-slate-600" title="Expand module" aria-label="Expand module" data-test="module-toggle">
                                 <x-icon name="chevron-right" class="h-4 w-4 transition" ::class="open && 'rotate-90'" />
                             </button>
-                            <h3 class="min-w-0 flex-1 basis-40 truncate font-display text-sm font-semibold text-slate-900"><a href="{{ route('modules.show', [$project, $module]) }}" wire:navigate class="hover:text-brand-600">{{ $module->name }}</a></h3>
+                            <h3 class="min-w-0 flex-1 basis-40 truncate font-display text-sm font-semibold text-slate-900">@if ($client){{ $module->name }}@else<a href="{{ route('modules.show', [$project, $module]) }}" wire:navigate class="hover:text-brand-600">{{ $module->name }}</a>@endif</h3>
                             @if ($canManage)
                                 <div class="relative" x-data="{ pop: false }" @click.outside="pop = false" @keydown.escape="pop = false">
                                     <button type="button" @click="pop = !pop" class="rounded-full" title="Change priority" aria-label="Change priority" data-test="module-priority"><x-ui.priority :value="$module->priority" /></button>
@@ -21,13 +21,25 @@
                                 <x-ui.priority :value="$module->priority" data-test="module-priority" />
                             @endif
                             <x-ui.badge :color="\App\Models\Module::STATUS_COLORS[$mStatus]" data-test="module-status">{{ \App\Models\Module::STATUS_LABELS[$mStatus] }}</x-ui.badge>
+                            @php $cv = $module->client_visible; $cvTitle = $cv ? 'Visible to client' : 'Hidden from client'; @endphp
+                            @unless ($client)
+                            @if ($canManage)
+                                <button type="button" wire:click="toggleModuleVisibility({{ $module->id }})" wire:loading.class="animate-pulse opacity-50" wire:loading.attr="disabled" wire:target="toggleModuleVisibility({{ $module->id }})" @class(['shrink-0', 'text-brand-600 hover:text-brand-700' => $cv, 'text-slate-400 hover:text-slate-600' => ! $cv]) title="{{ $cvTitle }}. Click to toggle" aria-label="{{ $cvTitle }}" data-test="module-visibility"><x-icon :name="$cv ? 'eye' : 'eye-off'" /></button>
+                            @else
+                                <span @class(['shrink-0', 'text-brand-600' => $cv, 'text-slate-400' => ! $cv]) title="{{ $cvTitle }}" data-test="module-visibility"><x-icon :name="$cv ? 'eye' : 'eye-off'" /></span>
+                            @endif
+                            @endunless
                             <span class="w-24 text-xs" data-test="module-deadline">@if ($module->deadline)<x-ui.deadline :date="$module->deadline" :done="$mStatus === 'completed'" format="M j, Y" />@else<span class="text-slate-500">No deadline</span>@endif</span>
+                            @unless ($client)
                             <x-ui.assignees :users="$module->assignees" :candidates="$canManage ? $candidates : null" method="toggleModuleAssignee" :id="$module->id" data-test="module-assignees" />
+                            @endunless
+                            @unless ($client)
                             <span class="flex flex-wrap gap-1">
                                 @foreach ($module->labels as $l)
                                     <x-ui.label-chip :label="$l" />
                                 @endforeach
                             </span>
+                            @endunless
                             <x-ui.progress :pct="$mPct" class="w-40" data-test="module-progress" />
                             <span class="w-14 text-right text-xs text-slate-400" data-test="module-task-count">{{ $module->tasks->count() }} {{ Str::plural('task', $module->tasks->count()) }}</span>
                             @can('manage-money')
@@ -59,6 +71,16 @@
                             @elseif ($module->description)
                                 <x-ui.markdown :text="$module->description" class="mt-1" />
                             @endif
+                            @if ($client)
+                                <div class="mt-3 space-y-2">
+                                    @include('livewire.portal._threads', ['subject' => $module, 'kind' => 'module'])
+                                    <form wire:submit="addModuleComment({{ $module->id }})" class="space-y-2">
+                                        <x-ui.markdown-editor model="moduleBody.{{ $module->id }}" :rows="2" :uploads="false" placeholder="Comment on this module…" />
+                                        <button type="submit" class="btn btn-secondary h-8 px-3 py-1 text-xs">Post</button>
+                                    </form>
+                                    @error('moduleBody.'.$module->id) <p class="field-error text-xs">{{ $message }}</p> @enderror
+                                </div>
+                            @endif
                             @can('manage-money')
                                 @php $hourly = $module->billingMode() === 'hourly'; @endphp
                                 <div class="mt-2 text-xs text-slate-500" x-data="{ editingBudget: false }">
@@ -87,7 +109,7 @@
                             @endcan
                         </div>
 
-                        <ul class="divide-y divide-slate-100" x-data x-sortable data-sort-method="reorderTasks" data-sort-scope="{{ $module->id }}" data-test="module-task-rows">
+                        <ul class="divide-y divide-slate-100" {!! $client ? '' : 'x-data x-sortable data-sort-method="reorderTasks" data-sort-scope="'.$module->id.'"' !!} data-test="module-task-rows">
                             @foreach ($module->tasks as $task)
                                 @php $taskProgress = $progress->forTask($task); @endphp
                                 <li x-data="{ open: false }" wire:key="mt-{{ $task->id }}" data-id="{{ $task->id }}" class="bg-white px-3 py-3 dark:bg-transparent">
@@ -99,10 +121,14 @@
                                             <x-icon name="chevron-right" class="h-4 w-4 text-slate-400 transition" ::class="open && 'rotate-90'" />
                                         </button>
                                         <x-ui.task-code :task="$task" />
-                                        <a href="{{ route('tasks.show', $task) }}" wire:navigate data-test="task-link" class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>
+                                        @if ($client)<span class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">{{ $task->title }}</span>@else<a href="{{ route('tasks.show', $task) }}" wire:navigate data-test="task-link" class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800 hover:text-brand-600">{{ $task->title }}</a>@endif
+                                        @unless ($client)
                                         <x-ui.assignees :users="$task->assignees" :candidates="$canManage ? $candidates : null" method="toggleTaskAssignee" :id="$task->id" />
+                                        @endunless
                                         @can('manage-money')
                                             @include('livewire.items._task-value', ['task' => $task, 'currency' => $project->currency])
+                                        @elseif ($client && $task->budget_amount !== null)
+                                            <span class="text-xs tabular-nums text-slate-600" data-test="row-value">{{ \App\Support\Money::format(\App\Support\Money::toCents((string) $task->budget_amount), $project->currency) }}</span>
                                         @endcan
                                         @foreach ($task->labels as $l)
                                             <x-ui.label-chip :label="$l" class="hidden sm:inline-flex" />
@@ -111,6 +137,13 @@
                                         <x-ui.priority :value="$task->priority" />
                                         <x-ui.deadline :date="$task->deadline" :done="$task->column?->stage === 'done'" class="text-xs" />
                                         <x-ui.stage-badge :column="$task->column" />
+                                        @if ($client)
+                                            @if ($task->client_approval === 'approved')
+                                                <x-ui.badge color="green">Approved</x-ui.badge>
+                                            @elseif ($task->column?->stage === 'done')
+                                                <button type="button" wire:click="approveTask({{ $task->id }})" class="btn btn-primary h-7 px-3 py-1 text-xs">Approve</button>
+                                            @endif
+                                        @endif
                                         <x-ui.progress :pct="$taskProgress" class="w-40" data-test="task-progress-bar" />
                                         @if($canManage)
                                         <a href="{{ route('tasks.show', $task) }}" wire:navigate class="shrink-0 text-slate-400 hover:text-brand-600" title="Edit task" aria-label="Edit task" data-test="edit-task"><x-icon name="pencil" /></a>
@@ -130,6 +163,7 @@
                                       </div>
 
                                       <div class="grid gap-5 sm:grid-cols-2">
+                                        @unless ($client)
                                         {{-- Checklist --}}
                                         <div>
                                             <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Checklist</p>
@@ -158,11 +192,12 @@
                                                 </form>
                                             @endif
                                         </div>
+                                        @endunless
 
                                         {{-- Subtasks --}}
                                         <div>
                                             <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Subtasks</p>
-                                            <ul class="space-y-1.5" x-data x-sortable data-sort-method="reorderSubtasksOf" data-sort-scope="{{ $task->id }}" data-sort-handle=".item-handle" data-test="task-subtasks">
+                                            <ul class="space-y-1.5" {!! $client ? '' : 'x-data x-sortable data-sort-method="reorderSubtasksOf" data-sort-scope="'.$task->id.'" data-sort-handle=".item-handle"' !!} data-test="task-subtasks">
                                                 @foreach ($task->subtasks as $subtask)
                                                     <li wire:key="msub-{{ $subtask->id }}" data-id="{{ $subtask->id }}" class="flex items-center gap-1.5 text-sm text-slate-700">
                                                         @if ($canManage)
@@ -187,12 +222,24 @@
                                             @endif
                                         </div>
                                       </div>
+                                      @unless ($client)
 
                                       {{-- Time logger --}}
                                       <div>
                                           <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Time</p>
                                           <livewire:time.logger :timeable="$task" :key="'logger-'.$task->id" />
                                       </div>
+                                      @endunless
+                                      @if ($client)
+                                          <div class="space-y-2">
+                                              @include('livewire.portal._threads', ['subject' => $task, 'kind' => 'task'])
+                                              <form wire:submit="addComment({{ $task->id }})" class="space-y-2">
+                                                  <x-ui.markdown-editor model="taskBody.{{ $task->id }}" :rows="2" :uploads="false" placeholder="Your comment…" />
+                                                  <button type="submit" class="btn btn-secondary h-8 px-3 py-1 text-xs">Post</button>
+                                              </form>
+                                              @error('taskBody.'.$task->id) <p class="field-error text-xs">{{ $message }}</p> @enderror
+                                          </div>
+                                      @endif
                                     </div>
                                 </li>
                             @endforeach
