@@ -32,20 +32,25 @@ class MoneyStats
         ];
     }
 
-    public static function payments(): array
+    /** Stats over the payments list's filtered query. Total and average are null when any counted payment has no local figure (all-or-nothing). */
+    public static function payments(Builder $filtered): array
     {
         $local = LocalCurrency::code();
-        $q = fn () => Payment::where('local_currency', $local);
+        $q = fn () => (clone $filtered)->reorder();
         $count = $q()->count();
-        $total = (int) $q()->sum('local_amount_cents');
+        $missing = $q()->whereNull('local_amount_cents')->count();
+        $total = $missing ? null : (int) $q()->where('local_currency', $local)->sum('local_amount_cents');
+        $byType = $q()->where('local_currency', $local)->groupBy('type')->selectRaw('type, SUM(local_amount_cents) as cents')->pluck('cents', 'type');
 
         return [
             'currency' => $local,
             'total' => $total,
-            'this_month' => (int) $q()->whereDate('paid_on', '>=', now()->startOfMonth()->toDateString())->sum('local_amount_cents'),
-            'count' => Payment::count(),
-            'average' => $count > 0 ? intdiv($total + intdiv($count, 2), $count) : 0,
-            'missing_rate' => Payment::whereNull('local_amount_cents')->count(),
+            'count' => $count,
+            'clients' => $q()->distinct()->count('client_id'),
+            'average' => $total !== null && $count > 0 ? intdiv($total + intdiv($count, 2), $count) : null,
+            'missing_rate' => $missing,
+            // ponytail: a type's sum skips rows without a rate; the missing_rate hint flags that
+            'by_type' => $byType->map(fn ($c) => (int) $c)->sortDesc()->all(),
         ];
     }
 }

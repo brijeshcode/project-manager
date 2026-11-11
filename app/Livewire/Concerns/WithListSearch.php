@@ -28,7 +28,7 @@ trait WithListSearch
 
     public function clearFilters(): void
     {
-        $this->reset(...array_filter(['search', 'status', 'clientFilter', 'from', 'to'], fn ($p) => property_exists($this, $p)));
+        $this->reset(...array_filter(['search', 'status', 'clientFilter', 'typeFilter', 'from', 'to'], fn ($p) => property_exists($this, $p)));
         $this->resetPage();
     }
 

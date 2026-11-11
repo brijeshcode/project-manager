@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Payments\Form;
 use App\Livewire\Payments\Index;
 use App\Models\Client;
 use App\Models\Payment;
@@ -25,7 +26,7 @@ function lcClient(string $cur = 'USD'): Client
 
 function lcPage(Client $c, string $amount = '100.00', ?string $rate = null)
 {
-    $t = Livewire::actingAs(test()->owner)->test(Index::class)->assertOk()->set('client_id', $c->id)->set('amount', $amount);
+    $t = Livewire::actingAs(test()->owner)->test(Form::class)->assertOk()->set('client_id', $c->id)->set('amount', $amount);
 
     return $rate === null ? $t : $t->set('exchange_rate', $rate);
 }

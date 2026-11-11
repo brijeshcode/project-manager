@@ -79,7 +79,7 @@ Route::get('payments', \App\Livewire\Payments\Index::class)
 Route::middleware(['auth', 'can:manage-money'])->prefix('payments')->name('payments.')->whereNumber('payment')->group(function () {
     Route::get('create', \App\Livewire\Payments\Form::class)->name('create');
     Route::get('{payment}', \App\Livewire\Payments\Show::class)->name('show');
-    Route::get('{payment}/edit', \App\Livewire\Payments\Edit::class)->name('edit');
+    Route::get('{payment}/edit', \App\Livewire\Payments\Form::class)->name('edit');
 });
 
 Route::get('payment-documents/{document}/download', \App\Http\Controllers\PaymentDocumentDownloadController::class)

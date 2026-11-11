@@ -12,7 +12,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 
 /**
- * Fields, validation and money math shared by the payment record form and the edit page.
+ * Fields, validation and money math shared by the payment create and edit form.
  * A payment is amount + currency + rate + local amount; the amount is in the selected currency.
  */
 trait PaymentFields
@@ -26,6 +26,7 @@ trait PaymentFields
     public string $method = '';
     public string $notes = '';
     public string $exchange_rate = '';
+    public bool $documents_visible_to_client = false;
 
     public function updatedClientId(): void
     {
@@ -80,6 +81,7 @@ trait PaymentFields
             'type' => ['required', new Enum(PaymentType::class)],
             'method' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
+            'documents_visible_to_client' => 'boolean',
         ]);
 
         $rate = $cur === $local ? '1' : $data['exchange_rate'];
@@ -91,6 +93,7 @@ trait PaymentFields
             'exchange_rate' => $rate, 'local_amount_cents' => Money::convert($cents, $rate), 'local_currency' => $local,
             'paid_on' => $data['paid_on'], 'type' => $data['type'],
             'method' => $data['method'] ?: null, 'notes' => $data['notes'] ?: null,
+            'documents_visible_to_client' => (bool) $data['documents_visible_to_client'],
         ];
     }
 

@@ -138,20 +138,17 @@ it('invoices: % literal in client name, page 2, beyond-last safe', function () {
 });
 
 // ---- payments
-it('payments: search by client name, never notes', function () {
+it('payments: filter by client, notes never on the list', function () {
     $a = lfClient('Acme'); $b = lfClient('Bolt');
     lfPayment($a, 111100, ['notes' => 'secretnote']);
     lfPayment($b, 222200);
-    Livewire::test(PaymentsIndex::class)->assertOk()->assertSee('1,111.00')->assertSee('2,222.00')
-        ->set('search', 'acme')->assertSee('1,111.00')->assertDontSee('2,222.00')
-        ->set('search', 'secretnote')->assertDontSee('1,111.00')->assertDontSee('2,222.00')->assertSee('No matches');
+    Livewire::test(PaymentsIndex::class)->assertOk()->assertSee('1,111.00')->assertSee('2,222.00')->assertDontSee('secretnote')
+        ->set('clientFilter', (string) $a->id)->assertSee('1,111.00')->assertDontSee('2,222.00');
 });
 
-it('payments: % literal, page 2, beyond-last safe', function () {
+it('payments: page 2, beyond-last safe', function () {
     $p = lfClient('100% Pure'); $o = lfClient('Other');
     lfPayment($p, 777700, ['paid_on' => today()->subDays(30)]);
-    lfPayment($o, 333300);
-    Livewire::test(PaymentsIndex::class)->assertOk()->set('search', '%')->assertSee('7,777.00')->assertDontSee('3,333.00');
     foreach (range(1, 15) as $i) { lfPayment($o, 100, ['paid_on' => today()]); }
     Livewire::test(PaymentsIndex::class)->assertOk()->assertDontSee('7,777.00')
         ->call('gotoPage', 2)->assertSee('7,777.00')

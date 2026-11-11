@@ -6,7 +6,7 @@ use App\Livewire\Currencies\Index;
 use App\Livewire\Invoices\Create;
 use App\Livewire\Invoices\Index as InvoiceIndex;
 use App\Livewire\Invoices\Show;
-use App\Livewire\Payments\Index as PayIndex;
+use App\Livewire\Payments\Form as PayForm;
 use App\Models\BillableLine;
 use App\Models\Client;
 use App\Models\Currency;
@@ -80,11 +80,11 @@ it('keeps the local currency active and rate-free when edited', function () {
 it('deactivating a currency removes it from the payment form, and the local currency stays active', function () {
     $c = cdClient('USD');
     $eur = Currency::forCode('EUR');
-    Livewire::actingAs($this->owner)->test(PayIndex::class)->set('client_id', $c->id)->assertSeeHtml('<option value="EUR">EUR</option>');
+    Livewire::actingAs($this->owner)->test(PayForm::class)->set('client_id', $c->id)->assertSeeHtml('<option value="EUR">EUR</option>');
 
     $page = Livewire::actingAs($this->owner)->test(Index::class)->call('toggle', $eur->id);
     expect($eur->fresh()->is_active)->toBeFalse();
-    Livewire::actingAs($this->owner)->test(PayIndex::class)->set('client_id', $c->id)->assertDontSeeHtml('<option value="EUR">EUR</option>');
+    Livewire::actingAs($this->owner)->test(PayForm::class)->set('client_id', $c->id)->assertDontSeeHtml('<option value="EUR">EUR</option>');
 
     $inr = Currency::forCode('INR');
     $page->call('toggle', $inr->id);
@@ -111,7 +111,7 @@ it('is owner only', function () {
 
 it('a payment has no invoice', function () {
     $c = cdClient('USD');
-    Livewire::actingAs($this->owner)->test(PayIndex::class)->set('client_id', $c->id)->set('amount', '10')->call('save')->assertHasNoErrors();
+    Livewire::actingAs($this->owner)->test(PayForm::class)->set('client_id', $c->id)->set('amount', '10')->call('save')->assertHasNoErrors();
     expect(Payment::first()->getAttributes())->not->toHaveKey('invoice_id');
 });
 

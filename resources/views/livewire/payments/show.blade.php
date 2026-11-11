@@ -2,7 +2,7 @@
     @php $money = fn ($c, $cur) => \App\Support\Money::format($c, $cur); @endphp
     <x-ui.page-header :title="'Payment from '.$payment->client->name" :subtitle="$payment->paid_on->toFormattedDateString()">
         <x-slot:actions>
-            <a href="{{ route('payments.index') }}" class="btn btn-ghost">All payments</a>
+            <a href="{{ route('payments.index') }}" wire:navigate class="btn btn-ghost">All payments</a>
             <a href="{{ route('payments.edit', $payment) }}" class="btn btn-ghost">Edit</a>
             <button wire:click="delete" wire:confirm="Delete this payment? The client balance will change." class="btn btn-ghost text-rose-600 dark:text-rose-400">Delete</button>
         </x-slot:actions>
@@ -26,13 +26,18 @@
         </dl>
     </div>
 
-    <div class="card mt-6">
-        <h2 class="mb-3 font-semibold">Documents</h2>
+    <div class="card mt-6" id="documents">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 class="font-semibold">Documents</h2>
+            @if ($payment->documents->isNotEmpty())
+                <x-ui.badge :color="$payment->documents_visible_to_client ? 'green' : 'slate'">{{ $payment->documents_visible_to_client ? 'Visible to client' : 'Hidden from client' }}</x-ui.badge>
+            @endif
+        </div>
         <ul class="space-y-1 text-sm">
             @forelse ($payment->documents as $d)
-                <li wire:key="doc-{{ $d->id }}"><a href="{{ route('payment-documents.download', $d->id) }}" class="link">{{ $d->original_name }}</a></li>
+                <li wire:key="doc-{{ $d->id }}" class="flex items-center gap-2"><x-icon name="file-text" class="h-4 w-4 text-slate-400" /><a href="{{ route('payment-documents.download', $d->id) }}" class="link">{{ $d->original_name }}</a></li>
             @empty
-                <li class="text-slate-500">No documents. Add them from the payments list.</li>
+                <li class="text-slate-500">No documents. <a href="{{ route('payments.edit', $payment) }}" wire:navigate class="link">Add them on the edit page.</a></li>
             @endforelse
         </ul>
     </div>

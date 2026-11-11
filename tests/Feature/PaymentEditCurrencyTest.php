@@ -1,6 +1,6 @@
 <?php
 
-use App\Livewire\Payments\Edit;
+use App\Livewire\Payments\Form;
 use App\Livewire\Payments\Index;
 use App\Livewire\Payments\Show;
 use App\Models\Client;
@@ -39,14 +39,14 @@ it('unconverts a local amount back to a currency', function () {
 
 it('offers the local currency and every currency with an active rate', function () {
     $c = pcClient();
-    Livewire::actingAs(pcOwner())->test(Index::class)->set('client_id', $c->id)
+    Livewire::actingAs(pcOwner())->test(Form::class)->set('client_id', $c->id)
         ->assertSet('currency', 'USD')
         ->assertSeeInOrder(['EUR', 'INR', 'USD']);
 });
 
 it('records a payment in the client currency as before', function () {
     $c = pcClient();
-    Livewire::actingAs(pcOwner())->test(Index::class)->set('client_id', $c->id)->set('amount', '100')->call('save')->assertHasNoErrors();
+    Livewire::actingAs(pcOwner())->test(Form::class)->set('client_id', $c->id)->set('amount', '100')->call('save')->assertHasNoErrors();
     $p = Payment::first();
     expect($p->amount_cents)->toBe(10000)->and($p->paid_amount_cents)->toBeNull()->and($p->currency)->toBe('USD')
         ->and($p->local_amount_cents)->toBe(800000);
@@ -55,7 +55,7 @@ it('records a payment in the client currency as before', function () {
 it('records a payment in another currency: amount, currency, rate and local amount', function () {
     $c = pcClient('USD');
     // 50.00 EUR @ 100 = 5,000.00 INR
-    Livewire::actingAs(pcOwner())->test(Index::class)->set('client_id', $c->id)->set('currency', 'EUR')
+    Livewire::actingAs(pcOwner())->test(Form::class)->set('client_id', $c->id)->set('currency', 'EUR')
         ->assertSet('exchange_rate', '100')->set('amount', '50')->call('save')->assertHasNoErrors();
     $p = Payment::first();
     expect($p->currency)->toBe('EUR')->and($p->amount_cents)->toBe(5000)
@@ -73,7 +73,7 @@ it('shows the client balance in the client currency and in local currency', func
 
 it('rejects a currency that is not active in the system', function () {
     $c = pcClient();
-    Livewire::actingAs(pcOwner())->test(Index::class)->set('client_id', $c->id)->set('currency', 'JPY')->set('amount', '10')->call('save')->assertHasErrors('currency');
+    Livewire::actingAs(pcOwner())->test(Form::class)->set('client_id', $c->id)->set('currency', 'JPY')->set('amount', '10')->call('save')->assertHasErrors('currency');
     expect(Payment::count())->toBe(0);
 });
 
@@ -82,7 +82,7 @@ it('edits every field, recalculating the local amount and moving the balance', f
     $p = Payment::create(['client_id' => $c->id, 'amount_cents' => 10000, 'currency' => 'USD', 'exchange_rate' => '80', 'local_amount_cents' => 800000, 'local_currency' => 'INR', 'paid_on' => today(), 'type' => 'project']);
     $other = pcClient('EUR');
 
-    Livewire::actingAs(pcOwner())->test(Edit::class, ['payment' => $p])
+    Livewire::actingAs(pcOwner())->test(Form::class, ['payment' => $p])
         ->assertSet('amount', '100.00')->assertSet('currency', 'USD')
         ->set('client_id', $other->id)->assertSet('currency', 'EUR')
         ->set('amount', '20')->set('method', 'wire')->set('notes', 'fixed')
@@ -97,7 +97,7 @@ it('edits every field, recalculating the local amount and moving the balance', f
 it('edit switches a payment to another currency', function () {
     $c = pcClient('USD');
     $p = Payment::create(['client_id' => $c->id, 'amount_cents' => 10000, 'currency' => 'USD', 'exchange_rate' => '80', 'local_amount_cents' => 800000, 'local_currency' => 'INR', 'paid_on' => today(), 'type' => 'project']);
-    Livewire::actingAs(pcOwner())->test(Edit::class, ['payment' => $p])->set('currency', 'EUR')->set('amount', '80')->call('save')->assertHasNoErrors();
+    Livewire::actingAs(pcOwner())->test(Form::class, ['payment' => $p])->set('currency', 'EUR')->set('amount', '80')->call('save')->assertHasNoErrors();
     $p->refresh();
     expect($p->currency)->toBe('EUR')->and($p->amount_cents)->toBe(8000)->and($p->local_amount_cents)->toBe(800000)->and((string) $p->exchange_rate)->toBe('100.000000');
 });
@@ -120,6 +120,6 @@ it('keeps edit and view owner only', function () {
     $c = pcClient();
     $p = Payment::create(['client_id' => $c->id, 'amount_cents' => 100, 'currency' => 'USD', 'paid_on' => today(), 'type' => 'project']);
     $dev = User::factory()->create()->assignRole('developer');
-    Livewire::actingAs($dev)->test(Edit::class, ['payment' => $p])->assertForbidden();
+    Livewire::actingAs($dev)->test(Form::class, ['payment' => $p])->assertForbidden();
     Livewire::actingAs($dev)->test(Show::class, ['payment' => $p])->assertForbidden();
 });

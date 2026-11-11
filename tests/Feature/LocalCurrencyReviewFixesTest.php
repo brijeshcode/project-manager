@@ -2,7 +2,7 @@
 
 use App\Livewire\Clients\Form;
 use App\Livewire\Invoices\Create;
-use App\Livewire\Payments\Index as Payments;
+use App\Livewire\Payments\Form as Payments;
 use App\Models\BillableLine;
 use App\Models\Client;
 use App\Models\ExchangeRate;
