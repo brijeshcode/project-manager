@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Invoices;
 
+use App\Livewire\Concerns\RemembersView;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Services\InvoiceService;
@@ -13,6 +14,7 @@ use Livewire\Component;
 
 class Index extends Component
 {
+    use RemembersView;
     use WithListSearch, WithDateFilter;
 
     public string $clientFilter = '';

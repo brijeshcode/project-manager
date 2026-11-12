@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Portal;
 
+use App\Livewire\Concerns\RemembersView;
 use App\Models\Payment;
 use App\Models\PaymentDocument;
 use Illuminate\Support\Facades\Log;
@@ -12,6 +13,7 @@ use Livewire\WithPagination;
 
 class Payments extends Component
 {
+    use RemembersView;
     use WithPagination;
 
     #[Url(as: 'view')]

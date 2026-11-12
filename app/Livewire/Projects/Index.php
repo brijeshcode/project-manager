@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Projects;
 
+use App\Livewire\Concerns\RemembersView;
 use App\Livewire\Concerns\WithListSearch;
 use App\Models\Project;
 use App\Models\Subtask;
@@ -13,6 +14,7 @@ use Livewire\Component;
 
 class Index extends Component
 {
+    use RemembersView;
     use WithListSearch;
 
     /** cards | list */

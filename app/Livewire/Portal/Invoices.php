@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Portal;
 
+use App\Livewire\Concerns\RemembersView;
 use App\Models\Invoice;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -9,6 +10,7 @@ use Livewire\WithPagination;
 
 class Invoices extends Component
 {
+    use RemembersView;
     use WithPagination;
 
     #[Url(as: 'view')]

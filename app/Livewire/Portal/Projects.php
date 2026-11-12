@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Portal;
 
+use App\Livewire\Concerns\RemembersView;
 use App\Models\Project;
 use App\Services\ClientAccount;
 use App\Services\ProgressService;
@@ -10,6 +11,7 @@ use Livewire\Component;
 
 class Projects extends Component
 {
+    use RemembersView;
     #[Url(as: 'view')]
     public string $view = 'cards';
 

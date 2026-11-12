@@ -45,3 +45,15 @@ it('shows started, completed and last-worked dates', function () {
         ->assertSeeHtml('data-test="view-toggle"')->assertSeeHtml('data-test="project-list"')
         ->assertSee('Completed Mar 10, 2026')->assertSee('Last worked Apr 20, 2026');
 });
+
+it('remembers the cards/list choice per page, and a ?view= in the URL still wins', function () {
+    $u = User::factory()->create();
+    $u->assignRole('super_admin');
+
+    Livewire::actingAs($u)->test(Index::class)->set('view', 'list');
+    expect(collect(\Illuminate\Support\Facades\Cookie::getQueuedCookies())->first(fn ($c) => $c->getName() === 'view_projects_index')?->getValue())->toBe('list');
+
+    Livewire::withCookies(['view_projects_index' => 'list'])->actingAs($u)->test(Index::class)->assertSet('view', 'list');
+    Livewire::withQueryParams(['view' => 'cards'])->withCookies(['view_projects_index' => 'list'])->actingAs($u)->test(Index::class)->assertSet('view', 'cards');
+    Livewire::withCookies(['view_projects_index' => 'bogus'])->actingAs($u)->test(Index::class)->assertSet('view', 'cards');
+});
