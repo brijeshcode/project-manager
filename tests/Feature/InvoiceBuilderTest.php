@@ -302,30 +302,20 @@ it('uses the chosen invoice date, defaulting to today, and dates the due date fr
     expect($inv->issued_on->toDateString())->toBe('2026-10-01')->and($inv->due_on->toDateString())->toBe('2026-10-16');
 });
 
-it('removing an item sets it aside on the page, and it can be put back or dropped', function () {
+it('removing work puts it back in the picker; removing a custom item sets it aside', function () {
     $c = ibClient();
     $a = ibLine($c, 10000, 'Alpha');
     $b = ibLine($c, 5000, 'Beta');
     $t = Livewire::withQueryParams(['client' => $c->id])->actingAs(ibOwner())->test(Create::class)->assertSet('tab', 'charges')
         ->set('pickCharges', [(string) $a->id, (string) $b->id])->call('addPicked')->assertCount('groups', 2)->assertSet('pickCharges', [])
-        ->set('groups.0.label', 'Alpha, renamed')->call('removeGroup', 0)
-        ->assertCount('groups', 1)->assertCount('parkedGroups', 1)->assertSee('Set aside');
-    $t->call('addAllWork')->assertCount('groups', 1); // set-aside work is not offered again
+        ->call('removeGroup', 0)->assertCount('groups', 1)->assertCount('parkedGroups', 0)->assertDontSee('Put back');
+    $t->call('addAllWork')->assertCount('groups', 2)->assertSet('groups.1.label', 'Alpha'); // offered again
     $t->call('addCustom')->set('custom.0.description', 'Hosting')->set('custom.0.unit_price', '10')->call('removeCustom', 0)
-        ->assertCount('custom', 0)->assertCount('parkedCustom', 1)->call('restoreCustom', 0)->assertSet('custom.0.description', 'Hosting');
-    $t->call('restoreGroup', 0)->assertCount('parkedGroups', 0)->assertSet('groups.1.label', 'Alpha, renamed');
+        ->assertCount('custom', 0)->assertCount('parkedCustom', 1)->assertSee('Put back')->call('restoreCustom', 0)->assertSet('custom.0.description', 'Hosting');
     $t->call('addCustom')->call('removeCustom', 1)->assertCount('parkedCustom', 0); // blank line is just dropped
     $t->call('save')->assertHasNoErrors();
     $inv = Invoice::firstOrFail();
-    expect($inv->total_cents)->toBe(16000)->and(array_column($inv->lines_snapshot, 'description'))->toBe(['Beta', 'Alpha, renamed', 'Hosting']);
-});
-
-it('drops a set-aside item back into the picker', function () {
-    $c = ibClient();
-    $a = ibLine($c, 10000, 'Alpha');
-    Livewire::withQueryParams(['client' => $c->id])->actingAs(ibOwner())->test(Create::class)
-        ->call('addAllWork')->call('removeGroup', 0)->call('forgetGroup', 0)->assertCount('parkedGroups', 0)
-        ->call('addAllWork')->assertSet('groups', [['label' => 'Alpha', 'lines' => [(string) $a->id]]]);
+    expect($inv->total_cents)->toBe(16000)->and(array_column($inv->lines_snapshot, 'description'))->toBe(['Beta', 'Alpha', 'Hosting']);
 });
 
 it('hides quantity on the invoice unless asked, and keeps the choice', function () {

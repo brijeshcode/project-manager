@@ -3,7 +3,7 @@
                     <div class="flex items-start justify-between gap-4">
                         <div>
                             <h2 class="{{ $h2 }}">Invoice items</h2>
-                            <p class="{{ $hint }}">These rows print on the invoice. Edit any label; remove a row and it moves to <em>Set aside</em>.</p>
+                            <p class="{{ $hint }}">These rows print on the invoice. Edit any label; removed work goes back to the list above, removed custom items move to <em>Set aside</em>.</p>
                         </div>
                         <button type="button" wire:click="addCustom" class="btn btn-secondary shrink-0"><x-icon name="plus" class="h-4 w-4" />Custom item</button>
                     </div>

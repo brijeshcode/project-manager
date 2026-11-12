@@ -28,9 +28,14 @@ function irBuilder($test)
     return Livewire::withQueryParams(['client' => $test->client->id])->actingAs($test->owner)->test(Create::class);
 }
 
-it('puts the client-wide due recurring service on a new invoice, once', function () {
+function irPicked($test)
+{
+    return irBuilder($test)->set('pickSubs', [(string) $test->charge->id])->call('addPicked');
+}
+
+it('adds nothing on load; a picked due service goes on the invoice, once', function () {
     $line = fn () => BillableLine::where('recurring_charge_id', $this->charge->id)->sole();
-    irBuilder($this)->assertSet('groups', [['label' => 'Hosting (Nov 2026)', 'lines' => [(string) $line()->id], 'amount' => '50.00', 'period' => 'Nov 2026', 'currency' => 'USD']])
+    irBuilder($this)->assertSet('groups', [])->set('pickSubs', [(string) $this->charge->id])->call('addPicked')->assertSet('groups', [['label' => 'Hosting (Nov 2026)', 'lines' => [(string) $line()->id], 'amount' => '50.00', 'period' => 'Nov 2026', 'currency' => 'USD']])
         ->assertSee('Recurring · Nov 2026');
     irBuilder($this);
     expect(BillableLine::where('recurring_charge_id', $this->charge->id)->count())->toBe(1)
@@ -44,7 +49,7 @@ it('skips paused services', function () {
 });
 
 it('saves an edited recurring amount on the line and the invoice', function () {
-    irBuilder($this)->set('groups.0.amount', '65.50')->call('save')->assertHasNoErrors()->assertRedirect();
+    irPicked($this)->set('groups.0.amount', '65.50')->call('save')->assertHasNoErrors()->assertRedirect();
     $inv = Invoice::sole();
     $line = BillableLine::where('recurring_charge_id', $this->charge->id)->sole();
     expect($inv->total_cents)->toBe(6550)
@@ -54,16 +59,16 @@ it('saves an edited recurring amount on the line and the invoice', function () {
 });
 
 it('rejects an empty or zero recurring amount', function () {
-    irBuilder($this)->set('groups.0.amount', '0')->call('save')->assertHasErrors('groups.0.amount');
-    irBuilder($this)->set('groups.0.amount', '')->call('save')->assertHasErrors('groups.0.amount');
+    irPicked($this)->set('groups.0.amount', '0')->call('save')->assertHasErrors('groups.0.amount');
+    irPicked($this)->set('groups.0.amount', '')->call('save')->assertHasErrors('groups.0.amount');
     expect(Invoice::count())->toBe(0);
 });
 
-it('a removed recurring item stays pending for a later invoice', function () {
-    irBuilder($this)->call('removeGroup', 0)->assertSet('groups', [])->call('addCustom')
+it('a removed recurring item goes back to the picker and stays pending', function () {
+    irPicked($this)->call('removeGroup', 0)->assertSet('groups', [])->assertCount('parkedGroups', 0)->assertDontSee('On this invoice')->call('addCustom')
         ->set('custom.0.description', 'Fix')->set('custom.0.unit_price', '10')->call('save')->assertHasNoErrors();
     expect(BillableLine::where('recurring_charge_id', $this->charge->id)->sole()->invoice_id)->toBeNull();
-    irBuilder($this)->assertCount('groups', 1); // offered again next time
+    irPicked($this)->assertCount('groups', 1); // offered again next time
 });
 
 it('edits a recurring item on an existing invoice', function () {
@@ -84,13 +89,13 @@ it('lists the subscriptions running in the invoice month without adding them', f
 
     $c = irBuilder($this)->set('issuedOn', '2022-03-10')->assertSet('tab', 'subs')
         ->assertSee('Old app')->assertSee('Mar 2022')->assertDontSee('Domain');
-    expect($items($c))->toBe(['Hosting (Nov 2026)']); // nothing added by the date change
+    expect($items($c))->toBe([]); // nothing added by the date change
 
     $c->set('issuedOn', '2026-03-05')->assertDontSee('Old app'); // ended before that month
     $c->set('issuedOn', '2022-03-10')->set('pickSubs', [(string) $old->id])->call('addPicked');
-    expect($items($c))->toBe(['Hosting (Nov 2026)', 'Old app (Mar 2022)'])
+    expect($items($c))->toBe(['Old app (Mar 2022)'])
         ->and(BillableLine::where('recurring_charge_id', $old->id)->exists())->toBeFalse(); // created only on save
-    $c->assertSee('on this invoice');
+    $c->assertSee('On this invoice');
     $c->call('save')->assertHasNoErrors();
     expect(BillableLine::where('recurring_charge_id', $old->id)->where('period', '2022-03')->whereNotNull('invoice_id')->exists())->toBeTrue();
 });
@@ -103,7 +108,14 @@ it('stops billing after the end date and ends the service', function () {
         ->and($this->charge->fresh()->active)->toBeFalse()->and($this->charge->fresh()->client_state)->toBe(RecurringCharge::ENDED);
 });
 
-it('does not load pending subscription lines of a later month', function () {
-    $this->charge->lineFor('2026-12');
-    expect(collect(irBuilder($this)->get('groups'))->pluck('label')->all())->toBe(['Hosting (Nov 2026)']);
+it('refresh reloads the picker and keeps invoice items', function () {
+    $c = irPicked($this)->call('addCustom')->set('custom.0.description', 'Fix')->set('pickSubs', ['1']);
+    RecurringCharge::create(['client_id' => $this->client->id, 'description' => 'Backups', 'amount_cents' => 900, 'frequency' => 'monthly', 'next_due_on' => '2026-11-01', 'active' => true]);
+    $c->call('refreshWork')->assertSet('pickSubs', [])->assertCount('groups', 1)->assertCount('custom', 1)->assertSee('Backups');
+});
+
+it('marks a subscription month already billed with its invoice', function () {
+    $line = $this->charge->lineFor('2026-11');
+    $inv = app(InvoiceService::class)->create($this->client, [$line->id]);
+    irBuilder($this)->set('tab', 'subs')->assertSee('Already billed · '.$inv->number)->assertSee(route('invoices.show', $inv));
 });

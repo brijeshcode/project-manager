@@ -153,16 +153,6 @@ trait BuildsInvoiceItems
         }
     }
 
-    /** Every due recurring service of the client up to the invoice month goes on the invoice by default; removing one sets it aside (stays pending). */
-    protected function addDueRecurring(Client $client): void
-    {
-        $used = $this->usedLineIds();
-        $month = rescue(fn () => \Carbon\Carbon::parse($this->issuedOn), today(), false);
-        BillableLine::pending()->where('client_id', $client->id)->whereNotNull('recurring_charge_id')->orderBy('period')->orderBy('id')->get()
-            ->reject(fn ($l) => in_array($l->id, $used, true) || $l->period > $month->format(strlen((string) $l->period) === 7 ? 'Y-m' : 'Y'))
-            ->each(fn ($l) => $this->groups[] = self::recurringGroup($l));
-    }
-
     private static function codes(Collection $lines): string
     {
         return $lines->map(fn ($l) => $l->task->code())->sortBy(fn ($c) => (int) substr($c, strrpos($c, '-') + 1))->implode(', ');
@@ -227,11 +217,14 @@ trait BuildsInvoiceItems
         $this->addPicked();
     }
 
+    /** Picked work goes back to the picker; only lines already saved on this invoice (edit) need "Set aside" to come back. */
     public function removeGroup(int $g): void
     {
         $this->authorize('manage-money');
         if (isset($this->groups[$g])) {
-            $this->parkedGroups[] = $this->groups[$g];
+            if (BillableLine::whereIn('id', $this->groups[$g]['lines'])->whereNotNull('invoice_id')->exists()) {
+                $this->parkedGroups[] = $this->groups[$g];
+            }
             unset($this->groups[$g]);
             $this->groups = array_values($this->groups);
         }

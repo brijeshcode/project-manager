@@ -30,7 +30,12 @@
                 </div>
                 <div>
                     <label for="issuedOn" class="label">Invoice date</label>
-                    <input wire:model.live="issuedOn" id="issuedOn" type="date" max="{{ now()->addYear()->toDateString() }}" class="input" />
+                    <div class="flex gap-2">
+                        <input wire:model.live="issuedOn" id="issuedOn" type="date" max="{{ now()->addYear()->toDateString() }}" class="input" />
+                        @if ($client)
+                            <button type="button" wire:click="refreshWork" class="btn btn-secondary h-10 w-10 shrink-0 justify-center px-0" title="Reload this client's work for the date" aria-label="Refresh work list"><x-icon name="refresh-cw" class="h-4 w-4" wire:loading.class="animate-spin" wire:target="refreshWork" /></button>
+                        @endif
+                    </div>
                     @error('issuedOn') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
                 <div>

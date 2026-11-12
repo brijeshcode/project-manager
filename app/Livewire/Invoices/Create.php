@@ -53,7 +53,6 @@ class Create extends Component
         $this->currency = strtoupper($client->currency);
         $this->exchangeRate = self::tidy(LocalCurrency::rateFor($client->currency));
         $this->groups = $this->parkedGroups = [];
-        $this->addDueRecurring($client);
         $this->resetPicks();
         $this->resetValidation();
         $this->pickFirstTab($client);
@@ -95,6 +94,17 @@ class Create extends Component
         $this->authorize('manage-money');
         $this->validate(['pick' => ['required', 'regex:/^\d{1,18}$/', Rule::exists('clients', 'id')]], ['pick.required' => 'Choose a client.']);
         $this->loadClient(Client::findOrFail((int) $this->pick));
+    }
+
+    /** Re-syncs the client's billable work and reloads the picker for the chosen date; invoice items stay. */
+    public function refreshWork(): void
+    {
+        $this->authorize('manage-money');
+        $client = Client::findOrFail($this->clientId);
+        app(BillableService::class)->syncCompletedWork($client);
+        app(BillableService::class)->syncRecurring($client);
+        $this->resetPicks();
+        $this->pickFirstTab($client);
     }
 
     public function saveDraft(InvoiceService $svc)
