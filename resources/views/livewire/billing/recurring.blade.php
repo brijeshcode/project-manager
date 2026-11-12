@@ -51,10 +51,21 @@
             </x-ui.empty-state>
         @endif
     @else
+        @php $ids = $charges->pluck('id')->map(fn ($id) => (string) $id)->all(); $box = 'h-4 w-4 rounded text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700'; @endphp
+        @if ($selected)
+            <div class="card mb-4 flex flex-wrap items-center gap-2 p-3" data-test="bulk-bar">
+                <span class="mr-auto text-sm font-medium text-gray-900 dark:text-white">{{ count($selected) }} selected</span>
+                <button type="button" wire:click="bulk('skip')" class="btn btn-secondary">Skip next period</button>
+                <button type="button" wire:click="bulk('pause')" class="btn btn-secondary">Pause</button>
+                <button type="button" wire:click="bulk('resume')" class="btn btn-secondary">Resume</button>
+                <button type="button" wire:click="$set('selected', [])" class="btn btn-ghost">Clear</button>
+            </div>
+        @endif
         <x-ui.table-card>
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
                 <thead>
                     <tr>
+                        <th class="table-th w-px"><input type="checkbox" aria-label="Select all on this page" class="{{ $box }}" @checked(! array_diff($ids, $selected)) x-on:change="$wire.set('selected', $event.target.checked ? @js($ids) : [])" /></th>
                         <th class="table-th">Service</th>
                         <th class="table-th">Client</th>
                         <th class="table-th text-right">Amount</th>
@@ -68,6 +79,7 @@
                     @foreach ($charges as $c)
                         @php $cur = $c->currency(); @endphp
                         <tr wire:key="rc-{{ $c->id }}" class="hover:bg-slate-50 dark:hover:bg-gray-700/40" data-test="recurring-row">
+                            <td class="table-td w-px"><input type="checkbox" wire:model.live="selected" value="{{ $c->id }}" aria-label="Select {{ $c->description }}" class="{{ $box }}" /></td>
                             <td class="table-td">
                                 <a href="{{ route('billing.recurring.show', $c) }}" wire:navigate class="link font-medium">{{ $c->description }}</a>
                                 @if ($c->pass_through)<x-ui.badge class="ml-1" title="A cost passed on to the client: billed as usual, not counted as income">Pass-through</x-ui.badge>@endif
@@ -87,6 +99,8 @@
                                 @else
                                     <span class="text-slate-400 dark:text-gray-500">—</span>
                                 @endif
+                                @php $gaps = array_filter([count($c->skipped_periods ?? []) ? count($c->skipped_periods).' skipped' : null, count($c->paused_periods ?? []) ? count($c->paused_periods).' paused' : null]); @endphp
+                                @if ($gaps)<div class="text-xs text-slate-500 dark:text-gray-400" data-test="gaps">{{ implode(' · ', $gaps) }}</div>@endif
                             </td>
                             <td class="table-td whitespace-nowrap text-right tabular-nums" data-test="usage">
                                 <div class="font-medium text-gray-900 dark:text-white">{{ $money($c->invoiced_cents, $cur) }}</div>

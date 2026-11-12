@@ -58,7 +58,7 @@ it('skips past periods without billing when not asked', function () {
 it('skips periods without billing and records them', function () {
     $c = RecurringCharge::create(['client_id' => $this->client->id, 'description' => 'Hosting', 'amount_cents' => 1000, 'frequency' => 'monthly', 'next_due_on' => '2026-12-01', 'active' => true]);
     Livewire::actingAs($this->owner)->test(RecurringShow::class, ['charge' => $c])->set('skipCount', 2)->call('skip')->assertHasNoErrors()
-        ->assertSee('Skipped: Dec 2026, Jan 2027');
+        ->assertSeeInOrder(['Jan 2027', 'Skipped', 'Dec 2026', 'Skipped']);
     $c->refresh();
     expect($c->next_due_on->toDateString())->toBe('2027-02-01')->and($c->skipped_periods)->toBe(['2026-12', '2027-01'])->and(BillableLine::count())->toBe(0);
 });

@@ -38,14 +38,13 @@
     @elseif ($invoices->isNotEmpty())
         <div x-show="view === 'list'" class="overflow-x-auto" data-test="client-invoices-list">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
-                <thead><tr><th class="table-th">Invoice</th><th class="table-th">Date</th><th class="table-th">Due</th><th class="table-th">Total</th><th class="table-th">Status</th><th class="table-th"></th></tr></thead>
+                <thead><tr><th class="table-th">Invoice</th><th class="table-th">Date</th><th class="table-th">Total</th><th class="table-th">Status</th><th class="table-th"></th></tr></thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
                     @foreach ($invoices as $invoice)
                         @php [$label, $color] = $invStatus($invoice->status); @endphp
                         <tr wire:key="invoice-{{ $invoice->id }}">
                             <td class="table-td"><a href="{{ route('invoices.show', $invoice) }}" wire:navigate class="link font-medium">{{ $invoice->number }}</a></td>
                             <td class="table-td">{{ $invoice->issued_on?->format('M j, Y') }}</td>
-                            <td class="table-td">{{ $invoice->due_on?->format('M j, Y') ?? 'On receipt' }}</td>
                             <td class="table-td tabular-nums">{{ \App\Support\Money::format($invoice->total_cents, $invoice->currency) }}</td>
                             <td class="table-td">@include('livewire.invoices._status', ['i' => $invoice, 'statusMethod' => 'setInvoiceStatus', 'statusKey' => '-l'])</td>
                             @include('livewire.clients._row-actions', ['edit' => $invoice->status !== 'void' ? route('invoices.edit', $invoice) : null] + $deleteAsk($invoice))
@@ -63,14 +62,10 @@
                         <div class="shrink-0">@include('livewire.invoices._status', ['i' => $invoice, 'statusMethod' => 'setInvoiceStatus', 'statusKey' => '-c'])</div>
                     </div>
                     <p class="mt-3 font-display text-2xl font-bold tabular-nums text-slate-900 dark:text-white">{{ \App\Support\Money::format($invoice->total_cents, $invoice->currency) }}</p>
-                    <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
+                    <dl class="mt-4 text-xs">
                         <div class="rounded-lg bg-slate-50 px-3 py-2 dark:bg-gray-700/40">
                             <dt class="text-slate-500 dark:text-gray-400">Issued</dt>
                             <dd class="mt-0.5 font-semibold text-slate-900 dark:text-white">{{ $invoice->issued_on?->format('M j, Y') }}</dd>
-                        </div>
-                        <div class="rounded-lg bg-slate-50 px-3 py-2 dark:bg-gray-700/40">
-                            <dt class="text-slate-500 dark:text-gray-400">Due</dt>
-                            <dd class="mt-0.5 font-semibold text-slate-900 dark:text-white">{{ $invoice->due_on?->format('M j, Y') ?? 'On receipt' }}</dd>
                         </div>
                     </dl>
                     <div class="mt-4 flex items-center justify-end border-t border-slate-100 pt-3 dark:border-gray-700">

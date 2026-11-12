@@ -68,10 +68,10 @@ it('keeps rate and local amount on a module budget, a task budget amount and a b
     expect($r->local_amount_cents)->toBe(24000); // no project: client's USD @ 80
 });
 
-it('uses a rate of 1 when the currency has no rate in the table', function () {
+it('leaves rate and local amount empty when the currency has no rate in the table', function () {
     $c = csClient('AED');
     $l = BillableLine::create(['client_id' => $c->id, 'description' => 'W', 'quantity' => 1, 'unit_price_cents' => 700, 'amount_cents' => 700]);
-    expect((string) $l->exchange_rate)->toBe('1.000000')->and($l->local_amount_cents)->toBe(700);
+    expect($l->exchange_rate)->toBeNull()->and($l->local_amount_cents)->toBeNull();
 });
 
 it('recomputes the local amount when the amount changes', function () {

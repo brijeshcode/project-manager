@@ -63,7 +63,7 @@ trait BuildsInvoiceItems
         $picked = collect([...$this->groups, ...$this->parkedGroups])->pluck('sub')->filter()->all();
 
         return $client->recurringCharges()->where(fn ($q) => $q->whereNull('client_state')->orWhere('client_state', '!=', \App\Models\RecurringCharge::AWAITING))->orderBy('description')->get()
-            ->filter(fn ($c) => $c->fallsDueIn($month) && ! in_array($c->periodOf($month), $c->skipped_periods ?? [], true))
+            ->filter(fn ($c) => $c->fallsDueIn($month) && ! in_array($c->periodOf($month), [...($c->skipped_periods ?? []), ...($c->paused_periods ?? [])], true))
             ->map(function ($c) use ($month, $used, $picked) {
                 $period = $c->periodOf($month);
                 $line = BillableLine::with('invoice')->where('recurring_charge_id', $c->id)->where('period', $period)->first();

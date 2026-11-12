@@ -10,25 +10,28 @@ use Illuminate\Database\Eloquent\Builder;
 /** Owner list-page stat cards. All cents in the local currency; cancelled (void) invoices never count. */
 class MoneyStats
 {
-    /** Stats over the list's filtered query. Sums are null when any counted invoice has no local figure (all-or-nothing). */
+    /** Stats over the list's filtered query, sent invoices only. Amounts per own currency; local figures are approximate (invoices without a rate are skipped and counted in missing_rate). */
     public static function invoices(Builder $filtered): array
     {
-        $rows = (clone $filtered)->get(['invoices.id', 'status', 'local_total_cents']);
-        $sum = function ($rows) {
-            $vals = $rows->map->localDisplayCents();
-
-            return $vals->contains(null) ? null : (int) $vals->sum();
-        };
-        $sent = $rows->where('status', 'sent');
-        $draft = $rows->where('status', 'draft');
+        $sent = (clone $filtered)->reorder()->where('invoices.status', 'sent')
+            ->get(['invoices.id', 'client_id', 'currency_id', 'issued_on', 'total_cents', 'local_total_cents']);
+        $byCurrency = fn ($rows) => $rows->groupBy(fn ($i) => $i->currency ?? LocalCurrency::code())->map->sum('total_cents')->all();
+        $month = $sent->filter(fn ($i) => $i->issued_on->isSameMonth(today()));
+        $known = $sent->whereNotNull('local_total_cents');
+        $knownLocal = (int) $known->sum('local_total_cents');
 
         return [
             'currency' => LocalCurrency::code(),
-            'total' => $sum($sent),
+            'invoiced' => $byCurrency($sent),
+            'invoiced_local' => $knownLocal,
             'count' => $sent->count(),
-            'missing_rate' => $sent->filter(fn ($i) => $i->localDisplayCents() === null)->count(),
-            'draft' => $draft->count(),
-            'draft_total' => $sum($draft),
+            'missing_rate' => $sent->count() - $known->count(),
+            'month' => $byCurrency($month),
+            'month_count' => $month->count(),
+            'average' => $sent->groupBy(fn ($i) => $i->currency ?? LocalCurrency::code())->map(fn ($rows) => intdiv((int) $rows->sum('total_cents'), $rows->count()))->all(),
+            'average_local' => $known->isEmpty() ? null : intdiv($knownLocal, $known->count()),
+            'clients' => $sent->unique('client_id')->count(),
+            'drafts' => (clone $filtered)->reorder()->where('invoices.status', 'draft')->count(),
         ];
     }
 

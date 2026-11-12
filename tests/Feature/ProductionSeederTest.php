@@ -23,7 +23,8 @@ it('seeds the production clients once, with no billed lines', function () {
 
     $david = Client::where('name', 'David Zouein')->first();
     expect($david->currency)->toBe('USD')->and($david->country)->toBe('Morocco');
-    expect((float) Project::where('name', 'Luigi Darbur App')->value('final_budget'))->toBe(2000.0);
+    $app = Project::where('name', 'Luigi Darbur App')->first();
+    expect((float) $app->final_budget)->toBe(2300.0)->and($app->status)->toBe('completed')->and($app->completed_at->toDateString())->toBe('2025-11-30');
 
     $mark = RecurringCharge::where('description', 'Maintaining currency trading system')->first();
     expect($mark->active)->toBeTrue()->and($mark->amount_cents)->toBe(8000)

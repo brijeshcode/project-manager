@@ -142,6 +142,17 @@ it('shows stats that exclude cancelled invoices and are in local currency', func
         ->assertSee('Total invoiced')->assertSee('8,350.00')->assertDontSee('83,850.00')->assertSee('Cancelled');
 });
 
+it('still shows invoice stats when an invoice has no rate', function () {
+    $c = ieClient();
+    ieInvoice($c, [ieLine($c, 10000)->id]);
+    $noRate = ieInvoice($c, [ieLine($c, 5000)->id]);
+    $noRate->forceFill(['exchange_rate' => null])->save();
+
+    Livewire::actingAs(ieOwner())->test(Index::class)
+        ->assertSee('150.00')->assertSee('≈ ₹8,350.00', false)->assertSee('1 without a rate')
+        ->assertSee('Clients billed')->assertSee('This month');
+});
+
 it('is owner only', function () {
     $c = ieClient();
     $inv = ieInvoice($c, [ieLine($c, 10000)->id]);
@@ -199,7 +210,7 @@ it('stats follow the status and client filters', function () {
     Livewire::actingAs(ieOwner())->test(Index::class)
         ->assertSee('25,050.00')
         ->set('clientFilter', (string) $c->id)->assertSee('8,350.00')->assertDontSee('25,050.00')
-        ->set('clientFilter', '')->set('status', 'draft')->assertSee('0 sent')->assertSee('0 draft');
+        ->set('clientFilter', '')->set('status', 'draft')->assertSee('0 invoices')->assertSee('No drafts waiting');
 });
 
 it('filters by issued date with month, year and financial year shortcuts', function () {
@@ -213,10 +224,10 @@ it('filters by issued date with month, year and financial year shortcuts', funct
 
     $t = Livewire::actingAs(ieOwner())->test(Index::class)
         ->call('setPeriod', 'month')->assertSet('from', '2026-11-01')->assertSet('to', '2026-11-30')
-        ->assertSee($now->number)->assertDontSee($may->number)->assertSee('1 sent')
+        ->assertSee($now->number)->assertDontSee($may->number)->assertSee('1 invoice')
         ->call('setPeriod', 'fy')->assertSet('from', '2026-04-01')->assertSet('to', '2027-03-31')
         ->assertSee($may->number)->assertDontSee($feb->number)
-        ->call('setPeriod', 'year')->assertSee($feb->number)->assertSee('3 sent')
+        ->call('setPeriod', 'year')->assertSee($feb->number)->assertSee('3 invoices')
         ->set('from', '2026-05-01')->set('to', '2026-05-31')->assertSee($may->number)->assertDontSee($now->number)
         ->call('setPeriod', '')->assertSet('from', '')->assertSee($now->number);
 });

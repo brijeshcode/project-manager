@@ -63,7 +63,7 @@ it('seeds subscriptions, sent invoices and payments from the history file, once'
     unlink($path);
 });
 
-it('rates each invoice at the client payment rate from its month', function () {
+it('rates each invoice at the client payment rate nearest its issue date', function () {
     $path = tempnam(sys_get_temp_dir(), 'hist');
     $line = fn ($n) => ['number' => $n[0], 'client' => 'David Zouein', 'issued_on' => $n[1], 'period' => substr($n[1], 0, 7), 'lines' => [
         ['description' => 'Fee', 'qty' => 1, 'unit_price' => 80, 'amount' => 80, 'subscription' => null, 'period' => null, 'project' => null],
@@ -82,6 +82,6 @@ it('rates each invoice at the client payment rate from its month', function () {
 
     $a = Invoice::where('number', 'INV-A')->first();
     expect($a->local_total_cents)->toBe(604000)->and($a->lines()->first()->local_amount_cents)->toBe(604000)
-        ->and(Invoice::where('number', 'INV-B')->value('exchange_rate'))->toBeNull();
+        ->and(Invoice::where('number', 'INV-B')->value('exchange_rate'))->toBe('90.000000');
     unlink($path);
 });

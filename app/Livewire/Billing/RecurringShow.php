@@ -41,6 +41,14 @@ class RecurringShow extends Component
         $this->dispatch('toast', type: 'success', message: "Skipped {$this->skipCount} ".\Illuminate\Support\Str::plural('period', $this->skipCount).'. Next due '.$c->next_due_on->toFormattedDateString().'.');
     }
 
+    public function unskip(string $period): void
+    {
+        $this->authorize('manage-money');
+        $c = RecurringCharge::findOrFail($this->chargeId);
+        $c->unskip($period);
+        $this->dispatch('toast', type: 'success', message: 'Period unskipped. Next due '.$c->next_due_on->toFormattedDateString().'.');
+    }
+
     public function pauseUntil(): void
     {
         $this->authorize('manage-money');
@@ -79,6 +87,7 @@ class RecurringShow extends Component
         return view('livewire.billing.recurring-show', [
             'charge' => $charge,
             'local' => LocalCurrency::code(),
+            'rate' => LocalCurrency::rateFor($charge->currency()),
             'usages' => $charge->lines()->whereHas('invoice', fn ($i) => $i->where('status', '!=', 'void'))->with('invoice:id,number,status,issued_on')
                 ->get()->sortByDesc(fn ($l) => $l->invoice->issued_on->toDateString().' '.$l->period)->values(),
             'pending' => $charge->lines()->whereNull('invoice_id')->orderBy('period')->get(['id', 'period', 'amount_cents']),

@@ -168,7 +168,7 @@ class Show extends Component
     /** Recurring charges with how often and how much they have been put on sent invoices (matches the recurring page). */
     private function subscriptions(Client $client)
     {
-        $charges = $client->recurringCharges()->with('project')->orderByDesc('active')->orderBy('next_due_on')->get();
+        $charges = $client->recurringCharges()->with('project')->orderByDesc('active')->orderByRaw('CASE WHEN NOT active THEN COALESCE(ended_at, updated_at) END DESC')->orderBy('next_due_on')->get();
         $billed = BillableLine::whereIn('recurring_charge_id', $charges->pluck('id'))
             ->whereHas('invoice', fn ($q) => $q->where('status', 'sent'))
             ->groupBy('recurring_charge_id')->select('recurring_charge_id', DB::raw('count(*) as n'), DB::raw('sum(amount_cents) as s'))

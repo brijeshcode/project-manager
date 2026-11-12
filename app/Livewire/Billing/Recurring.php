@@ -17,6 +17,8 @@ class Recurring extends Component
 
     public string $clientFilter = '';
 
+    public array $selected = [];
+
     public function mount(): void
     {
         $this->authorize('manage-money');
@@ -33,6 +35,27 @@ class Recurring extends Component
         $c = RecurringCharge::findOrFail($id);
         $c->setActive(! $c->active, today());
         $this->dispatch('toast', type: 'success', message: $c->active ? 'Service resumed.' : 'Service paused.');
+    }
+
+    public function bulk(string $action): void
+    {
+        $this->authorize('manage-money');
+        abort_unless(in_array($action, ['skip', 'pause', 'resume'], true), 422);
+        $charges = RecurringCharge::whereIn('id', array_map('intval', $this->selected))->get();
+        $done = 0;
+        foreach ($charges as $c) {
+            $ok = match ($action) {
+                'skip', 'pause' => $c->active,
+                'resume' => ! $c->active && ! in_array($c->client_state, [RecurringCharge::ENDED, RecurringCharge::AWAITING], true),
+            };
+            if ($ok) {
+                $action === 'skip' ? $c->skip(1) : $c->setActive($action === 'resume', today());
+                $done++;
+            }
+        }
+        $this->selected = [];
+        $verb = ['skip' => 'skipped a period', 'pause' => 'paused', 'resume' => 'resumed'][$action];
+        $this->dispatch('toast', type: $done ? 'success' : 'error', message: "{$done} of {$charges->count()} ".\Illuminate\Support\Str::plural('service', $charges->count())." {$verb}.");
     }
 
     public function delete(int $id): void
@@ -55,7 +78,7 @@ class Recurring extends Component
                 ->whereRaw("description LIKE ? ESCAPE '!'", [$like])
                 ->orWhereHas('client', fn ($c) => $c->whereRaw("name LIKE ? ESCAPE '!'", [$like]))
                 ->orWhereHas('project', fn ($c) => $c->whereRaw("name LIKE ? ESCAPE '!'", [$like]))))
-            ->orderByDesc('active')->orderBy('next_due_on');
+            ->orderByDesc('active')->orderByRaw('CASE WHEN NOT active THEN COALESCE(ended_at, updated_at) END DESC')->orderBy('next_due_on');
 
         $active = RecurringCharge::with(['client', 'project'])->where('active', true)->get();
         $monthly = $active->reject->pass_through->groupBy(fn ($c) => $c->currency())->map->sum(fn ($c) => $c->monthlyCents()); // income only: pass-through costs left out

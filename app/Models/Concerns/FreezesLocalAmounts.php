@@ -7,7 +7,7 @@ use App\Support\Money;
 
 /**
  * Rows priced in a project's (or client's) currency keep amount + rate + local amount together.
- * The rate comes from the rate table, or 1 when the currency has none; it is refreshed whenever an amount changes.
+ * The rate comes from the rate table; with none known, rate and local amounts stay null (never a fake 1:1) and are retried on the next save.
  * Models declare `localAmounts()` as [amount column => [local column, 'cents'|'major']] and `moneyCurrency()`.
  */
 trait FreezesLocalAmounts
@@ -25,14 +25,14 @@ trait FreezesLocalAmounts
             if (! $amountChanged && ! $explicit && $m->getAttribute('exchange_rate') !== null) {
                 return;
             }
-            $rate = $explicit ? (string) $m->getAttribute('exchange_rate') : LocalCurrency::rateOrOne($m->moneyCurrency() ?? LocalCurrency::code());
-            $rate = number_format((float) $rate, 6, '.', ''); // same 6-decimal form the rate table uses
+            $rate = $explicit ? (string) $m->getAttribute('exchange_rate') : LocalCurrency::rateFor($m->moneyCurrency() ?? LocalCurrency::code());
+            $rate = $rate === null ? null : number_format((float) $rate, 6, '.', ''); // same 6-decimal form the rate table uses
             $m->setAttribute('exchange_rate', $rate);
             foreach ($cols as $amount => [$local, $kind]) {
                 $v = $m->getAttribute($amount);
                 try {
                     $cents = $v === null ? null : ($kind === 'major' ? Money::toCents($v) : (int) $v);
-                    $out = $cents === null ? null : Money::convert($cents, $rate);
+                    $out = $cents === null || $rate === null ? null : Money::convert($cents, $rate);
                     $m->setAttribute($local, $out === null ? null : ($kind === 'major' ? Money::toInput($out) : $out));
                 } catch (\Throwable) {
                     $m->setAttribute($local, null); // absurd stored values never block a save

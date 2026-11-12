@@ -18,7 +18,7 @@ class RecurringCharge extends Model
     use FreezesLocalAmounts;
 
     protected $fillable = ['client_id', 'project_id', 'description', 'amount_cents', 'exchange_rate', 'local_amount_cents', 'frequency', 'next_due_on', 'due_day', 'active',
-        'client_state', 'client_note', 'client_approved_at', 'cancel_note', 'cancel_requested_at', 'ended_at', 'skipped_periods', 'resume_on', 'pass_through', 'starts_on', 'ends_on'];
+        'client_state', 'client_note', 'client_approved_at', 'cancel_note', 'cancel_requested_at', 'ended_at', 'skipped_periods', 'paused_periods', 'resume_on', 'pass_through', 'starts_on', 'ends_on'];
 
     public const AWAITING = 'awaiting';
     public const CANCEL_REQUESTED = 'cancel_requested';
@@ -28,7 +28,7 @@ class RecurringCharge extends Model
     {
         return ['frequency' => RecurringFrequency::class, 'next_due_on' => 'date', 'active' => 'boolean',
             'client_approved_at' => 'datetime', 'cancel_requested_at' => 'datetime', 'ended_at' => 'datetime',
-            'skipped_periods' => 'array', 'resume_on' => 'date', 'pass_through' => 'boolean', 'starts_on' => 'date', 'ends_on' => 'date'];
+            'skipped_periods' => 'array', 'paused_periods' => 'array', 'resume_on' => 'date', 'pass_through' => 'boolean', 'starts_on' => 'date', 'ends_on' => 'date'];
     }
 
     /** [label, badge colour] for every list and page. */
@@ -153,7 +153,10 @@ class RecurringCharge extends Model
     public function setActive(bool $active, CarbonInterface $today): void
     {
         if ($active && ! $this->active) {
-            $this->skipPast($today);
+            $passed = $this->skipPast($today);
+            if ($this->client_state === null && $passed) { // a plain pause, not an unapproved or ended service
+                $this->paused_periods = [...($this->paused_periods ?? []), ...$passed];
+            }
         }
         $this->active = $active;
         $this->resume_on = null; // a plain pause or resume drops any "paused until" date
@@ -163,12 +166,16 @@ class RecurringCharge extends Model
         $this->save();
     }
 
-    /** Moves next_due_on to the first anchored date >= $today without billing the periods passed over. Does not save. */
-    private function skipPast(CarbonInterface $today): void
+    /** Moves next_due_on to the first anchored date >= $today without billing the periods passed over, and returns them. Does not save. */
+    private function skipPast(CarbonInterface $today): array
     {
+        $passed = [];
         while ($this->next_due_on->lt($today->copy()->startOfDay())) {
+            $passed[] = $this->periodOf($this->next_due_on);
             $this->next_due_on = $this->advance($this->next_due_on);
         }
+
+        return $passed;
     }
 
     public function periodOf(CarbonInterface $due): string
@@ -240,6 +247,62 @@ class RecurringCharge extends Model
         $this->save();
     }
 
+    /**
+     * Price changes over time, oldest first: [from period, to period (null = ongoing), cents], read from billed lines plus the current price.
+     * A one-month blip (a prorated or partial month) is not a price change, unless it is the latest month.
+     */
+    public function priceHistory(): array
+    {
+        $runs = fn (iterable $items) => collect($items)->reduce(function ($runs, $r) {
+            if ($runs && end($runs)[2] === $r[2]) {
+                $runs[array_key_last($runs)][1] = $r[1];
+            } else {
+                $runs[] = $r;
+            }
+
+            return $runs;
+        }, []);
+        $lines = $this->lines()->whereNotNull('period')->where(fn ($q) => $q->whereNull('invoice_id')->orWhereHas('invoice', fn ($i) => $i->where('status', '!=', 'void')))
+            ->orderBy('period')->get(['period', 'amount_cents']);
+        $settled = function (array $all) use ($runs) {
+            $last = array_key_last($all);
+
+            return $runs(array_filter($all, fn ($r, $i) => $r[0] !== $r[1] || $i === $last, ARRAY_FILTER_USE_BOTH));
+        };
+        $all = $runs($lines->map(fn ($l) => [$l->period, $l->period, $l->amount_cents]));
+        $prices = array_column($settled($all), 2);
+        $runs = $settled($runs($lines->filter(fn ($l) => in_array($l->amount_cents, $prices, true))->map(fn ($l) => [$l->period, $l->period, $l->amount_cents])));
+        if (! $runs || ($this->active && end($runs)[2] !== $this->amount_cents)) {
+            $runs[] = [$this->periodOf($this->next_due_on), null, $this->amount_cents];
+        } elseif ($this->active) {
+            $runs[array_key_last($runs)][1] = null;
+        }
+
+        return $runs;
+    }
+
+    /** Bills a skipped period after all: next due moves back to it, so it is billed now if already due, else when it falls due. */
+    public function unskip(string $period): void
+    {
+        abort_unless(in_array($period, $this->skipped_periods ?? [], true), 422);
+        DB::transaction(function () use ($period) {
+            $this->skipped_periods = array_values(array_diff($this->skipped_periods, [$period]));
+            $due = Carbon::createFromFormat('!Y-m', strlen($period) === 4 ? $period.'-'.$this->next_due_on->format('m') : $period);
+            $due->day(min($this->due_day, $due->daysInMonth));
+            if ($due->lt($this->next_due_on)) {
+                $this->next_due_on = $due;
+            }
+            $this->save();
+            if ($this->active) {
+                $this->generateDue(today());
+            }
+            while (in_array($this->periodOf($this->next_due_on), $this->skipped_periods, true)) {
+                $this->next_due_on = $this->advance($this->next_due_on);
+            }
+            $this->save();
+        });
+    }
+
     /** Pauses now; the daily run resumes it on $date, skipping (not billing) the paused periods. */
     public function pauseUntil(CarbonInterface $date): void
     {
@@ -267,8 +330,9 @@ class RecurringCharge extends Model
         $created = 0;
         for ($i = 0; $i < self::MAX_PERIODS_PER_RUN && $this->active && $this->next_due_on->lte($today) && (! $this->ends_on || $this->next_due_on->lte($this->ends_on)); $i++) {
             $due = $this->next_due_on;
-            $line = $this->lineFor($this->periodOf($due));
-            $created += (int) $line->wasRecentlyCreated;
+            if (! in_array($this->periodOf($due), $this->skipped_periods ?? [], true)) {
+                $created += (int) $this->lineFor($this->periodOf($due))->wasRecentlyCreated;
+            }
 
             $this->next_due_on = $this->advance($due);
             $this->save();

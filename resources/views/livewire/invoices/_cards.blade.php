@@ -14,14 +14,10 @@
             @if ($i->localTotalCents() !== null && strtoupper($i->currency) !== $local)
                 <p class="text-xs tabular-nums text-slate-500 dark:text-gray-400">{{ \App\Support\Money::format($i->localTotalCents(), $local) }}</p>
             @endif
-            <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
+            <dl class="mt-4 text-xs">
                 <div class="rounded-lg bg-slate-50 px-3 py-2 dark:bg-gray-700/40">
                     <dt class="text-slate-500 dark:text-gray-400">Issued</dt>
                     <dd class="mt-0.5 font-semibold text-slate-900 dark:text-white">{{ $i->issued_on->toFormattedDateString() }}</dd>
-                </div>
-                <div class="rounded-lg bg-slate-50 px-3 py-2 dark:bg-gray-700/40">
-                    <dt class="text-slate-500 dark:text-gray-400">Due</dt>
-                    <dd class="mt-0.5 font-semibold text-slate-900 dark:text-white">{{ $i->due_on?->toFormattedDateString() ?? 'On receipt' }}</dd>
                 </div>
             </dl>
             <div class="mt-4 flex items-center justify-end border-t border-slate-100 pt-3 dark:border-gray-700">@include('livewire.invoices._actions')</div>

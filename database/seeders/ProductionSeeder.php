@@ -10,6 +10,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Models\RecurringCharge;
+use App\Services\LocalCurrency;
 use App\Support\Money;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
@@ -31,8 +32,8 @@ class ProductionSeeder extends Seeder
             'name' => 'David Zouein', 'country' => 'Morocco', 'phone' => '+212 661-234565',
             'company' => ['company_name' => 'Zouein Prestige', 'contact_email' => 'davidzouein@hotmail.com'],
             'projects' => [
-                ['name' => 'Accounts System', 'budget' => 1500],
-                ['name' => 'Luigi Darbur App', 'budget' => 2000],
+                ['name' => 'Accounts System', 'budget' => 1500, 'completed' => '2025-03-31'],
+                ['name' => 'Luigi Darbur App', 'budget' => 2300, 'completed' => '2025-11-30'],
             ],
             // [description, monthly amount, project name or null, started (Y-m), ended (Y-m) or null]
             'subscriptions' => [], // from production-history.json
@@ -40,7 +41,7 @@ class ProductionSeeder extends Seeder
         [
             'name' => 'Mark Zouein', 'country' => 'Lebanon', 'phone' => '+961 3 737 655',
             'projects' => [
-                ['name' => 'Currency Trading System', 'budget' => null],
+                ['name' => 'Currency Trading System', 'budget' => 1500, 'completed' => '2023-12-31'],
             ],
             'subscriptions' => [
                 ['Maintaining currency trading system', 80, 'Currency Trading System', '2024-01', null],
@@ -52,7 +53,7 @@ class ProductionSeeder extends Seeder
             'company' => ['company_name' => 'Global-Z Est.', 'tax_number' => '3318008-601', 'contact_email' => 'Nickzouein@hotmail.com',
                 'address' => 'St. Georges St., Zouein bldg, Louwayzeh, Baabda', 'city' => 'Baabda'],
             'projects' => [
-                ['name' => 'Wholesale Trading System', 'budget' => 2000],
+                ['name' => 'Wholesale Trading System', 'budget' => 2000, 'completed' => '2025-08-31'],
             ],
             'subscriptions' => [
                 ['Wholesale trading system maintenance', 120, 'Wholesale Trading System', '2025-09', '2026-09'],
@@ -75,7 +76,7 @@ class ProductionSeeder extends Seeder
             foreach ($c['projects'] as $p) {
                 $projects[$p['name']] = Project::firstOrCreate(
                     ['client_id' => $client->id, 'name' => $p['name']],
-                    ['status' => 'active', 'initial_budget' => $p['budget'] ?? 0],
+                    ['status' => isset($p['completed']) ? 'completed' : 'active', 'completed_at' => $p['completed'] ?? null, 'initial_budget' => $p['budget'] ?? 0],
                 );
             }
 
@@ -118,12 +119,12 @@ class ProductionSeeder extends Seeder
         // the client's own project first; else one of another client's (e.g. Nick's project paid by David)
         $project = fn (int $clientId, ?string $name) => $name ? Project::where('name', $name)->orderByRaw('client_id = ? desc', [$clientId])->value('id') : null;
         $month = fn (string $ym) => Carbon::createFromFormat('!Y-m', $ym);
-        // an invoice takes the rate of the client's payment in its month (closest to the issue date); none that month -> current rate
+        // an invoice takes the rate of the client's payment nearest its issue date; no payments -> current rate
         $paidRates = collect($data['payments'] ?? [])->filter(fn ($p) => isset($p['exchange_rate']));
         $rateFor = fn (string $client, string $date) => $paidRates
-            ->filter(fn ($p) => $p['client'] === $client && substr($p['paid_on'], 0, 7) === substr($date, 0, 7))
+            ->filter(fn ($p) => $p['client'] === $client)
             ->sortBy(fn ($p) => abs(strtotime($p['paid_on']) - strtotime($date)))
-            ->first()['exchange_rate'] ?? null;
+            ->first()['exchange_rate'] ?? LocalCurrency::rateFor('USD');
 
         foreach ($data['subscriptions'] ?? [] as $s) {
             $cid = $clients[$s['client']] ?? null;
@@ -139,7 +140,8 @@ class ProductionSeeder extends Seeder
                 'next_due_on' => $start, 'active' => false, 'pass_through' => (bool) ($s['pass_through'] ?? false),
             ]);
             if ($s['active']) {
-                $charge->startApproved(false, today());
+                // older ones were billed by hand (past months not billed); one starting this month or later bills from its start
+                $charge->startApproved($start->gte(today()->startOfMonth()), today());
             } else {
                 $end = $month($s['last_period'])->endOfMonth();
                 $charge->forceFill(['client_state' => RecurringCharge::ENDED, 'client_approved_at' => $start, 'ended_at' => $end, 'ends_on' => $end->toDateString(), 'next_due_on' => $end->copy()->addDay()->startOfDay()])->save();
@@ -155,7 +157,7 @@ class ProductionSeeder extends Seeder
                 continue;
             }
             DB::transaction(function () use ($inv, $cid, $project, $rateFor) {
-                $rate = $rateFor($inv['client'], $inv['issued_on']);
+                $rate = $inv['exchange_rate'] ?? $rateFor($inv['client'], $inv['issued_on']);
                 $rate = $rate === null ? null : number_format((float) $rate, 6, '.', '');
                 $lines = array_map(fn ($l) => $l + [
                     'cents' => Money::toCents((string) $l['amount']),

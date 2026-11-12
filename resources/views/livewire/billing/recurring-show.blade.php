@@ -21,7 +21,7 @@
     </x-ui.page-header>
 
     <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <x-ui.stat label="Amount" :value="$money($charge->amount_cents)" icon="currency" color="blue" :hint="'Billed '.$charge->frequency->value.($other && $charge->local_amount_cents !== null ? ' · ≈ '.$money($charge->local_amount_cents, $local) : '')" />
+        <x-ui.stat label="Amount" :value="$money($charge->amount_cents)" icon="currency" color="blue" :hint="'Billed '.$charge->frequency->value.($other && $rate ? ' · ≈ '.$money(\App\Support\Money::convert($charge->amount_cents, $rate), $local) : '')" />
         <x-ui.stat label="Next due" :value="$charge->active ? $charge->next_due_on->toFormattedDateString() : '—'" icon="calendar" color="yellow" :hint="$charge->active ? $charge->next_due_on->diffForHumans() : ($charge->resume_on ? 'Resumes '.$charge->resume_on->toFormattedDateString() : 'Paused')" />
         <x-ui.stat label="Times invoiced" :value="$charge->invoiced_count" icon="check" color="green" :hint="$charge->draft_count ? $charge->draft_count.' more on draft invoices' : 'On sent invoices'" />
         <x-ui.stat label="Invoiced to date" :value="$money($charge->invoiced_cents)" icon="refresh" color="purple" :hint="$other && $charge->invoiced_count ? $money($charge->invoiced_local_cents, $local) : 'Sent invoices only'" />
@@ -69,16 +69,39 @@
                     @error('resumeOn') <p class="field-error w-full">{{ $message }}</p> @enderror
                 </form>
             </div>
-            @if ($charge->skipped_periods)
-                <p class="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-gray-700 dark:text-gray-400" data-test="skipped">
-                    Skipped: {{ collect($charge->skipped_periods)->map($periodLabel)->implode(', ') }}
-                </p>
-            @endif
         </x-ui.card>
     @endif
 
+    @php
+        $starts = $charge->starts_on ?? $charge->next_due_on ?? $charge->created_at;
+        $ends = $charge->ends_on ?? $charge->ended_at;
+    @endphp
+    <p @class(["flex items-center gap-1.5 text-sm text-slate-500 dark:text-gray-400", $charge->client_approved_at && ! $charge->client_note ? "mb-2" : "mb-6"]) data-test="service-dates">
+        <x-icon name="calendar" class="h-4 w-4" />
+        {{ $starts->isFuture() ? 'Starts' : 'Started' }} {{ $starts->toFormattedDateString() }}
+        · {{ $ends ? ($ends->isFuture() ? 'Ends ' : 'Ended ').$ends->toFormattedDateString() : 'No end date' }}
+    </p>
     @if ($charge->client_approved_at && ! $charge->client_note)
         <p class="mb-6 flex items-center gap-1.5 text-sm text-slate-500 dark:text-gray-400" data-test="team-approved"><x-icon name="circle-check-big" class="h-4 w-4 text-emerald-600" />Approved by your team on {{ $charge->client_approved_at->toFormattedDateString() }}.</p>
+    @endif
+
+    @php $prices = $charge->priceHistory(); @endphp
+    @if (count($prices) > 1)
+        <x-ui.card class="mb-6" data-test="price-history">
+            <details class="group">
+            <summary class="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-gray-900 dark:text-white">
+                Price history <span class="font-normal text-slate-500 dark:text-gray-400">{{ count($prices) }} prices <x-icon name="chevron-down" class="inline h-4 w-4 transition group-open:rotate-180" /></span>
+            </summary>
+            <ol class="mt-3 space-y-1.5 text-sm">
+                @foreach (array_reverse($prices) as [$from, $to, $cents])
+                    <li class="flex justify-between gap-4">
+                        <span class="text-slate-500 dark:text-gray-400">{{ $periodLabel($from) }} – {{ $to === null ? 'now' : $periodLabel($to) }}</span>
+                        <span class="font-medium tabular-nums text-gray-900 dark:text-white">{{ $money($cents) }}</span>
+                    </li>
+                @endforeach
+            </ol>
+            </details>
+        </x-ui.card>
     @endif
 
     @if ($charge->client_note || ($charge->cancel_note && $charge->client_state !== \App\Models\RecurringCharge::CANCEL_REQUESTED))
@@ -100,8 +123,13 @@
         </div>
     @endif
 
+    @php
+        $gaps = collect($charge->skipped_periods ?? [])->map(fn ($p) => ['period' => $p, 'kind' => 'Skipped'])
+            ->merge(collect($charge->paused_periods ?? [])->map(fn ($p) => ['period' => $p, 'kind' => 'Paused']));
+        $rows = $usages->toBase()->map(fn ($l) => ['period' => $l->period, 'line' => $l])->merge($gaps)->sortByDesc('period')->values();
+    @endphp
     <h2 class="mb-3 text-lg font-semibold text-gray-900 dark:text-white">Invoice history</h2>
-    @if ($usages->isEmpty())
+    @if ($rows->isEmpty())
         <x-ui.empty-state title="Not invoiced yet" message="Each time this service falls due it adds a line you can include on the client's next invoice." name="document" />
     @else
         <x-ui.table-card>
@@ -116,7 +144,22 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
-                    @foreach ($usages as $l)
+                    @foreach ($rows as $row)
+                        @unless ($l = $row['line'] ?? null)
+                            <tr wire:key="gap-{{ $row['period'] }}" class="text-slate-500 dark:text-gray-400" data-test="gap-row">
+                                <td class="table-td">—</td>
+                                <td class="table-td">—</td>
+                                <td class="table-td whitespace-nowrap">{{ $periodLabel($row['period']) }}</td>
+                                <td class="table-td text-right">Not billed</td>
+                                <td class="table-td whitespace-nowrap">
+                                    <x-ui.badge :color="$row['kind'] === 'Paused' ? 'slate' : 'amber'">{{ $row['kind'] }}</x-ui.badge>
+                                    @if ($row['kind'] === 'Skipped')
+                                        <button type="button" wire:click="unskip('{{ $row['period'] }}')" wire:confirm="Bill this period after all? Next due moves back to it." class="link ml-2 text-xs" data-test="unskip">Unskip</button>
+                                    @endif
+                                </td>
+                            </tr>
+                            @continue
+                        @endunless
                         <tr wire:key="use-{{ $l->id }}" class="hover:bg-slate-50 dark:hover:bg-gray-700/40" data-test="usage-row">
                             <td class="table-td whitespace-nowrap"><a href="{{ route('invoices.show', $l->invoice_id) }}" class="link font-medium">{{ $l->invoice->number }}</a></td>
                             <td class="table-td whitespace-nowrap">{{ $l->invoice->issued_on->toFormattedDateString() }}</td>
