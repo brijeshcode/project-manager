@@ -97,3 +97,9 @@ it('authorises every action', function (string $role, string $action) {
     $t->set('currency', 'USD')->set('rate', '83')->call($action)->assertForbidden();
     expect(ExchangeRate::count())->toBe(0)->and(Settings::get('local_currency', null))->toBeNull();
 })->with(['developer', 'client'])->with(['addRate', 'saveLocalCurrency']);
+
+it('links to the other settings pages', function () {
+    actingAs(stUser('super_admin'))->get(route('settings.index'))->assertOk()
+        ->assertSee(route('currencies.index'))->assertSee(route('billing.bank-accounts'))
+        ->assertSee(route('settings.task-types'))->assertSee(route('settings.labels'))->assertSee(route('settings.system'));
+});

@@ -74,3 +74,23 @@ it('forbids non-owners on route and actions', function (string $role) {
     $t->call('save')->assertForbidden();
     expect(BankAccount::count())->toBe(1);
 })->with(['project_manager', 'developer', 'client']);
+
+it('opens the add form when there are no accounts, empty state after cancel', function () {
+    $this->actingAs(baOwner())->get(route('billing.bank-accounts'))->assertOk()->assertSee('New bank account');
+    Livewire::actingAs(baOwner())->test(BankAccounts::class)->call('cancel')->assertSee('No bank accounts yet');
+    baAccount();
+    Livewire::actingAs(baOwner())->test(BankAccounts::class)->assertSet('showForm', false)->assertSee('Main USD');
+});
+
+it('edits an account and keeps the number when left blank', function () {
+    $a = baAccount();
+    Livewire::actingAs(baOwner())->test(BankAccounts::class)
+        ->call('edit', $a->id)->assertSet('label', 'Main USD')->assertSet('account_number', '')
+        ->assertSee('Edit Main USD')->assertDontSee('50100012341447')
+        ->set('label', 'Primary')->call('save')->assertHasNoErrors()->assertSet('showForm', false);
+    expect($a->fresh())->label->toBe('Primary')->account_number->toBe('50100012341447')->ifsc_swift->toBe('HDFC0001234');
+
+    Livewire::actingAs(baOwner())->test(BankAccounts::class)
+        ->call('edit', $a->id)->set('account_number', '999988887777')->call('save')->assertHasNoErrors();
+    expect($a->fresh()->account_number)->toBe('999988887777');
+});
