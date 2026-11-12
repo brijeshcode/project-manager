@@ -62,3 +62,26 @@ it('seeds subscriptions, sent invoices and payments from the history file, once'
         ->and(BillableLine::where('description', 'Customer app (iOS and Android)')->first()->project->name)->toBe('Luigi Darbur App');
     unlink($path);
 });
+
+it('rates each invoice at the client payment rate from its month', function () {
+    $path = tempnam(sys_get_temp_dir(), 'hist');
+    $line = fn ($n) => ['number' => $n[0], 'client' => 'David Zouein', 'issued_on' => $n[1], 'period' => substr($n[1], 0, 7), 'lines' => [
+        ['description' => 'Fee', 'qty' => 1, 'unit_price' => 80, 'amount' => 80, 'subscription' => null, 'period' => null, 'project' => null],
+    ]];
+    file_put_contents($path, json_encode([
+        'invoices' => [$line(['INV-A', '2022-03-01']), $line(['INV-B', '2022-05-01'])],
+        'payments' => [
+            ['client' => 'David Zouein', 'paid_on' => '2022-03-28', 'amount' => 80, 'exchange_rate' => 70],
+            ['client' => 'David Zouein', 'paid_on' => '2022-03-05', 'amount' => 80, 'exchange_rate' => 75.5],
+            ['client' => 'David Zouein', 'paid_on' => '2022-04-01', 'amount' => 80, 'exchange_rate' => 90],
+        ],
+    ]));
+    $s = app(ProductionSeeder::class);
+    $s->historyPath = $path;
+    $s->run();
+
+    $a = Invoice::where('number', 'INV-A')->first();
+    expect($a->local_total_cents)->toBe(604000)->and($a->lines()->first()->local_amount_cents)->toBe(604000)
+        ->and(Invoice::where('number', 'INV-B')->value('exchange_rate'))->toBeNull();
+    unlink($path);
+});

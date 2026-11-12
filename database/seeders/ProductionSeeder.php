@@ -118,6 +118,12 @@ class ProductionSeeder extends Seeder
         // the client's own project first; else one of another client's (e.g. Nick's project paid by David)
         $project = fn (int $clientId, ?string $name) => $name ? Project::where('name', $name)->orderByRaw('client_id = ? desc', [$clientId])->value('id') : null;
         $month = fn (string $ym) => Carbon::createFromFormat('!Y-m', $ym);
+        // an invoice takes the rate of the client's payment in its month (closest to the issue date); none that month -> current rate
+        $paidRates = collect($data['payments'] ?? [])->filter(fn ($p) => isset($p['exchange_rate']));
+        $rateFor = fn (string $client, string $date) => $paidRates
+            ->filter(fn ($p) => $p['client'] === $client && substr($p['paid_on'], 0, 7) === substr($date, 0, 7))
+            ->sortBy(fn ($p) => abs(strtotime($p['paid_on']) - strtotime($date)))
+            ->first()['exchange_rate'] ?? null;
 
         foreach ($data['subscriptions'] ?? [] as $s) {
             $cid = $clients[$s['client']] ?? null;
@@ -148,7 +154,9 @@ class ProductionSeeder extends Seeder
 
                 continue;
             }
-            DB::transaction(function () use ($inv, $cid, $project) {
+            DB::transaction(function () use ($inv, $cid, $project, $rateFor) {
+                $rate = $rateFor($inv['client'], $inv['issued_on']);
+                $rate = $rate === null ? null : number_format((float) $rate, 6, '.', '');
                 $lines = array_map(fn ($l) => $l + [
                     'cents' => Money::toCents((string) $l['amount']),
                     'unit_cents' => Money::toCents((string) $l['unit_price']),
@@ -159,7 +167,7 @@ class ProductionSeeder extends Seeder
                 $invoice = Invoice::create([
                     'number' => $inv['number'], 'client_id' => $cid, 'status' => 'sent', 'issued_on' => $inv['issued_on'], 'due_on' => null,
                     'currency' => 'USD', 'subtotal_cents' => $subtotal, 'tax_percent' => '0.00', 'tax_cents' => 0, 'total_cents' => $subtotal,
-                    'terms' => $inv['terms'] ?? null, 'emailed_at' => $inv['issued_on'], 'exchange_rate' => null,
+                    'terms' => $inv['terms'] ?? null, 'emailed_at' => $inv['issued_on'], 'exchange_rate' => $rate,
                     'show_quantity' => collect($lines)->contains(fn ($l) => (float) $l['qty'] != 1.0),
                     'lines_snapshot' => array_map(fn ($l) => ['description' => $l['description'], 'quantity' => number_format((float) $l['qty'], 2, '.', ''), 'unit_price_cents' => $l['unit_cents'], 'amount_cents' => $l['cents'], 'project_id' => $l['project_id']], $lines),
                 ]);
@@ -171,7 +179,7 @@ class ProductionSeeder extends Seeder
                         'client_id' => $cid, 'project_id' => $l['project_id'], 'invoice_id' => $invoice->id, 'description' => $l['description'],
                         'recurring_charge_id' => $link ? $l['charge_id'] : null, 'period' => $link ? $period : null,
                         'quantity' => $l['qty'], 'unit_price_cents' => $l['unit_cents'], 'amount_cents' => $l['cents'],
-                        'pass_through' => (bool) ($l['pass_through'] ?? false),
+                        'pass_through' => (bool) ($l['pass_through'] ?? false), 'exchange_rate' => $rate,
                     ]);
                 }
             });
@@ -192,6 +200,10 @@ class ProductionSeeder extends Seeder
             Payment::create([
                 'client_id' => $cid, 'amount_cents' => $cents, 'paid_on' => $p['paid_on'], 'type' => PaymentType::Maintenance,
                 'method' => $p['method'] ?? null, 'notes' => $p['notes'] ?? null, 'currency' => 'USD', 'documents_visible_to_client' => false,
+                // the rate and INR actually received, as printed on the transfer receipt
+                'exchange_rate' => $p['exchange_rate'] ?? null,
+                'local_amount_cents' => isset($p['local_amount']) ? Money::toCents((string) $p['local_amount']) : null,
+                'local_currency' => $p['local_currency'] ?? null,
             ]);
             $n['payments']++;
         }
