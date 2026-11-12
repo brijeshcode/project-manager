@@ -7,6 +7,7 @@ use App\Models\BillableLine;
 use App\Models\Client;
 use App\Models\RecurringCharge;
 use App\Services\LocalCurrency;
+use App\Support\Money;
 use App\Support\Settings;
 use Livewire\Component;
 
@@ -56,8 +57,10 @@ class Recurring extends Component
                 ->orWhereHas('project', fn ($c) => $c->whereRaw("name LIKE ? ESCAPE '!'", [$like]))))
             ->orderByDesc('active')->orderBy('next_due_on');
 
-        $active = RecurringCharge::where('active', true)->get(['id', 'amount_cents', 'local_amount_cents', 'frequency', 'next_due_on', 'pass_through']);
-        $invoiced = BillableLine::whereNotNull('recurring_charge_id')->whereHas('invoice', fn ($i) => $i->where('status', 'sent'));
+        $active = RecurringCharge::with(['client', 'project'])->where('active', true)->get();
+        $monthly = $active->reject->pass_through->groupBy(fn ($c) => $c->currency())->map->sum(fn ($c) => $c->monthlyCents()); // income only: pass-through costs left out
+        $rates = $monthly->map(fn ($cents, $cur) => LocalCurrency::rateFor($cur));
+        $invoiced = BillableLine::with(['client', 'project'])->whereNotNull('recurring_charge_id')->whereHas('invoice', fn ($i) => $i->where('status', 'sent'))->get();
 
         return view('livewire.billing.recurring', [
             'charges' => $this->fitPage($charges, Settings::pageSize()),
@@ -66,10 +69,12 @@ class Recurring extends Component
             'stats' => [
                 'active' => $active->count(),
                 'paused' => RecurringCharge::where('active', false)->count(),
-                'monthly' => $active->reject->pass_through->sum(fn ($c) => $c->monthlyLocalCents()), // income only: pass-through costs left out
+                'monthly' => $monthly->all(),
+                'monthly_local' => $rates->contains(null) ? null : $monthly->map(fn ($cents, $cur) => Money::convert($cents, $rates[$cur]))->sum(),
                 'due_soon' => $active->filter(fn ($c) => $c->next_due_on->lte(today()->addDays(30)))->count(),
-                'invoiced' => (int) (clone $invoiced)->sum('local_amount_cents'),
-                'invoiced_count' => (clone $invoiced)->count(),
+                'invoiced' => $invoiced->groupBy(fn ($l) => $l->lineCurrency() ?? LocalCurrency::code())->map->sum('amount_cents')->all(),
+                'invoiced_local' => (int) $invoiced->sum('local_amount_cents'),
+                'invoiced_count' => $invoiced->count(),
             ],
         ]);
     }

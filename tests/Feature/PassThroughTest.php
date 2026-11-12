@@ -57,7 +57,7 @@ it('a pass-through subscription passes the flag to its lines and leaves monthly 
 
     $this->actingAs($owner)->get(route('billing.recurring'))->assertOk()->assertSee('Pass-through');
     $this->actingAs($owner)->get(route('billing.recurring.show', $c))->assertSeeHtml('data-test="pass-through-badge"');
-    expect(Livewire::actingAs($owner)->test(\App\Livewire\Billing\Recurring::class)->viewData('stats')['monthly'])->toBe(0);
+    expect(Livewire::actingAs($owner)->test(\App\Livewire\Billing\Recurring::class)->viewData('stats')['monthly'])->toBe([]);
 });
 
 it('admin invoice page tags pass-through lines but the client-facing body does not', function () {

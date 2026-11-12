@@ -1,4 +1,8 @@
-@php $money = fn ($c, $cur) => \App\Support\Money::format((int) $c, $cur); @endphp
+@php
+    $money = fn ($c, $cur) => \App\Support\Money::format((int) $c, $cur);
+    $sums = fn ($byCur) => collect($byCur)->map(fn ($c, $cur) => $money($c, $cur))->implode(' + ') ?: $money(0, $local);
+    $foreign = fn ($byCur) => collect($byCur)->keys()->contains(fn ($cur) => strtoupper($cur) !== $local);
+@endphp
 <div>
     <x-ui.page-header title="Recurring services" subtitle="Hosting, retainers and other repeating fees. A billable line is added automatically each time one falls due.">
         <x-slot:actions>
@@ -9,9 +13,9 @@
 
     <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <x-ui.stat label="Active services" :value="$stats['active']" icon="refresh" color="green" :hint="$stats['paused'].' paused'" />
-        <x-ui.stat label="Monthly recurring" :value="$money($stats['monthly'], $local)" icon="currency" color="blue" hint="Active services, yearly spread per month, pass-through costs excluded" />
+        <x-ui.stat label="Monthly recurring" :value="$sums($stats['monthly'])" icon="currency" color="blue" :hint="($foreign($stats['monthly']) ? ($stats['monthly_local'] !== null ? '≈ '.$money($stats['monthly_local'], $local) : '≈ '.$local.' needs an exchange rate').' · ' : '').'Active services, yearly spread per month, pass-through costs excluded'" />
         <x-ui.stat label="Due in 30 days" :value="$stats['due_soon']" icon="calendar" color="yellow" hint="Active services falling due" />
-        <x-ui.stat label="Invoiced to date" :value="$money($stats['invoiced'], $local)" icon="check" color="purple" :hint="$stats['invoiced_count'].' '.\Illuminate\Support\Str::plural('time', $stats['invoiced_count']).' on sent invoices'" />
+        <x-ui.stat label="Invoiced to date" :value="$sums($stats['invoiced'])" icon="check" color="purple" :hint="($foreign($stats['invoiced']) ? '≈ '.$money($stats['invoiced_local'], $local).' · ' : '').$stats['invoiced_count'].' '.\Illuminate\Support\Str::plural('time', $stats['invoiced_count']).' on sent invoices'" />
     </div>
 
     <div class="card mb-6 p-4">

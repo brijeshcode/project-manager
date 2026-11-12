@@ -132,10 +132,10 @@ class RecurringCharge extends Model
         });
     }
 
-    /** Value per month in the local currency (yearly spread over 12). */
-    public function monthlyLocalCents(): int
+    /** Value per month in the service's own currency (yearly spread over 12). */
+    public function monthlyCents(): int
     {
-        return intdiv((int) $this->local_amount_cents, $this->frequency === RecurringFrequency::Yearly ? 12 : 1);
+        return intdiv((int) $this->amount_cents, $this->frequency === RecurringFrequency::Yearly ? 12 : 1);
     }
 
     private const MAX_PERIODS_PER_RUN = 36;

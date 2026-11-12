@@ -309,3 +309,10 @@ it('filters by status and search', function () {
     Livewire::actingAs(rcOwner())->test(Recurring::class)->set('status', 'paused')->assertSee('Support')->assertDontSee('Domain renewal')
         ->set('status', '')->set('search', 'domain')->assertSee('Domain renewal')->assertDontSee('Support plan');
 });
+
+it('shows monthly recurring in the service currency with an approx local total', function () {
+    $owner = rcOwner();
+    (new \App\Services\ExchangeRates)->setRate('USD', '84', $owner);
+    rcCharge(['amount_cents' => 20000]);
+    Livewire::actingAs($owner)->test(Recurring::class)->assertSee('$200.00')->assertSee('≈ ₹16,800.00');
+});
