@@ -283,3 +283,20 @@ it('escapes an emoji or hostile name on the management pages', function () {
     $html = Livewire::actingAs($s['admin'])->test(LabelsPage::class)->html();
     expect($html)->not->toContain('<img src=x')->toContain('🔥');
 });
+
+it('deletes straight from the confirm dialog and toasts, showing the panel when a type cannot go', function () {
+    $s = ttSetup();
+    $label = Label::where('name', 'Design')->first();
+    Livewire::actingAs($s['admin'])->test(LabelsPage::class)->call('delete', $label->id)->assertDispatched('toast', message: 'Label deleted.');
+    expect(Label::find($label->id))->toBeNull();
+
+    $c = Livewire::actingAs($s['admin'])->test(TypesPage::class);
+    $change = TaskType::where('name', 'Change')->first();
+    $c->call('delete', $change->id)->assertDispatched('toast', message: 'Task type deleted.');
+    expect(TaskType::find($change->id))->toBeNull();
+
+    $task = TaskType::where('name', 'Task')->first();
+    TaskType::where('id', '!=', $task->id)->delete();
+    $s['task']->update(['task_type_id' => null]);
+    $c->call('delete', $task->id)->assertHasErrors('replacement')->assertSet('deleting', $task->id)->assertSeeHtml('data-test="delete-panel"');
+});

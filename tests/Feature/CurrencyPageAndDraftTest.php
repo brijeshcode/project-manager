@@ -82,7 +82,7 @@ it('deactivating a currency removes it from the payment form, and the local curr
     $eur = Currency::forCode('EUR');
     Livewire::actingAs($this->owner)->test(PayForm::class)->set('client_id', $c->id)->assertSeeHtml('<option value="EUR">EUR</option>');
 
-    $page = Livewire::actingAs($this->owner)->test(Index::class)->call('toggle', $eur->id);
+    $page = Livewire::actingAs($this->owner)->test(Index::class)->call('toggle', $eur->id)->assertDispatched('toast', message: 'EUR deactivated.');
     expect($eur->fresh()->is_active)->toBeFalse();
     Livewire::actingAs($this->owner)->test(PayForm::class)->set('client_id', $c->id)->assertDontSeeHtml('<option value="EUR">EUR</option>');
 

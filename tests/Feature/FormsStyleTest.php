@@ -17,6 +17,8 @@ it('forms and login use the shared field classes, not hard-coded field styles', 
         'recurring' => fn () => $this->actingAs($admin)->get(route('billing.recurring')),
         'bank accounts' => fn () => $this->actingAs($admin)->get(route('billing.bank-accounts')),
         'invoice create' => fn () => $this->actingAs($admin)->get(route('invoices.create')),
+        'currencies' => fn () => $this->actingAs($admin)->get(route('currencies.index')),
+        'currency create' => fn () => $this->actingAs($admin)->get(route('currencies.create')),
     ];
     foreach ($pages as $name => $req) {
         $res = $req();

@@ -66,10 +66,13 @@ class TaskTypes extends Component
         $data['icon'] = $data['icon'] ?: null;
         if ($this->editing) {
             TaskType::findOrFail($this->editing)->update($data);
+            $msg = 'Task type saved.';
         } else {
             TaskType::create($data + ['position' => (int) TaskType::max('position') + 1]);
+            $msg = 'Task type added.';
         }
         $this->cancel();
+        $this->dispatch('toast', message: $msg);
     }
 
     /** Drag-reorder: positions follow the order of the given ids. */
@@ -91,10 +94,13 @@ class TaskTypes extends Component
         $this->resetErrorBag();
     }
 
-    public function delete(): void
+    /** $id comes from the confirm dialog (unused types); the move-tasks panel calls it bare. Errors show in that panel. */
+    public function delete(?int $id = null): void
     {
         $this->authorize('manage-taxonomy');
-        $type = TaskType::findOrFail($this->deleting);
+        $type = TaskType::findOrFail($id ?? $this->deleting);
+        $this->editing = null;
+        $this->deleting = $type->id;
         $used = $type->tasks()->count();
 
         if (TaskType::count() <= 1) {
@@ -113,6 +119,7 @@ class TaskTypes extends Component
         }
         $type->delete();
         $this->cancel();
+        $this->dispatch('toast', message: 'Task type deleted.');
     }
 
     public function render()

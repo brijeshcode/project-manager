@@ -72,6 +72,22 @@ test('user can delete their account', function () {
     $this->assertNull($user->fresh());
 });
 
+test('account deletion works when called from the confirm dialog', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    $this->get('/profile')->assertSee('data-test="confirm-modal"', false);
+
+    Volt::test('profile.delete-user-form')
+        ->set('password', 'password')
+        ->call('deleteUser', null)
+        ->assertHasNoErrors()
+        ->assertRedirect('/');
+
+    $this->assertNull($user->fresh());
+});
+
 test('correct password must be provided to delete account', function () {
     $user = User::factory()->create();
 

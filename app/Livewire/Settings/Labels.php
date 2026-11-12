@@ -62,7 +62,9 @@ class Labels extends Component
         ]);
         $data['icon'] = $data['icon'] ?: null;
         $this->editing ? Label::findOrFail($this->editing)->update($data) : Label::create($data);
+        $msg = $this->editing ? 'Label saved.' : 'Label added.';
         $this->cancel();
+        $this->dispatch('toast', message: $msg);
     }
 
     public function confirmDelete(int $id): void
@@ -73,14 +75,15 @@ class Labels extends Component
         $this->deleting = $id;
     }
 
-    /** Deleting a label simply removes it from everything it was attached to. */
-    public function delete(): void
+    /** Deleting a label simply removes it from everything it was attached to. $id comes from the confirm dialog. */
+    public function delete(?int $id = null): void
     {
         $this->authorize('manage-taxonomy');
-        $label = Label::findOrFail($this->deleting);
+        $label = Label::findOrFail($id ?? $this->deleting);
         DB::table('labelables')->where('label_id', $label->id)->delete();
         $label->delete();
         $this->cancel();
+        $this->dispatch('toast', message: 'Label deleted.');
     }
 
     public function render()

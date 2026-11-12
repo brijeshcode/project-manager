@@ -51,6 +51,7 @@ class Index extends Component
             return;
         }
         $c->update(['is_active' => ! $c->is_active]);
+        $this->dispatch('toast', message: $c->code.($c->is_active ? ' activated.' : ' deactivated.'));
     }
 
     public function delete(int $id): void
