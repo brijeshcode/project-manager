@@ -2,34 +2,37 @@
 
 namespace App\Livewire\Clients;
 
+use App\Enums\ClientStatus;
 use App\Livewire\Concerns\DeletesClient;
+use App\Livewire\Concerns\FiltersStatement;
 use App\Models\Client;
+use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Project;
+use App\Models\RecurringCharge;
+use App\Models\User;
+use App\Services\InvoiceService;
+use Illuminate\Support\Facades\Log;
 use App\Services\ClientAccount;
 use App\Models\BillableLine;
 use App\Services\LocalCurrency;
-use App\Support\ClientStatement;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 class Show extends Component
 {
-    use DeletesClient;
+    use DeletesClient, FiltersStatement;
 
     #[Locked]
     public int $clientId;
 
-    public string $from = '';
+    public array $login = ['name' => '', 'email' => '', 'password' => ''];
 
-    public string $to = '';
-
-    public string $dir = 'desc';
-
-    public function toggleDir(): void
-    {
-        $this->dir = $this->dir === 'desc' ? 'asc' : 'desc';
-    }
+    /** Keyed by user id. */
+    public array $newPassword = [];
 
     public function mount(Client $client): void
     {
@@ -46,47 +49,120 @@ class Show extends Component
         }
     }
 
-    /** Statement date shortcuts as [from, to]; financial year April–March like the invoices list. */
-    private function periods(): array
+    public function setStatus(string $status): void
     {
-        $fy = today()->month >= 4 ? today()->setDate(today()->year, 4, 1) : today()->setDate(today()->year - 1, 4, 1);
-
-        return array_map(fn ($r) => array_map(fn ($d) => $d->toDateString(), $r), [
-            'month' => [today()->startOfMonth(), today()->endOfMonth()],
-            'year' => [today()->startOfYear(), today()->endOfYear()],
-            'fy' => [$fy, $fy->copy()->addYear()->subDay()],
-        ]);
+        $client = Client::findOrFail($this->clientId);
+        $this->authorize('update', $client);
+        $client->update(['status' => ClientStatus::from($status)]);
+        $this->dispatch('toast', type: 'success', message: 'Status updated.');
     }
 
-    public function setPeriod(string $period): void
+    /** Block or restore portal sign-in for every login of this client; blocked users are signed out on their next request. */
+    public function togglePortalBlock(): void
     {
-        [$this->from, $this->to] = $this->periods()[$period] ?? ['', ''];
+        $client = Client::findOrFail($this->clientId);
+        $this->authorize('update', $client);
+        $client->update(['portal_blocked_at' => $client->portalBlocked() ? null : now()]);
+        $this->dispatch('toast', type: 'success', message: $client->portalBlocked() ? 'Portal access blocked.' : 'Portal access restored.');
     }
 
-    private function validDate(string $d): bool
+    /** A portal login for this client: a user with the client role, tied to this client only. */
+    public function addLogin(): void
     {
-        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) === 1 && checkdate((int) substr($d, 5, 2), (int) substr($d, 8, 2), (int) substr($d, 0, 4));
+        $client = Client::findOrFail($this->clientId);
+        $this->authorize('update', $client);
+        $data = $this->validate([
+            'login.name' => 'required|string|max:255',
+            'login.email' => 'required|email|max:255|unique:users,email',
+            'login.password' => ['required', Password::defaults()],
+        ])['login'];
+        $user = User::create(['name' => $data['name'], 'email' => $data['email'], 'password' => Hash::make($data['password']), 'client_id' => $client->id]);
+        $user->forceFill(['email_verified_at' => now()])->save();
+        $user->assignRole('client');
+        $this->reset('login');
+        $this->dispatch('toast', type: 'success', message: 'Portal login added.');
     }
 
-    /** Ledger rows inside the date filter plus the balance carried in from before it. */
-    private function statement(Client $client): array
+    public function setLoginPassword(int $userId): void
     {
-        $all = ClientStatement::rows($client);
-        $from = $this->validDate($this->from) ? $this->from : null;
-        $to = $this->validDate($this->to) ? $this->to : null;
-        $day = fn ($r) => (string) $r['date']?->toDateString();
-        $before = $from ? $all->filter(fn ($r) => $day($r) < $from) : collect();
-        $rows = $all->filter(fn ($r) => (! $from || $day($r) >= $from) && (! $to || $day($r) <= $to))->values();
-        $opening = $before->isEmpty() ? 0 : $before->last()['balance'];
+        $user = $this->clientLogin($userId);
+        $this->validate(['newPassword.'.$userId => ['required', Password::defaults()]], [], ['newPassword.'.$userId => 'password']);
+        $user->update(['password' => Hash::make($this->newPassword[$userId])]);
+        unset($this->newPassword[$userId]);
+        $this->dispatch('toast', type: 'success', message: 'Password changed.');
+    }
 
-        return [
-            'rows' => $this->dir === 'asc' ? $rows : $rows->reverse()->values(),
-            'opening' => $opening,
-            'debit' => $rows->where('type', 'invoice')->sum('amount'),
-            'credit' => $rows->where('type', 'payment')->sum('amount'),
-            'closing' => $rows->isEmpty() ? $opening : $rows->last()['balance'],
-            'period' => array_search([$this->from, $this->to], $this->periods(), true),
-        ];
+    public function removeLogin(int $userId): void
+    {
+        $this->clientLogin($userId)->delete();
+        $this->dispatch('toast', type: 'success', message: 'Portal login removed.');
+    }
+
+    // Row deletes from the tabs: each record must belong to THIS client, else 404.
+
+    public function deleteProject(int $id): void
+    {
+        $this->authorize('update', Client::findOrFail($this->clientId));
+        $project = Project::where('client_id', $this->clientId)->find($id);
+        abort_unless($project, 404);
+        if ($project->payments()->exists() || BillableLine::where('project_id', $id)->whereNotNull('invoice_id')->exists()) {
+            $this->dispatch('toast', type: 'error', message: 'This project has payments or invoiced work, so it cannot be deleted. Mark it completed instead.');
+
+            return;
+        }
+        $project->delete();
+        Log::info('project deleted', ['id' => $id, 'client_id' => $this->clientId, 'user_id' => auth()->id()]);
+        $this->dispatch('toast', type: 'success', message: 'Project deleted.');
+    }
+
+    public function deleteInvoice(int $id, InvoiceService $svc): void
+    {
+        $this->authorize('manage-money');
+        $invoice = Invoice::where('client_id', $this->clientId)->find($id);
+        abort_unless($invoice, 404);
+        $svc->delete($invoice);
+        $this->dispatch('toast', type: 'success', message: 'Invoice deleted.');
+    }
+
+    /** Same rules as the invoices list: draft -> sent (emails once) or sent -> draft. */
+    public function setInvoiceStatus(int $id, string $status, InvoiceService $svc): void
+    {
+        $this->authorize('manage-money');
+        $invoice = Invoice::where('client_id', $this->clientId)->find($id);
+        abort_unless($invoice, 404);
+        $ok = $svc->setStatus($invoice, $status);
+        $this->dispatch('toast', type: $ok ? 'success' : 'error', message: $ok ? 'Status updated.' : 'This invoice cannot change status.');
+    }
+
+    public function deletePayment(int $id): void
+    {
+        $this->authorize('manage-money');
+        $p = Payment::where('client_id', $this->clientId)->find($id);
+        abort_unless($p, 404);
+        $p->delete();
+        // audit trail only: ids and amounts, never the free-text notes
+        Log::info('payment deleted', ['id' => $p->id, 'client_id' => $p->client_id, 'amount_cents' => $p->amount_cents, 'paid_on' => $p->paid_on->toDateString(), 'user_id' => auth()->id()]);
+        $this->dispatch('toast', type: 'success', message: 'Payment deleted.');
+    }
+
+    public function deleteSubscription(int $id): void
+    {
+        $this->authorize('manage-money');
+        $c = RecurringCharge::where('client_id', $this->clientId)->find($id);
+        abort_unless($c, 404);
+        $ok = $c->deleteIfNeverInvoiced();
+        $this->dispatch('toast', type: $ok ? 'success' : 'error', message: $ok ? 'Subscription deleted.' : RecurringCharge::KEEP_HISTORY);
+    }
+
+    /** A client-role login of THIS client, or 404. */
+    private function clientLogin(int $userId): User
+    {
+        $this->authorize('update', Client::findOrFail($this->clientId));
+
+        $user = User::role('client')->where('client_id', $this->clientId)->find($userId);
+        abort_unless($user, 404);
+
+        return $user;
     }
 
     /** Recurring charges with how often and how much they have been put on sent invoices (matches the recurring page). */
@@ -142,6 +218,7 @@ class Show extends Component
             'futureInvoices' => $invoices->where('status', 'draft'),
             'statement' => ($money = auth()->user()->can('manage-money')) ? $this->statement($client) : null,
             'subscriptions' => $money ? $this->subscriptions($client) : null,
+            'logins' => User::role('client')->where('client_id', $client->id)->orderBy('name')->get(['id', 'name', 'email', 'created_at']),
         ]);
     }
 }

@@ -17,11 +17,14 @@ class Client extends Model
 
     protected $fillable = [
         'name',
+        'company_name', // billed party on invoices
         'currency',
         'billing_mode',
         'type',
         'client_code',
         'status',
+        'inactive_since',
+        'portal_blocked_at',
         'notes', // internal only: never shown in the portal
         // Contact
         'contact_name',
@@ -49,10 +52,27 @@ class Client extends Model
             'billing_mode'        => \App\Enums\BillingMode::class,
             'type'                => ClientType::class,
             'status'              => ClientStatus::class,
+            'inactive_since'      => 'date',
+            'portal_blocked_at'   => 'datetime',
             'bank_name'           => 'encrypted',
             'bank_account_number' => 'encrypted',
             'bank_swift'          => 'encrypted',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // the date we stopped working with them: set on leaving Active, kept between Inactive and Archived, cleared on return
+        static::saving(function (self $c) {
+            if ($c->isDirty('status')) {
+                $c->inactive_since = $c->status === ClientStatus::Active ? null : ($c->inactive_since ?? today());
+            }
+        });
+    }
+
+    public function portalBlocked(): bool
+    {
+        return $this->portal_blocked_at !== null;
     }
 
     /** Next CLI-0001 style code; save() retries if a concurrent create takes it. */

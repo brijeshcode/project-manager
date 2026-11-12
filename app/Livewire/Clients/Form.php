@@ -8,6 +8,7 @@ use App\Enums\ClientType;
 use App\Models\Client;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class Form extends Component
@@ -18,7 +19,14 @@ class Form extends Component
     #[Locked]
     public ?string $client_code = null; // display only, generated on create
 
+    /** Edit only one part of the client (from a details card); '' shows every field. Saving still saves the whole client. */
+    #[Url]
+    public string $section = '';
+
+    public const SECTIONS = ['basic' => 'basic details', 'contact' => 'contact details', 'address' => 'address', 'billing' => 'billing details', 'notes' => 'internal notes'];
+
     public string $name     = '';
+    public ?string $company_name = null;
     public string $currency = '';
     public string $billing_mode = 'fixed';
     public string $type   = 'company';
@@ -51,13 +59,15 @@ class Form extends Component
     public ?string $bank_swift          = null;
 
     private const FIELDS = [
-        'name', 'currency', 'contact_name', 'contact_email', 'contact_phone', 'website', 'address', 'city', 'state',
+        'name', 'company_name', 'currency', 'contact_name', 'contact_email', 'contact_phone', 'website', 'address', 'city', 'state',
         'postal_code', 'country', 'tax_number', 'notes', 'billing_address', 'payment_terms',
         'bank_name', 'bank_account_number', 'bank_swift',
     ];
 
     public function mount(?Client $client = null): void
     {
+        $this->section = $client?->exists && array_key_exists($this->section, self::SECTIONS) ? $this->section : '';
+
         if ($client && $client->exists) {
             $this->authorize('update', $client);
             $this->clientId     = $client->id;
@@ -81,6 +91,7 @@ class Form extends Component
 
         $data = $this->validate([
             'name'                => 'required|string|max:255',
+            'company_name'        => 'nullable|string|max:255',
             'currency'            => ['required', 'regex:/\A[A-Za-z]{3}\z/'],
             'billing_mode'        => ['required', Rule::enum(BillingMode::class)],
             'type'                => ['required', Rule::enum(ClientType::class)],
@@ -121,6 +132,10 @@ class Form extends Component
 
     public function render()
     {
+        if (! array_key_exists($this->section, self::SECTIONS)) {
+            $this->section = '';
+        }
+
         return view('livewire.clients.form');
     }
 }

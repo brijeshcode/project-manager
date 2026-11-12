@@ -12,6 +12,12 @@
         <label for="{{ $key }}-description" class="sr-only">Description</label>
         <input wire:model.live.debounce.500ms="{{ $model }}.description" id="{{ $key }}-description" type="text" maxlength="255" placeholder="Description, e.g. Domain renewal, 1 year" class="input" />
         <p class="mt-1 text-xs text-slate-400 dark:text-gray-500">{{ $tag }}</p>
+        @if (str_starts_with($model, 'custom.'))
+            <label class="mt-1 inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-gray-400" title="A cost you pay and pass on (server, hosting): billed as usual, not counted as income">
+                <input type="checkbox" wire:model="{{ $model }}.pass_through" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700" data-test="custom-pass-through">
+                Pass-through cost (not my income)
+            </label>
+        @endif
         @error("$model.description") <p class="field-error">{{ $message }}</p> @enderror
     </div>
     @if ($showQty)

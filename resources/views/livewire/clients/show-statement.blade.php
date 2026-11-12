@@ -3,6 +3,7 @@
     $bal = fn (int $c) => $c < 0 ? 'text-red-600 dark:text-red-400' : ($c > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white');
     $balNote = fn (int $c) => $c < 0 ? 'Owing' : ($c > 0 ? 'In credit' : 'Settled');
     $filtered = $from !== '' || $to !== '';
+    $portal ??= false;
 @endphp
 <div class="space-y-4">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -18,7 +19,7 @@
                 <button type="button" wire:click="setPeriod('')" class="link text-sm">Any date</button>
             @endif
         </div>
-        <p class="text-xs text-gray-500 dark:text-gray-400">Amounts in {{ $client->currency }}. Balance = payments − sent invoices; negative means the client owes you.</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Amounts in {{ $client->currency }}. Balance = payments − sent invoices; negative means {{ $portal ? 'you owe us' : 'the client owes you' }}.</p>
     </div>
 
     @if ($statement['rows']->isEmpty() && $statement['opening'] === 0)
@@ -51,9 +52,9 @@
                             </td>
                             <td class="table-td whitespace-nowrap">
                                 @if ($inv)
-                                    <a href="{{ route('invoices.show', $m) }}" wire:navigate class="link font-medium">{{ $m->number }}</a>
+                                    <a href="{{ route($portal ? 'portal.invoice' : 'invoices.show', $m) }}" wire:navigate class="link font-medium">{{ $m->number }}</a>
                                 @else
-                                    <a href="{{ route('payments.show', $m) }}" wire:navigate class="link font-medium">Payment #{{ $m->id }}</a>
+                                    <a href="{{ route($portal ? 'portal.payment' : 'payments.show', $m) }}" wire:navigate class="link font-medium">Payment #{{ $m->id }}</a>
                                 @endif
                             </td>
                             <td class="table-td text-sm text-gray-600 dark:text-gray-300">

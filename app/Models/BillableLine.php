@@ -12,11 +12,11 @@ class BillableLine extends Model
 {
     use FreezesLocalAmounts;
 
-    protected $fillable = ['client_id', 'project_id', 'source_type', 'source_id', 'recurring_charge_id', 'period', 'description', 'quantity', 'unit_price_cents', 'amount_cents', 'exchange_rate', 'local_amount_cents', 'invoice_id', 'invoice_label'];
+    protected $fillable = ['client_id', 'project_id', 'source_type', 'source_id', 'recurring_charge_id', 'period', 'description', 'quantity', 'unit_price_cents', 'amount_cents', 'pass_through', 'exchange_rate', 'local_amount_cents', 'invoice_id', 'invoice_label'];
 
     protected function casts(): array
     {
-        return ['quantity' => 'decimal:2'];
+        return ['quantity' => 'decimal:2', 'pass_through' => 'boolean'];
     }
 
     protected function localAmounts(): array

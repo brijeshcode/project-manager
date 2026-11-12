@@ -54,7 +54,8 @@ class ProjectEconomics
         $totalH100 = array_sum($hundredths);
 
         $money = self::money($project);
-        $received = $money['received_cents'];
+        // income = received minus pass-through costs (server, hosting) billed on this project's sent invoices
+        $received = $money['received_cents'] - $money['pass_through_cents'];
 
         // cents per hour = cents * 100 / hundredths, half-up
         $perHour = fn (int $cents) => $totalH100 === 0 ? null : intdiv($cents * 200 + $totalH100, 2 * $totalH100);
@@ -130,6 +131,8 @@ class ProjectEconomics
             'received_local'          => (int) $p->l,
             'invoiced_missing_rate'   => $invoicedMissing,
             'received_missing_rate'   => (int) $p->m,
+            'pass_through_cents'      => (int) BillableLine::query()->join('invoices', 'invoices.id', '=', 'billable_lines.invoice_id')
+                ->where('billable_lines.project_id', $project->id)->where('invoices.status', 'sent')->where('billable_lines.pass_through', true)->sum('billable_lines.amount_cents'),
         ];
     }
 }

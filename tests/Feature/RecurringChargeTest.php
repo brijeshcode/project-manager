@@ -118,7 +118,7 @@ it('is forbidden for non-owners', function () {
 it('lets the owner create and toggle charges', function () {
     $client = rcClient();
     Livewire::actingAs(rcOwner())->test(RecurringForm::class)
-        ->set('client_id', $client->id)->set('description', 'Hosting')->set('amount', '49.99')
+        ->set('client_id', $client->id)->set('needsApproval', false)->set('description', 'Hosting')->set('amount', '49.99')
         ->set('frequency', 'monthly')->set('next_due_on', '2026-11-01')->call('save')->assertHasNoErrors();
     $c = RecurringCharge::first();
     expect([$c->amount_cents, $c->active])->toBe([4999, true]);

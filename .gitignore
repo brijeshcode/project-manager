@@ -25,3 +25,5 @@ Thumbs.db
 
 /.superpowers
 /docs/desgin-example
+# production client history (private, copy to the server by hand)
+/database/seeders/data/

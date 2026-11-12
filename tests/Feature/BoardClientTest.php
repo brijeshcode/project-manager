@@ -117,3 +117,42 @@ it('shows admins an eye icon on every card', function () {
         ->and($html)->toContain('Hidden from the client')->toContain('Visible to the client');
     bclBoard($this->clientUser)->assertDontSeeHtml('data-test="card-client"');
 });
+
+it('client cards and card options hide checklist, subtask, visibility, assignee and hours', function () {
+    $t = bclTask();
+    $t->checklistItems()->create(['title' => 'x', 'position' => 1]);
+    $html = bclBoard($this->clientUser)->html();
+    expect($html)->not->toContain('data-test="card-checklist"')->not->toContain('Checklist count')
+        ->not->toContain('Subtask count')->not->toContain('Client-visible icon');
+    expect(bclBoard($this->admin)->html())->toContain('data-test="card-checklist"');
+});
+
+it('client module filter lists only visible modules with visible tasks', function () {
+    bclTask();
+    Module::create(['project_id' => $this->project->id, 'name' => 'HiddenMod', 'position' => 2, 'client_visible' => false]);
+    Module::create(['project_id' => $this->project->id, 'name' => 'EmptyMod', 'position' => 3, 'client_visible' => true]);
+    $modules = bclBoard($this->clientUser)->viewData('modules')->pluck('name')->all();
+    expect($modules)->toBe(['BcMod']);
+});
+
+it('portal hides draft and on-hold projects', function () {
+    foreach (['draft', 'on_hold'] as $s) {
+        $this->project->update(['status' => $s]);
+        $this->actingAs($this->clientUser)->get(route('portal.project', $this->project))->assertForbidden();
+    }
+    $this->project->update(['status' => 'completed']);
+    $this->actingAs($this->clientUser)->get(route('portal.project', $this->project))->assertOk();
+});
+
+it('portal planned tab shows task details expanded and client stats count only visible work', function () {
+    $notStarted = $this->project->columns()->where('stage', 'not_started')->first();
+    $done = $this->project->columns()->where('stage', 'done')->first();
+    bclTask(['title' => 'Plan Me', 'description' => 'Plan details here', 'board_column_id' => $notStarted->id]);
+    bclTask(['title' => 'Hidden Done', 'client_visible' => false, 'board_column_id' => $done->id]);
+
+    Livewire::actingAs($this->clientUser)->test(\App\Livewire\Portal\ProjectView::class, ['project' => $this->project])
+        ->set('tab', 'planned')->assertSee('Plan Me')->assertSee('Plan details here')->assertSeeHtml('<details open');
+
+    $s = app(\App\Services\ProgressService::class)->forClient($this->project);
+    expect($s['tasks'])->toBe(1)->and($s['tasksDone'])->toBe(0)->and($s['pct'])->toBe(0.0);
+});

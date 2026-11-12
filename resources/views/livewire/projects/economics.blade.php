@@ -58,7 +58,7 @@
         <x-ui.card padding="p-4" data-test="kpi-profit">
             <div class="{{ $label }}">Profit</div>
             <div class="{{ $value }} {{ $e['profit_cents'] < 0 ? '!text-red-600' : '!text-green-600' }}">{{ $m($e['profit_cents']) }}</div>
-            <div class="{{ $hint }}">Received − cost &middot; {{ $m($e['hourly_received_cents']) }}/h earned</div>
+            <div class="{{ $hint }}">{{ $e['pass_through_cents'] ? 'Received − '.$m($e['pass_through_cents']).' pass-through − cost' : 'Received − cost' }} &middot; {{ $m($e['hourly_received_cents']) }}/h earned</div>
         </x-ui.card>
     </div>
 

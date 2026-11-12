@@ -24,10 +24,13 @@
                 </button>
             @endforeach
         </div>
-        <div class="relative sm:w-72">
-            <label for="search" class="sr-only">Search projects</label>
-            <x-icon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search project or client…" class="input pl-9" />
+        <div class="flex items-center gap-2">
+            <div class="relative flex-1 sm:w-72 sm:flex-none">
+                <label for="search" class="sr-only">Search projects</label>
+                <x-icon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search project or client…" class="input pl-9" />
+            </div>
+            @include('livewire.projects._view-toggle', ['live' => true])
         </div>
     </div>
 
@@ -43,6 +46,9 @@
                 </x-slot>
             @endunless
         </x-ui.empty-state>
+    @elseif ($view === 'list')
+        @include('livewire.projects._list', ['showClient' => true, 'clientTab' => false])
+        <div class="mt-6">{{ $projects->links() }}</div>
     @else
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             @foreach ($projects as $project)
@@ -87,6 +93,7 @@
                             @else
                                 <p class="text-slate-400 dark:text-gray-500">No deadline</p>
                             @endif
+                            <p class="mt-1 text-slate-500 dark:text-gray-400">@include('livewire.projects._dates', ['lastWorked' => $lastWorked[$project->id] ?? null])</p>
                             @if ($canMoney && $project->final_budget !== null)
                                 <p class="mt-1 font-medium text-slate-700 dark:text-gray-200" data-test="card-budget">{{ \App\Support\Money::format(\App\Support\Money::toCents($project->final_budget), $project->currency) }}</p>
                             @endif

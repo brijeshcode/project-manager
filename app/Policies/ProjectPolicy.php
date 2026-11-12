@@ -16,7 +16,8 @@ class ProjectPolicy
     public function viewAsClient(User $user, Project $project): bool
     {
         return $user->hasRole('client')
-            && (int) $user->client_id === (int) $project->client_id;
+            && (int) $user->client_id === (int) $project->client_id
+            && in_array($project->status, Project::CLIENT_STATUSES, true);
     }
 
     public function create(User $user): bool

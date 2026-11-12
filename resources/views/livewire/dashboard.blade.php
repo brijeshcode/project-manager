@@ -29,7 +29,7 @@
         @endif
 
         <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <x-ui.stat label="Total Revenue" icon="currency" color="green" :value="$loc($money['received'])" :hint="$period == 365 ? 'last 12 months' : 'last '.$period.' days'" />
+            <x-ui.stat label="Total Revenue" icon="currency" color="green" :value="$loc($money['received'])" :hint="($period == 365 ? 'last 12 months' : 'last '.$period.' days').($money['pass_through'] ? ' · excludes '.$loc($money['pass_through']).' pass-through costs' : '')" />
             <x-ui.stat label="Outstanding Balance" icon="credit-card" color="yellow" :value="$loc($money['outstanding'])" :hint="$overdue.' overdue '.($overdue === 1 ? 'invoice' : 'invoices')" />
             <x-ui.stat label="Active Clients" icon="users" color="blue" :value="$activeClients" :hint="$clientCount.' total '.($clientCount === 1 ? 'client' : 'clients')" />
             <x-ui.stat label="This Month" icon="document" color="purple" :value="$loc($money['this_month'])" :hint="$sentThisMonth.' '.($sentThisMonth === 1 ? 'invoice' : 'invoices').' sent'" />
@@ -40,7 +40,7 @@
         <div class="card p-6">
             <div class="mb-4">
                 <h2 class="{{ $h2 }}">Revenue Trend</h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400">Payments received, in {{ $money['currency'] }} ({{ $period == 365 ? 'by month, last 12 months' : ($period == 90 ? 'by week' : 'by day') }}).</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Payments received{{ $money['pass_through'] ? ' less pass-through costs' : '' }}, in {{ $money['currency'] }} ({{ $period == 365 ? 'by month, last 12 months' : ($period == 90 ? 'by week' : 'by day') }}).</p>
             </div>
             @if ($revenue)
                 <x-ui.line-chart :points="$revenue" :currency="$money['currency']" />

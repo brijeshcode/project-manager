@@ -52,6 +52,7 @@
                         <th class="table-th">Contact</th>
                         <th class="table-th">Financial Summary</th>
                         <th class="table-th">Status</th>
+                        <th class="table-th">Worked together</th>
                         <th class="table-th text-right">Actions</th>
                     </tr>
                 </thead>
@@ -60,6 +61,10 @@
                         @php
                             $t = $totals[$client->id];
                             $balance = $t['received'] - $t['billed'];
+                            // from: first project start or when the client was added, whichever is earlier
+                            $firstStart = $client->projects_min_start_date ? \Illuminate\Support\Carbon::parse($client->projects_min_start_date) : null;
+                            $from = $firstStart && $firstStart->lt($client->created_at) ? $firstStart : $client->created_at;
+                            $to = $client->status->value === 'active' ? null : $client->inactive_since;
                         @endphp
                         <tr wire:key="client-{{ $client->id }}" class="transition hover:bg-slate-50 dark:hover:bg-gray-700/40">
                             <td class="table-td whitespace-nowrap">
@@ -69,6 +74,8 @@
                                     </span>
                                     <div>
                                         <a href="{{ route('clients.show', $client) }}" wire:navigate class="text-sm font-medium text-gray-900 hover:underline dark:text-white">{{ $client->name }}</a>
+                                        @if ($client->portal_blocked_at)<x-ui.badge color="rose" class="ml-1" data-test="portal-blocked">Portal blocked</x-ui.badge>@endif
+                                        @if ($client->company_name)<div class="text-xs text-gray-400 dark:text-gray-500">{{ $client->company_name }}</div>@endif
                                         <div class="text-sm text-gray-500 dark:text-gray-400">{{ $client->client_code }}@if ($client->contact_name) <span class="ml-2">&bull; {{ $client->contact_name }}</span>@endif</div>
                                     </div>
                                 </div>
@@ -82,6 +89,10 @@
                                 <div class="text-gray-500 dark:text-gray-400">Balance: {{ \App\Support\Money::format($balance, $client->currency) }}</div>
                             </td>
                             <td class="table-td whitespace-nowrap"><x-ui.badge :color="$client->status->color()" class="capitalize">{{ $client->status->value }}</x-ui.badge></td>
+                            <td class="table-td whitespace-nowrap" data-test="worked-period" title="{{ $from?->format('M j, Y') }} – {{ $to ? $to->format('M j, Y') : 'present' }}">
+                                <div class="text-gray-900 dark:text-white">{{ $from?->format('M Y') }} – {{ $to ? $to->format('M Y') : 'Present' }}</div>
+                                @if ($to)<div class="text-xs text-gray-500 dark:text-gray-400">Inactive since {{ $to->format('M j, Y') }}</div>@endif
+                            </td>
                             <td class="table-td whitespace-nowrap text-right">
                                 <div class="flex items-center justify-end gap-3">
                                     <a href="{{ route('clients.show', $client) }}" wire:navigate title="View Client" aria-label="View {{ $client->name }}" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"><x-nav.icon name="eye" class="h-4 w-4" /></a>

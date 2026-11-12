@@ -20,14 +20,17 @@
             // [label, route, active pattern, icon, visible]
             $nav = collect([
                 ['Dashboard',     'dashboard',             'dashboard',                            'home',        $u && ! $client],
-                ['Projects',      'portal.dashboard',      ['portal.dashboard', 'portal.project'], 'folder',      $client],
+                ['Dashboard',     'portal.dashboard',      'portal.dashboard',                     'home',        $client],
+                ['Projects',      'portal.projects',       ['portal.projects', 'portal.project'],  'folder',      $client],
                 ['Clients',       'clients.index',         'clients.*',                            'users',       $u && $u->hasRole('super_admin')],
                 ['Projects',      'projects.index',        'projects.*',                           'folder',      $u && ! $client],
                 ['Recurring',     'billing.recurring',     ['billing.recurring', 'billing.recurring.*'], 'refresh',     $money],
                 ['Invoices',      'invoices.index',        'invoices.*',                           'document',    $money],
-                ['Invoices',      'portal.invoices',       'portal.invoices',                      'document',    $client],
+                ['Invoices',      'portal.invoices',       ['portal.invoices', 'portal.invoice'],  'document',    $client],
                 ['Payments',      'payments.index',        'payments.*',                           'credit-card', $money],
-                ['Payments',      'portal.payments',       'portal.payments',                      'credit-card', $client],
+                ['Payments',      'portal.payments',       ['portal.payments', 'portal.payment'],  'credit-card', $client],
+                ['Statement',     'portal.statement',      'portal.statement',                     'document',    $client],
+                ['Subscriptions', 'portal.subscriptions',  ['portal.subscriptions', 'portal.subscription'], 'refresh', $client],
             ])->filter(fn ($i) => $i[4]);
             $settingsNav = collect([
                 ['Currencies',    'currencies.index',      'currencies.*',                         'coins',              $money],

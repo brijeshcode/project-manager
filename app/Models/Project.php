@@ -21,6 +21,9 @@ class Project extends Model
 
     protected $attributes = ['initial_budget' => 0, 'addons_amount' => 0, 'final_budget' => 0];
 
+    /** Statuses the client portal shows; draft and on-hold projects stay hidden. */
+    public const CLIENT_STATUSES = ['active', 'completed'];
+
     protected $fillable = [
         'key',
         'aim',

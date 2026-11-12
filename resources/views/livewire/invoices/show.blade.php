@@ -38,6 +38,16 @@
     <div class="grid gap-6 lg:grid-cols-3">
         <div class="lg:col-span-2">
             <div class="card overflow-hidden p-0"><div class="overflow-x-auto">@include('invoices._body', ['invoice' => $invoice])</div></div>
+            {{-- admin only: the client-facing body above stays untagged --}}
+            @php $pass = $invoice->lines->where('pass_through', true); @endphp
+            @if ($pass->isNotEmpty())
+                <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm dark:border-gray-700 dark:bg-gray-800/60" data-test="pass-through-lines">
+                    <p class="font-medium text-slate-900 dark:text-white"><x-ui.badge>Pass-through</x-ui.badge> <span class="ml-1">{{ \App\Support\Money::format((int) $pass->sum('amount_cents'), $invoice->currency) }} of this invoice is a cost passed on to the client, not income</span></p>
+                    <ul class="mt-2 list-disc pl-5 text-slate-600 dark:text-gray-300">
+                        @foreach ($pass as $l)<li>{{ $l->description }} · {{ \App\Support\Money::format((int) $l->amount_cents, $invoice->currency) }}</li>@endforeach
+                    </ul>
+                </div>
+            @endif
         </div>
 
         <div class="space-y-6">

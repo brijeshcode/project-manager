@@ -29,7 +29,12 @@
     <table style="width:100%;border-collapse:collapse;"><tr>
         <td style="padding:{{ $__g }};vertical-align:top;width:55%;">
             <div style="{{ $__cap }}">Bill to</div>
-            <div style="font-weight:bold;">{{ $__client->name }}</div>
+            @if ($__client->company_name)
+                <div style="font-weight:bold;">{{ $__client->company_name }}</div>
+                <div>Attn: {{ $__client->name }}</div>
+            @else
+                <div style="font-weight:bold;">{{ $__client->name }}</div>
+            @endif
             @if ($__client->tax_number)<div>Tax no: {{ $__client->tax_number }}</div>@endif
             @if ($__client->billing_address ?: $__client->address)<div style="white-space:pre-line;">{{ $__client->billing_address ?: $__client->address }}</div>@endif
             @if ($__client->contact_email)<div>{{ $__client->contact_email }}</div>@endif

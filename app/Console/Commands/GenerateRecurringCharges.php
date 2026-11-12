@@ -13,6 +13,8 @@ class GenerateRecurringCharges extends Command
 
     public function handle(): int
     {
+        $resumed = RecurringCharge::resumeDue(today());
+        $resumed && $this->info("Resumed {$resumed} paused service(s).");
         $n = 0;
         RecurringCharge::where('active', true)->each(function ($c) use (&$n) {
             $n += $c->generateDue(today());

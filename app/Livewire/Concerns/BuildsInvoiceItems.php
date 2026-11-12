@@ -205,7 +205,7 @@ trait BuildsInvoiceItems
     public function addCustom(): void
     {
         $this->authorize('manage-money');
-        $this->custom[] = ['description' => '', 'quantity' => '1', 'unit_price' => ''];
+        $this->custom[] = ['description' => '', 'quantity' => '1', 'unit_price' => '', 'pass_through' => false];
     }
 
     /** Removing a line sets it aside instead of losing it; a blank line is just dropped. */

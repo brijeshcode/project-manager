@@ -27,6 +27,11 @@ class RecurringForm extends Component
     public string $amount = '';
     public string $frequency = 'monthly';
     public string $next_due_on = '';
+    public bool $needsApproval = true;
+    public bool $pass_through = false;
+
+    /** Auto-approved with a past first due date: bill the past periods now (true) or start from today (false). */
+    public bool $addPast = true;
 
     public function mount(?RecurringCharge $charge = null): void
     {
@@ -38,7 +43,7 @@ class RecurringForm extends Component
             $this->fill([
                 'client_id' => $charge->client_id, 'project_id' => $charge->project_id, 'description' => $charge->description,
                 'amount' => Money::toInput($charge->amount_cents), 'frequency' => $charge->frequency->value,
-                'next_due_on' => $charge->next_due_on->toDateString(),
+                'next_due_on' => $charge->next_due_on->toDateString(), 'pass_through' => (bool) $charge->pass_through,
             ]);
 
             return;
@@ -73,7 +78,7 @@ class RecurringForm extends Component
         $attrs = [
             'client_id' => $data['client_id'], 'project_id' => $data['project_id'] ?: null,
             'description' => $data['description'], 'amount_cents' => Money::toCents($data['amount']),
-            'frequency' => $data['frequency'], 'next_due_on' => $data['next_due_on'],
+            'frequency' => $data['frequency'], 'next_due_on' => $data['next_due_on'], 'pass_through' => $this->pass_through,
         ];
 
         if ($charge) {
@@ -81,8 +86,15 @@ class RecurringForm extends Component
             $charge->update($attrs + ['due_day' => Carbon::parse($data['next_due_on'])->day, 'exchange_rate' => null]);
             session()->flash('toast', 'Service updated.');
         } else {
-            $charge = RecurringCharge::create($attrs + ['active' => true]);
-            session()->flash('toast', 'Service added.');
+            if ($this->needsApproval) {
+                $charge = RecurringCharge::create($attrs + ['active' => false, 'client_state' => RecurringCharge::AWAITING]);
+                session()->flash('toast', 'Service added. It starts once the client approves it.');
+            } else {
+                $charge = RecurringCharge::create($attrs + ['active' => false]);
+                $charge->startApproved($this->addPast, today());
+                $added = $charge->lines()->count();
+                session()->flash('toast', $added ? "Service added and approved. {$added} past ".\Illuminate\Support\Str::plural('period', $added).' added as pending lines.' : 'Service added and approved.');
+            }
         }
 
         return $this->redirectRoute('billing.recurring.show', $charge, navigate: true);
@@ -92,7 +104,14 @@ class RecurringForm extends Component
     {
         $this->authorize('manage-money');
 
+        // live hint: how many periods a past first due date would add
+        $validDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->next_due_on) && checkdate((int) substr($this->next_due_on, 5, 2), (int) substr($this->next_due_on, 8, 2), (int) substr($this->next_due_on, 0, 4));
+        $past = ! $this->chargeId && $validDate && RecurringFrequency::tryFrom($this->frequency)
+            ? (new RecurringCharge(['frequency' => $this->frequency, 'next_due_on' => $this->next_due_on, 'due_day' => Carbon::parse($this->next_due_on)->day]))->pastPeriods(today())
+            : 0;
+
         return view('livewire.billing.recurring-form', [
+            'pastCount' => $past,
             'clients'  => Client::orderBy('name')->get(['id', 'name']),
             'projects' => $this->client_id ? Client::find($this->client_id)?->projects()->orderBy('name')->get(['id', 'name']) ?? collect() : collect(),
         ]);

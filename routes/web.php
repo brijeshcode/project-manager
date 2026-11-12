@@ -14,7 +14,7 @@ use App\Livewire\Tasks\Form as TaskForm;
 use App\Models\Task;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome');
+Route::get('/', fn () => auth()->check() ? redirect()->route('dashboard') : view('welcome'))->name('home');
 
 Route::post('logout', function (Logout $logout) {
     $logout();
@@ -22,7 +22,7 @@ Route::post('logout', function (Logout $logout) {
     return redirect('/');
 })->middleware('auth')->name('logout');
 
-Route::view('dashboard', 'dashboard')
+Route::get('dashboard', fn () => auth()->user()->hasRole('client') ? redirect()->route('portal.dashboard') : view('dashboard'))
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
@@ -33,9 +33,15 @@ Route::view('profile', 'profile')
 // Client portal — gated to users with the 'client' role
 Route::middleware(['auth', 'role:client'])->prefix('portal')->name('portal.')->group(function () {
     Route::get('/', PortalDashboard::class)->name('dashboard');
+    Route::get('/projects', \App\Livewire\Portal\Projects::class)->name('projects');
     Route::get('/projects/{project}', PortalProjectView::class)->name('project');
     Route::get('/invoices', \App\Livewire\Portal\Invoices::class)->name('invoices');
+    Route::get('/invoices/{invoice}', \App\Livewire\Portal\InvoiceShow::class)->whereNumber('invoice')->name('invoice');
     Route::get('/payments', \App\Livewire\Portal\Payments::class)->name('payments');
+    Route::get('/payments/{payment}', \App\Livewire\Portal\PaymentShow::class)->whereNumber('payment')->name('payment');
+    Route::get('/statement', \App\Livewire\Portal\Statement::class)->name('statement');
+    Route::get('/subscriptions', \App\Livewire\Portal\Subscriptions::class)->name('subscriptions');
+    Route::get('/subscriptions/{charge}', \App\Livewire\Portal\SubscriptionShow::class)->whereNumber('charge')->name('subscription');
 });
 
 // Client management — super_admin only

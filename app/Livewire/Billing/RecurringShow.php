@@ -4,6 +4,7 @@ namespace App\Livewire\Billing;
 
 use App\Models\RecurringCharge;
 use App\Services\LocalCurrency;
+use Carbon\Carbon;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -24,6 +25,37 @@ class RecurringShow extends Component
         $c = RecurringCharge::findOrFail($this->chargeId);
         $c->setActive(! $c->active, today());
         $this->dispatch('toast', type: 'success', message: $c->active ? 'Service resumed.' : 'Service paused.');
+    }
+
+    public int $skipCount = 1;
+
+    public string $resumeOn = '';
+
+    public function skip(): void
+    {
+        $this->authorize('manage-money');
+        $this->validate(['skipCount' => 'required|integer|min:1|max:12']);
+        $c = RecurringCharge::findOrFail($this->chargeId);
+        abort_unless($c->active, 422);
+        $c->skip($this->skipCount);
+        $this->dispatch('toast', type: 'success', message: "Skipped {$this->skipCount} ".\Illuminate\Support\Str::plural('period', $this->skipCount).'. Next due '.$c->next_due_on->toFormattedDateString().'.');
+    }
+
+    public function pauseUntil(): void
+    {
+        $this->authorize('manage-money');
+        $this->validate(['resumeOn' => 'required|date_format:Y-m-d|after:today'], [], ['resumeOn' => 'resume date']);
+        $c = RecurringCharge::findOrFail($this->chargeId);
+        $c->pauseUntil(Carbon::parse($this->resumeOn));
+        $this->reset('resumeOn');
+        $this->dispatch('toast', type: 'success', message: 'Paused until '.$c->resume_on->toFormattedDateString().'. It resumes on its own.');
+    }
+
+    public function decideCancel(bool $approve): void
+    {
+        $this->authorize('manage-money');
+        RecurringCharge::findOrFail($this->chargeId)->decideCancel($approve);
+        $this->dispatch('toast', type: 'success', message: $approve ? 'Subscription ended.' : 'Cancellation declined; the subscription continues.');
     }
 
     public function delete()

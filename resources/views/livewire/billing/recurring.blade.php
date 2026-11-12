@@ -9,7 +9,7 @@
 
     <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <x-ui.stat label="Active services" :value="$stats['active']" icon="refresh" color="green" :hint="$stats['paused'].' paused'" />
-        <x-ui.stat label="Monthly recurring" :value="$money($stats['monthly'], $local)" icon="currency" color="blue" hint="Active services, yearly spread per month" />
+        <x-ui.stat label="Monthly recurring" :value="$money($stats['monthly'], $local)" icon="currency" color="blue" hint="Active services, yearly spread per month, pass-through costs excluded" />
         <x-ui.stat label="Due in 30 days" :value="$stats['due_soon']" icon="calendar" color="yellow" hint="Active services falling due" />
         <x-ui.stat label="Invoiced to date" :value="$money($stats['invoiced'], $local)" icon="check" color="purple" :hint="$stats['invoiced_count'].' '.\Illuminate\Support\Str::plural('time', $stats['invoiced_count']).' on sent invoices'" />
     </div>
@@ -66,6 +66,7 @@
                         <tr wire:key="rc-{{ $c->id }}" class="hover:bg-slate-50 dark:hover:bg-gray-700/40" data-test="recurring-row">
                             <td class="table-td">
                                 <a href="{{ route('billing.recurring.show', $c) }}" wire:navigate class="link font-medium">{{ $c->description }}</a>
+                                @if ($c->pass_through)<x-ui.badge class="ml-1" title="A cost passed on to the client: billed as usual, not counted as income">Pass-through</x-ui.badge>@endif
                                 <div class="text-xs text-slate-500 dark:text-gray-400">{{ ucfirst($c->frequency->value) }}</div>
                             </td>
                             <td class="table-td">
@@ -90,7 +91,7 @@
                                 @endif
                                 <div class="text-xs text-slate-500 dark:text-gray-400">{{ $c->invoiced_count }}× invoiced{{ $c->draft_count ? ' · '.$c->draft_count.' in draft' : '' }}</div>
                             </td>
-                            <td class="table-td"><x-ui.badge :color="$c->active ? 'green' : 'slate'">{{ $c->active ? 'Active' : 'Paused' }}</x-ui.badge></td>
+                            <td class="table-td"><x-ui.badge :color="$c->statusBadge()[1]">{{ $c->statusBadge()[0] }}</x-ui.badge></td>
                             <td class="table-td whitespace-nowrap text-right">
                                 <button type="button" wire:click="toggle({{ $c->id }})" class="btn btn-ghost px-2" title="{{ $c->active ? 'Pause' : 'Resume' }}" aria-label="{{ ($c->active ? 'Pause ' : 'Resume ').$c->description }}"><x-icon :name="$c->active ? 'ban' : 'play'" class="h-4 w-4" /></button>
                                 <a href="{{ route('billing.recurring.show', $c) }}" wire:navigate class="btn btn-ghost px-2" title="View details" aria-label="View {{ $c->description }}"><x-icon name="eye" class="h-4 w-4" /></a>

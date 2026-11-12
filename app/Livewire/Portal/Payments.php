@@ -6,12 +6,16 @@ use App\Models\Payment;
 use App\Models\PaymentDocument;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class Payments extends Component
 {
     use WithPagination;
+
+    #[Url(as: 'view')]
+    public string $view = 'list';
 
     public function mount(): void
     {
@@ -44,6 +48,7 @@ class Payments extends Component
 
     public function render()
     {
+        $this->view = in_array($this->view, ['cards', 'list'], true) ? $this->view : 'list';
         // notes deliberately not selected
         $cid = $this->guard();
         $payments = Payment::where('client_id', $cid)

@@ -3,21 +3,26 @@
     $localHint = fn (?int $l, int $m) => $m > 0 ? 'Local total unavailable — '.$m.' without an exchange rate' : ($l ? \App\Support\Money::format($l, $localCode) : null);
     $fmt = fn (int $c) => \App\Support\Money::format($c, $client->currency);
     $addressLine = collect([$client->city, $client->state, $client->postal_code, $client->country])->filter()->implode(', ');
+    // Details tab: value = string, or [text, href] for a link; empty shows a muted dash so the grids stay even
+    $link = fn (?string $v, string $href) => $v ? [$v, $href] : null;
+    $site = $client->website ? (preg_match('#^https?://#i', $client->website) ? $client->website : 'https://'.$client->website) : null;
     $sections = [
-        'Basic Information' => [
-            'Client Type' => ucfirst($client->type->value), 'Client Code' => $client->client_code, 'Status' => ucfirst($client->status->value),
-            'Billing Mode' => ucfirst($client->billing_mode->value), 'Currency' => $client->currency,
-        ],
-        'Contact Information' => [
-            'Contact Person' => $client->contact_name, 'Email' => $client->contact_email, 'Phone' => $client->contact_phone,
-            'Website' => $client->website, 'Address' => $client->address, 'City / State / Postal / Country' => $addressLine,
-        ],
-        'Billing' => [
-            'Tax / VAT Number' => $client->tax_number, 'Payment Terms' => $client->payment_terms, 'Billing Address' => $client->billing_address,
-        ],
+        ['Basic information', 'tag', 'sm:grid-cols-3', [
+            'Client type' => ucfirst($client->type->value), 'Company / legal name' => $client->company_name, 'Client code' => $client->client_code, 'Status' => 'status',
+            'Billing mode' => ucfirst($client->billing_mode->value), 'Currency' => $client->currency,
+        ]],
+        ['Contact', 'user', 'sm:grid-cols-2', [
+            'Contact person' => $client->contact_name, 'Email' => $link($client->contact_email, 'mailto:'.$client->contact_email),
+            'Phone' => $link($client->contact_phone, 'tel:'.preg_replace('/[^\d+]/', '', (string) $client->contact_phone)), 'Website' => $link($client->website, (string) $site),
+        ]],
+        ['Billing', 'landmark', 'sm:grid-cols-2', [
+            'Tax / VAT number' => $client->tax_number, 'Payment terms' => $client->payment_terms, 'Billing address' => $client->billing_address,
+        ]],
     ];
+    $dt = 'text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-gray-400';
+    $dd = 'mt-1 whitespace-pre-line break-words text-sm font-medium text-gray-900 dark:text-white';
 @endphp
-<div x-data="{ tab: 'details', del: null }" class="space-y-6">
+<div x-data="{ tab: 'details', del: null, ask: null }" class="space-y-6">
     {{-- Header --}}
     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex items-center gap-4">
@@ -26,9 +31,14 @@
             </span>
             <div>
                 <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ $client->name }}</h1>
+                @if ($client->company_name)<p class="text-sm text-gray-500 dark:text-gray-400" data-test="client-company">{{ $client->company_name }}</p>@endif
                 <div class="mt-1 flex items-center gap-2">
                     <span class="text-sm text-gray-500 dark:text-gray-400">{{ $client->client_code }}</span>
-                    <x-ui.badge :color="$client->status->color()" class="capitalize">{{ $client->status->value }}</x-ui.badge>
+                    <select wire:change="setStatus($event.target.value)" aria-label="Client status" class="select h-7 w-auto py-0 pl-2 pr-7 text-xs capitalize" data-test="client-status">
+                        @foreach (\App\Enums\ClientStatus::cases() as $s)
+                            <option value="{{ $s->value }}" @selected($client->status === $s)>{{ ucfirst($s->value) }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 @if ($client->contact_name)
                     <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Contact: {{ $client->contact_name }}</p>
@@ -67,7 +77,7 @@
     <div class="card">
         <div class="border-b border-gray-200 dark:border-gray-700">
             <nav class="-mb-px flex gap-8 overflow-x-auto px-6" aria-label="Tabs" role="tablist">
-                @foreach (['details' => 'Details', 'projects' => 'Projects', 'invoices' => 'Invoices', 'payments' => 'Payments'] + ($statement ? ['statement' => 'Statement', 'subscriptions' => 'Subscriptions'] : []) as $key => $label)
+                @foreach (['details' => 'Details', 'projects' => 'Projects', 'invoices' => 'Invoices', 'payments' => 'Payments'] + ($statement ? ['statement' => 'Statement', 'subscriptions' => 'Subscriptions'] : []) + ['access' => 'Portal access'] as $key => $label)
                     <button type="button" role="tab" :aria-selected="tab === '{{ $key }}'" x-on:click="tab = '{{ $key }}'"
                             :class="tab === '{{ $key }}' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-300'"
                             class="whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium transition-colors">{{ $label }}</button>
@@ -75,96 +85,78 @@
             </nav>
         </div>
 
-        <div role="tabpanel" x-show="tab === 'details'" class="space-y-8 p-6">
-            @foreach ($sections as $title => $fields)
-                <section>
-                    <h3 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">{{ $title }}</h3>
-                    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        @foreach (array_filter($fields, fn ($v) => $v !== null && $v !== '') as $label => $value)
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{{ $label }}</dt>
-                                <dd class="mt-1 whitespace-pre-line text-sm text-gray-900 dark:text-white">{{ $value }}</dd>
+        <div role="tabpanel" x-show="tab === 'details'" class="grid gap-6 bg-slate-50/60 p-4 sm:p-6 lg:grid-cols-3 dark:bg-gray-900/20" data-test="client-details">
+            <div class="space-y-6 lg:col-span-2">
+                @foreach ($sections as [$title, $icon, $cols, $fields])
+                    <section class="card p-6">
+                        @include('livewire.clients._details-head')
+                        <dl class="grid grid-cols-1 gap-x-6 gap-y-5 {{ $cols }}">
+                            @foreach ($fields as $label => $value)
+                                <div @class(['min-w-0', 'sm:col-span-2' => $label === 'Billing address'])>
+                                    <dt class="{{ $dt }}">{{ $label }}</dt>
+                                    <dd class="{{ $dd }}">
+                                        @if ($value === 'status')
+                                            <x-ui.badge :color="$client->status->color()" class="capitalize">{{ $client->status->value }}</x-ui.badge>
+                                        @elseif (is_array($value))
+                                            <a href="{{ $value[1] }}" class="link" @if ($label === 'Website') target="_blank" rel="noopener" @endif>{{ $value[0] }}</a>
+                                        @elseif ($value === null || $value === '')
+                                            <span class="font-normal text-slate-400 dark:text-gray-500">—</span>
+                                        @else
+                                            {{ $value }}
+                                        @endif
+                                    </dd>
+                                </div>
+                            @endforeach
+                        </dl>
+                    </section>
+                @endforeach
+            </div>
+
+            <div class="space-y-6">
+                <section class="card p-6">
+                    @include('livewire.clients._details-head', ['title' => 'Address', 'icon' => 'globe'])
+                    <dl class="space-y-5">
+                        @foreach (['Street address' => $client->address, 'City / State / Postal / Country' => $addressLine] as $label => $value)
+                            <div class="min-w-0">
+                                <dt class="{{ $dt }}">{{ $label }}</dt>
+                                <dd class="{{ $dd }}">@if ($value){{ $value }}@else<span class="font-normal text-slate-400 dark:text-gray-500">—</span>@endif</dd>
                             </div>
                         @endforeach
                     </dl>
                 </section>
-            @endforeach
-            @if ($client->notes)
-                <section>
-                    <h3 class="mb-4 text-lg font-medium text-gray-900 dark:text-white">Internal Notes</h3>
-                    <p class="whitespace-pre-line text-sm text-gray-700 dark:text-gray-300">{{ $client->notes }}</p>
+
+                <section class="card p-6" data-test="client-notes">
+                    @include('livewire.clients._details-head', ['title' => 'Internal notes', 'icon' => 'lock'])
+                    @if ($client->notes)
+                        <p class="whitespace-pre-line break-words text-sm text-slate-700 dark:text-gray-300">{{ $client->notes }}</p>
+                    @else
+                        <p class="text-sm text-slate-500 dark:text-gray-400">No notes.</p>
+                    @endif
+                    <p class="mt-4 flex items-center gap-1.5 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-gray-700 dark:text-gray-400"><x-icon name="eye-off" class="h-3.5 w-3.5" />Only your team sees this; never shown in the portal.</p>
                 </section>
-            @endif
+            </div>
         </div>
 
         <div role="tabpanel" x-show="tab === 'projects'" x-cloak class="p-6">
-            @if ($projects->isEmpty())
-                <x-ui.empty-state title="No projects yet" message="Projects for this client will appear here.">
-                    <x-slot name="action"><a href="{{ route('projects.create', ['client' => $client->id]) }}" wire:navigate class="btn btn-primary">Add Project</a></x-slot>
-                </x-ui.empty-state>
-            @else
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
-                        <thead><tr><th class="table-th">Project</th><th class="table-th">Status</th></tr></thead>
-                        <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
-                            @foreach ($projects as $project)
-                                <tr wire:key="project-{{ $project->id }}">
-                                    <td class="table-td"><a href="{{ route('projects.show', $project) }}" wire:navigate class="link font-medium">{{ $project->name }}</a></td>
-                                    <td class="table-td"><x-ui.badge :color="$project->status === 'active' ? 'green' : 'slate'">{{ ucfirst(str_replace('_', ' ', $project->status)) }}</x-ui.badge></td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @endif
+            @include('livewire.clients.show-projects')
         </div>
 
         <div role="tabpanel" x-show="tab === 'invoices'" x-cloak class="p-6">
-            @if ($futureInvoices->isNotEmpty())
-                <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/10">
-                    <div class="mb-2 flex items-center justify-between">
-                        <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-200">Future invoices (not sent)</h3>
-                        <span class="text-sm font-semibold tabular-nums text-amber-900 dark:text-amber-200">Estimate: {{ \App\Support\Money::format($futureInvoices->sum('total_cents'), $client->currency) }}</span>
-                    </div>
-                    <p class="mb-3 text-xs text-amber-800 dark:text-amber-300">For your planning only. These do not change the client's balance until you send them.</p>
-                    <ul class="space-y-1 text-sm">
-                        @foreach ($futureInvoices as $f)
-                            <li wire:key="future-{{ $f->id }}" class="flex items-center justify-between">
-                                <a href="{{ route('invoices.show', $f) }}" wire:navigate class="link font-medium">{{ $f->number }}</a>
-                                <span class="tabular-nums">{{ \App\Support\Money::format($f->total_cents, $f->currency) }}</span>
-                            </li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
-            @if ($invoices->isEmpty() && $futureInvoices->isEmpty())
-                <x-ui.empty-state title="No invoices yet" message="Invoices issued to this client will appear here." name="document" />
-            @elseif ($invoices->isNotEmpty())
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
-                        <thead><tr><th class="table-th">Invoice</th><th class="table-th">Date</th><th class="table-th">Total</th><th class="table-th">Status</th></tr></thead>
-                        <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
-                            @foreach ($invoices as $invoice)
-                                <tr wire:key="invoice-{{ $invoice->id }}">
-                                    <td class="table-td"><a href="{{ route('invoices.show', $invoice) }}" wire:navigate class="link font-medium">{{ $invoice->number }}</a></td>
-                                    <td class="table-td">{{ $invoice->issued_on?->format('M j, Y') }}</td>
-                                    <td class="table-td tabular-nums">{{ \App\Support\Money::format($invoice->total_cents, $invoice->currency) }}</td>
-                                    <td class="table-td"><x-ui.badge :color="['sent' => 'green', 'void' => 'rose', 'draft' => 'amber'][$invoice->status] ?? 'slate'">{{ ['sent' => 'Sent', 'void' => 'Cancelled', 'draft' => 'Not sent'][$invoice->status] ?? ucfirst($invoice->status) }}</x-ui.badge></td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @endif
+            @include('livewire.clients.show-invoices')
         </div>
 
         <div role="tabpanel" x-show="tab === 'payments'" x-cloak class="p-6">
+            @can('manage-money')
+                <div class="mb-4 flex justify-end">
+                    <a href="{{ route('payments.create', ['client' => $client->id]) }}" wire:navigate class="btn btn-primary" data-test="client-add-payment"><x-nav.icon name="plus" class="h-5 w-5" /> Record payment</a>
+                </div>
+            @endcan
             @if ($payments->isEmpty())
                 <x-ui.empty-state title="No payments yet" message="Payments received from this client will appear here." name="credit-card" />
             @else
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
-                        <thead><tr><th class="table-th">Date</th><th class="table-th">Amount</th><th class="table-th">Type</th><th class="table-th">Project</th><th class="table-th">Invoice</th><th class="table-th">Method</th><th class="table-th">Documents</th></tr></thead>
+                        <thead><tr><th class="table-th">Date</th><th class="table-th">Amount</th><th class="table-th">Type</th><th class="table-th">Project</th><th class="table-th">Method</th><th class="table-th">Documents</th><th class="table-th"></th></tr></thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
                             @foreach ($payments as $payment)
                                 <tr wire:key="payment-{{ $payment->id }}">
@@ -182,6 +174,7 @@
                                             <a href="{{ route('payment-documents.download', $doc) }}" class="link block text-xs">{{ $doc->original_name }}</a>
                                         @empty — @endforelse
                                     </td>
+                                    @include('livewire.clients._row-actions', ['edit' => route('payments.edit', $payment), 'method' => 'deletePayment', 'id' => $payment->id, 'title' => 'Delete payment', 'text' => 'Delete this payment of '.\App\Support\Money::format($payment->amount_cents, $payment->currency).'? The client balance will change.'])
                                 </tr>
                             @endforeach
                         </tbody>
@@ -194,7 +187,9 @@
             <div role="tabpanel" x-show="tab === 'statement'" x-cloak class="p-6">@include('livewire.clients.show-statement')</div>
             <div role="tabpanel" x-show="tab === 'subscriptions'" x-cloak class="p-6">@include('livewire.clients.show-subscriptions')</div>
         @endif
+        <div role="tabpanel" x-show="tab === 'access'" x-cloak class="p-6">@include('livewire.clients.show-access')</div>
     </div>
 
     <x-clients.delete-modal />
+    <x-ui.confirm-modal />
 </div>

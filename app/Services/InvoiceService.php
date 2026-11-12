@@ -415,6 +415,7 @@ class InvoiceService
                 'quantity' => sprintf('%d.%02d', intdiv($qtyH, 100), $qtyH % 100),
                 'unit_price_cents' => $unit,
                 'amount_cents' => $amount,
+                'pass_through' => (bool) ($l['pass_through'] ?? false), // cost passed on to the client, not income
             ];
         }
 

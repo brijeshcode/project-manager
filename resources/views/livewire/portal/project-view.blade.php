@@ -46,7 +46,7 @@
                 <x-ui.card>
                     <div class="mb-4 flex items-center justify-between gap-3">
                         <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Progress</h2>
-                        @php($pct = app(\App\Services\ProgressService::class)->forProject($project))
+                        @php($pct = app(\App\Services\ProgressService::class)->forClient($project)['pct'])
                         <x-ui.progress class="w-40" :pct="$pct" />
                     </div>
                     @include('livewire.projects._project-counts', ['moduleDone' => fn ($m) => $m->status_override === 'completed' || ($m->status_override === null && $m->tasks->isNotEmpty() && $m->tasks->every(fn ($t) => $t->column?->stage === 'done'))])
@@ -78,9 +78,25 @@
 
     @if($tab === 'planned')
         @forelse($planned as $task)
-            <x-ui.card class="mb-3 flex items-center justify-between gap-3 text-sm" data-test="portal-planned">
-                <span><x-ui.task-code :task="$task" class="mr-1" />{{ $task->title }}</span>
-                @if($task->deadline)<span class="text-xs text-slate-500">Due {{ $task->deadline->format('M j, Y') }}</span>@endif
+            <x-ui.card class="mb-3 text-sm" data-test="portal-planned">
+                <details open class="group">
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
+                        <span class="flex items-center gap-1.5 font-medium text-slate-900 dark:text-white"><x-icon name="chevron-right" class="h-4 w-4 text-slate-400 transition group-open:rotate-90" /><x-ui.task-code :task="$task" class="mr-1" />{{ $task->title }}</span>
+                        @if($task->deadline)<span class="shrink-0 text-xs text-slate-500">Due {{ $task->deadline->format('M j, Y') }}</span>@endif
+                    </summary>
+                    <div class="mt-3 space-y-3 border-t border-slate-100 pt-3 dark:border-gray-700" data-test="portal-planned-details">
+                        <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-gray-400">
+                            <span>Module: <span class="font-medium text-slate-700 dark:text-gray-200">{{ $modules->firstWhere('id', $task->module_id)?->name ?? '—' }}</span></span>
+                            <span>Priority: <span class="font-medium text-slate-700 dark:text-gray-200">{{ \App\Support\Look::PRIORITIES[$task->priority][0] ?? '—' }}</span></span>
+                            @if($task->budget_amount > 0)<span>Value: <span class="font-medium tabular-nums text-slate-700 dark:text-gray-200">{{ \App\Support\Money::format(\App\Support\Money::toCents((string) $task->budget_amount), $currency) }}</span></span>@endif
+                        </div>
+                        @if($task->description)
+                            <x-ui.markdown :text="$task->description" class="max-w-none" />
+                        @else
+                            <p class="text-slate-500 dark:text-gray-400">No description yet.</p>
+                        @endif
+                    </div>
+                </details>
             </x-ui.card>
         @empty
             <x-ui.empty-state title="Nothing planned" message="Tasks not yet started will appear here." />

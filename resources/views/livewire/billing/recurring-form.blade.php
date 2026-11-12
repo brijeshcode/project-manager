@@ -44,7 +44,7 @@
                 </div>
                 <div>
                     <label for="frequency" class="label">Billed</label>
-                    <select wire:model="frequency" id="frequency" class="select">
+                    <select wire:model.live="frequency" id="frequency" class="select">
                         <option value="monthly">Monthly</option>
                         <option value="yearly">Yearly</option>
                     </select>
@@ -52,12 +52,34 @@
                 </div>
                 <div>
                     <label for="next_due_on" class="label">{{ $chargeId ? 'Next due' : 'First due' }}</label>
-                    <input wire:model="next_due_on" id="next_due_on" type="date" class="input dark:[color-scheme:dark]" />
+                    <input wire:model.live="next_due_on" id="next_due_on" type="date" class="input dark:[color-scheme:dark]" />
                     @error('next_due_on') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
             </div>
+            <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-gray-300" data-test="pass-through">
+                <input type="checkbox" wire:model="pass_through" class="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700">
+                <span><span class="font-medium">Pass-through cost (not my income)</span><span class="block text-xs text-slate-500 dark:text-gray-400">E.g. a server or hosting you pay for. The client is billed as usual, but it's left out of your income figures.</span></span>
+            </label>
             @if ($chargeId)
                 <p class="text-xs text-slate-500 dark:text-gray-400">Changes apply to future periods. Lines already added keep their amount.</p>
+            @else
+                <fieldset class="space-y-2" data-test="approval-choice">
+                    <legend class="label">Approval</legend>
+                    @foreach ([1 => ['Ask the client to approve in the portal', 'Nothing is billed until they approve. You can also start it yourself from the service page.'], 0 => ['Already agreed — start now (auto-approved)', 'It starts right away and is marked as approved by your team.']] as $val => [$title, $hint])
+                        <label @class(['flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm', 'border-brand-500 bg-brand-50/60 dark:bg-brand-500/10' => (int) $needsApproval === $val, 'border-slate-200 dark:border-gray-700' => (int) $needsApproval !== $val])>
+                            <input type="radio" wire:model.live="needsApproval" value="{{ $val }}" class="mt-0.5 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700" data-test="needs-approval-{{ $val }}">
+                            <span><span class="font-medium text-slate-900 dark:text-white">{{ $title }}</span><span class="block text-xs text-slate-500 dark:text-gray-400">{{ $hint }}</span></span>
+                        </label>
+                    @endforeach
+                </fieldset>
+                @if (! $needsApproval && $pastCount > 0)
+                    <label class="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-900/10 dark:text-amber-200" data-test="add-past">
+                        <input type="checkbox" wire:model.live="addPast" class="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700">
+                        <span><span class="font-medium">Add past periods</span>
+                            <span class="block text-xs">{{ $addPast ? 'Adds '.$pastCount.' past '.Str::plural('period', $pastCount).' from '.\Carbon\Carbon::parse($next_due_on)->toFormattedDateString().' as pending lines, ready for the next invoice.' : 'Past periods are skipped; billing starts from the next due date on or after today.' }}</span>
+                        </span>
+                    </label>
+                @endif
             @endif
         </x-ui.card>
 

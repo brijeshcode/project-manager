@@ -8,6 +8,7 @@ use App\Services\InvoiceService;
 use App\Services\LocalCurrency;
 use App\Livewire\Concerns\WithDateFilter;
 use App\Livewire\Concerns\WithListSearch;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class Index extends Component
@@ -15,6 +16,10 @@ class Index extends Component
     use WithListSearch, WithDateFilter;
 
     public string $clientFilter = '';
+
+    /** cards | list */
+    #[Url(as: 'view')]
+    public string $view = 'list';
 
     public function mount(): void
     {
@@ -37,6 +42,7 @@ class Index extends Component
     public function render()
     {
         $this->authorize('manage-money');
+        $this->view = in_array($this->view, ['cards', 'list'], true) ? $this->view : 'list';
 
         $like = $this->likeTerm();
 

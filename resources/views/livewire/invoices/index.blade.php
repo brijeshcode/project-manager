@@ -21,9 +21,10 @@
             @endforeach
         </div>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div class="sm:col-span-2">
+            <div class="flex gap-2 sm:col-span-2">
                 <label for="search" class="sr-only">Search invoices</label>
                 <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by number or client..." class="input" />
+                @include('livewire.projects._view-toggle', ['live' => true])
             </div>
             <div>
                 <label for="clientFilter" class="sr-only">Client</label>
@@ -46,6 +47,9 @@
                 <x-slot name="action"><a href="{{ route('invoices.create') }}" class="btn btn-primary">New invoice</a></x-slot>
             </x-ui.empty-state>
         @endif
+    @elseif ($view === 'cards')
+        @include('livewire.invoices._cards')
+        <div class="mt-6">{{ $invoices->links() }}</div>
     @else
         <x-ui.table-card>
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
@@ -80,25 +84,8 @@
                                     <div class="text-xs text-slate-500 dark:text-gray-400">{{ \App\Support\Money::format($i->localTotalCents(), $local) }}</div>
                                 @endif
                             </td>
-                            <td class="table-td">
-                                @if ($i->status === 'void')
-                                    <x-ui.badge :color="$color">{{ $label }}</x-ui.badge>
-                                @else
-                                    @php $pickValue = $i->status; @endphp
-                                    <label for="status-{{ $i->id }}" class="sr-only">Status of {{ $i->number }}</label>
-                                    <select id="status-{{ $i->id }}" wire:change="setStatus({{ $i->id }}, $event.target.value)" wire:confirm="Change this invoice's status? Sent counts in the client's balance and is emailed once." wire:key="status-{{ $i->id }}-{{ $pickValue }}" class="badge badge-{{ $color }} cursor-pointer border-0 py-1 pl-2.5 pr-7 text-xs [color-scheme:light] focus:ring-2 focus:ring-brand-500 dark:[color-scheme:dark]" data-test="row-status">
-                                        <option value="draft" class="bg-white text-slate-900 dark:bg-gray-800 dark:text-gray-100" @selected($pickValue === 'draft')>Not sent</option>
-                                        <option value="sent" class="bg-white text-slate-900 dark:bg-gray-800 dark:text-gray-100" @selected($pickValue === 'sent')>Sent</option>
-                                    </select>
-                                @endif
-                            </td>
-                            <td class="table-td whitespace-nowrap text-right">
-                                <a href="{{ route('invoices.pdf', $i) }}" target="_blank" class="btn btn-ghost px-2" title="Download PDF" aria-label="Download PDF for {{ $i->number }}"><x-icon name="file-text" class="h-4 w-4" /></a>
-                                @if ($i->status !== 'void')
-                                    <a href="{{ route('invoices.edit', $i) }}" class="btn btn-ghost px-2" title="Edit" aria-label="Edit {{ $i->number }}"><x-icon name="pencil" class="h-4 w-4" /></a>
-                                @endif
-                                <a href="{{ route('invoices.show', $i) }}" class="btn btn-ghost px-2">View</a>
-                            </td>
+                            <td class="table-td">@include('livewire.invoices._status')</td>
+                            <td class="table-td whitespace-nowrap text-right">@include('livewire.invoices._actions')</td>
                         </tr>
                     @endforeach
                 </tbody>

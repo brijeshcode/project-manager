@@ -12,7 +12,7 @@
                 <thead>
                     <tr>
                         <th class="table-th">Description</th><th class="table-th">Project</th><th class="table-th">Frequency</th><th class="table-th text-right">Amount</th>
-                        <th class="table-th">Next due</th><th class="table-th">Status</th><th class="table-th text-right">Invoiced</th>
+                        <th class="table-th">Next due</th><th class="table-th">Status</th><th class="table-th text-right">Invoiced</th><th class="table-th"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
@@ -23,11 +23,12 @@
                             <td class="table-td">{{ ucfirst($s->frequency->value) }}</td>
                             <td class="table-td text-right tabular-nums">{{ \App\Support\Money::format($s->amount_cents, $s->display_currency) }}</td>
                             <td class="table-td whitespace-nowrap">{{ $s->active ? $s->next_due_on?->format('M j, Y') : '—' }}</td>
-                            <td class="table-td"><x-ui.badge :color="$s->active ? 'green' : 'slate'">{{ $s->active ? 'Active' : 'Paused' }}</x-ui.badge></td>
+                            <td class="table-td"><x-ui.badge :color="$s->statusBadge()[1]">{{ $s->statusBadge()[0] }}</x-ui.badge></td>
                             <td class="table-td text-right tabular-nums">
                                 {{ \App\Support\Money::format($s->total_invoiced, $s->display_currency) }}
                                 <div class="text-xs text-gray-500 dark:text-gray-400">{{ $s->times_invoiced }} {{ Str::plural('time', $s->times_invoiced) }}</div>
                             </td>
+                            @include('livewire.clients._row-actions', ['edit' => route('billing.recurring.edit', ['charge' => $s->id]), 'method' => 'deleteSubscription', 'id' => $s->id, 'title' => 'Delete subscription', 'text' => 'Delete "'.$s->description.'"? Lines not yet on an invoice are removed too. Subscriptions already on invoices keep their history and cannot be deleted; pause them instead.'])
                         </tr>
                     @endforeach
                 </tbody>

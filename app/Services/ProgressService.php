@@ -53,6 +53,34 @@ class ProgressService
         );
     }
 
+    /**
+     * Progress and counts as the client sees them: client-visible approved modules and their
+     * published, client-visible counted tasks only. Numbers only; nothing internal is returned.
+     *
+     * @return array{pct: float, modules: int, modulesDone: int, tasks: int, tasksDone: int}
+     */
+    public function forClient(Project $project): array
+    {
+        return $this->stats($project, true);
+    }
+
+    /** Same numbers over everything the team sees (all approved modules and counted tasks), or the client's slice. */
+    public function stats(Project $project, bool $clientOnly = false): array
+    {
+        $modules = $project->modules()->approved()->when($clientOnly, fn ($q) => $q->where('client_visible', true))
+            ->with(['tasks' => fn ($q) => $q->counted()->when($clientOnly, fn ($t) => $t->where('client_visible', true))->with(['column', 'checklistItems', 'subtasks'])])->get();
+        $done = fn (Task $t) => $t->column?->stage === 'done';
+        $tasks = $modules->flatMap->tasks;
+
+        return [
+            'pct' => $this->weighted($modules, fn (Module $m) => $m->tasks->sum(fn (Task $t) => $this->hours($t)), fn (Module $m) => $this->ofTasks($m->tasks)),
+            'modules' => $modules->count(),
+            'modulesDone' => $modules->filter(fn (Module $m) => $m->status_override === 'completed' || ($m->status_override === null && $m->tasks->isNotEmpty() && $m->tasks->every($done)))->count(),
+            'tasks' => $tasks->count(),
+            'tasksDone' => $tasks->filter($done)->count(),
+        ];
+    }
+
     private function ofTasks(Collection $tasks): float
     {
         return $this->weighted($tasks, fn (Task $t) => $this->hours($t), fn (Task $t) => $this->forTask($t));

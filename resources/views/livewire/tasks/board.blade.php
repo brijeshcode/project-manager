@@ -16,6 +16,7 @@
     $fmtMoney = fn (int $cents) => preg_replace('/\.00$/', '', \App\Support\Money::format($cents, $cur));
     $fmtHours = fn (float $h) => rtrim(rtrim(number_format($h, 1, '.', ''), '0'), '.') . 'h';
     $cardFields = ['type' => 'Type', 'priority' => 'Priority', 'module' => 'Module', 'code' => 'Code', 'deadline' => 'Deadline', 'checklist' => 'Checklist count', 'subtasks' => 'Subtask count', 'client' => 'Client-visible icon', 'labels' => 'Labels', 'assignees' => 'Assignees'] + ($canMoney ? ['value' => 'Value'] : []) + ['hours' => 'Hours'];
+    if ($client) $cardFields = array_diff_key($cardFields, array_flip(['checklist', 'subtasks', 'client', 'assignees', 'hours']));
 @endphp
 {{-- The board fills the viewport below its own top edge (fit()); every column scrolls on its own. Grouped swimlanes flow down the page instead. --}}
 <div x-data="{ h: 0, lastId: null, fit() { this.h = Math.max(440, window.innerHeight - this.$el.getBoundingClientRect().top - 16) },
@@ -226,10 +227,10 @@
                                     @if ($client)<span data-test="card-link" class="mt-1 line-clamp-2 break-words text-[13px] font-medium leading-snug text-slate-800 hover:text-brand-600">{{ $task->title }}</span>@else<a href="{{ route('tasks.show', $task) }}" draggable="false" data-test="card-link" class="mt-1 line-clamp-2 break-words text-[13px] font-medium leading-snug text-slate-800 hover:text-brand-600">{{ $task->title }}</a>@endif
                                     <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500" data-test="card-meta">
                                         <x-ui.deadline data-f="deadline" :date="$task->deadline" :done="$col->stage === 'done'" class="inline-flex items-center rounded bg-slate-100 px-1.5 py-px text-[11px] dark:bg-gray-600/60" data-test="card-deadline" />
-                                        @if($subs->isNotEmpty())
+                                        @if(! $client && $subs->isNotEmpty())
                                             <span data-f="subtasks" class="inline-flex items-center gap-0.5" data-tip="Subtasks done" data-test="card-subtasks"><x-icon name="square-check-big" class="h-3 w-3" />{{ $subsDone }}/{{ $subs->count() }}</span>
                                         @endif
-                                        @if($items->isNotEmpty())
+                                        @if(! $client && $items->isNotEmpty())
                                             <span data-f="checklist" class="inline-flex items-center gap-0.5" data-tip="Checklist done" data-test="card-checklist"><x-icon name="list-checks" class="h-3 w-3" />{{ $itemsDone }}/{{ $items->count() }}</span>
                                         @endif
                                         {{-- the value chip is only ever rendered for manage-money users --}}

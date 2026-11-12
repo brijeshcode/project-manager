@@ -53,10 +53,13 @@ class Index extends Component
         $perPage = $this->sizeOrDefault();
 
         $clients = $this->fitPage(
-            Client::orderBy('name')
+            // active first, then inactive, then archived; alphabetical within each
+            Client::orderByRaw("CASE status WHEN 'active' THEN 0 WHEN 'inactive' THEN 1 ELSE 2 END")->orderBy('name')
+                ->withMin('projects', 'start_date')
                 ->when(ClientStatus::tryFrom($this->status), fn ($q, $s) => $q->where('status', $s->value))
                 ->when($like, fn ($q) => $q->where(fn ($q) => $q
                     ->whereRaw("name LIKE ? ESCAPE '!'", [$like])
+                    ->orWhereRaw("company_name LIKE ? ESCAPE '!'", [$like])
                     ->orWhereRaw("client_code LIKE ? ESCAPE '!'", [$like])
                     ->orWhereRaw("contact_name LIKE ? ESCAPE '!'", [$like])
                     ->orWhereRaw("contact_email LIKE ? ESCAPE '!'", [$like]))),

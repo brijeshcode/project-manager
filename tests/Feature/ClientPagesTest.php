@@ -251,3 +251,93 @@ it('show lists this client\'s payments with type, project, invoice and method â€
 it('show has a payments empty state', function () {
     Livewire::actingAs(cpAdmin())->test(Show::class, ['client' => cpClient()])->assertOk()->assertSee('No payments yet');
 });
+
+it('client page manages portal logins and status', function () {
+    $admin = cpAdmin();
+    $client = cpClient();
+    $other = cpClient(['name' => 'Other Co']);
+    $c = Livewire::actingAs($admin)->test(Show::class, ['client' => $client])
+        ->set('login', ['name' => 'Pat', 'email' => 'pat@example.test', 'password' => 'secret-pass-123'])
+        ->call('addLogin')->assertHasNoErrors();
+    $u = User::where('email', 'pat@example.test')->first();
+    expect($u->client_id)->toBe($client->id)->and($u->hasRole('client'))->toBeTrue();
+
+    $c->set('newPassword.'.$u->id, 'another-pass-456')->call('setLoginPassword', $u->id)->assertHasNoErrors();
+    expect(\Illuminate\Support\Facades\Hash::check('another-pass-456', $u->fresh()->password))->toBeTrue();
+
+    $foreign = User::factory()->create(['client_id' => $other->id]);
+    $foreign->assignRole('client');
+    foreach ([$foreign->id, $admin->id] as $id) {
+        Livewire::actingAs($admin)->test(Show::class, ['client' => $client])->call('removeLogin', $id)->assertNotFound();
+    }
+    expect(User::find($foreign->id))->not->toBeNull();
+    $c->call('removeLogin', $u->id);
+    expect(User::find($u->id))->toBeNull();
+
+    $c->call('setStatus', 'inactive');
+    expect($client->fresh()->status->value)->toBe('inactive');
+    $c->assertSee(route('invoices.create', ['client' => $client->id]), false)->assertSee(route('payments.create', ['client' => $client->id]), false);
+});
+
+it('client page tabs edit and delete projects, invoices, payments and subscriptions of this client only', function () {
+    $admin = cpAdmin();
+    $client = cpClient();
+    $other = cpClient(['name' => 'Other Co']);
+    $project = Project::create(['client_id' => $client->id, 'name' => 'Empty Proj', 'status' => 'active']);
+    $paidProject = Project::create(['client_id' => $client->id, 'name' => 'Paid Proj', 'status' => 'active']);
+    Payment::create(['client_id' => $client->id, 'project_id' => $paidProject->id, 'amount_cents' => 100, 'paid_on' => today(), 'type' => 'project']);
+    $invoice = cpInvoice($client, 500);
+    $payment = cpPayment($client, 300);
+    $sub = RecurringCharge::create(['client_id' => $client->id, 'description' => 'Hosting', 'amount_cents' => 100, 'frequency' => 'monthly', 'next_due_on' => today(), 'active' => true]);
+    $foreignPayment = cpPayment($other, 50);
+
+    $page = fn () => Livewire::actingAs($admin)->test(Show::class, ['client' => $client]);
+    $page()->assertSee(route('projects.edit', $project), false)->assertSee(route('invoices.edit', $invoice), false)
+        ->assertSee(route('payments.edit', $payment), false)->assertSee(route('billing.recurring.edit', ['charge' => $sub->id]), false)
+        ->assertSeeHtml('data-test="confirm-modal"');
+
+    $page()->call('deleteProject', $project->id)->call('deleteProject', $paidProject->id)
+        ->call('deleteInvoice', $invoice->id)->call('deletePayment', $payment->id)->call('deleteSubscription', $sub->id);
+    expect(Project::find($project->id))->toBeNull()->and(Project::find($paidProject->id))->not->toBeNull()
+        ->and(Invoice::find($invoice->id))->toBeNull()->and(Payment::find($payment->id))->toBeNull()->and(RecurringCharge::find($sub->id))->toBeNull();
+
+    $page()->call('deletePayment', $foreignPayment->id)->assertNotFound();
+    expect(Payment::find($foreignPayment->id))->not->toBeNull();
+});
+
+it('projects tab shows progress, counts and portal visibility per project', function () {
+    $client = cpClient();
+    Project::create(['client_id' => $client->id, 'name' => 'Live Proj', 'status' => 'active']);
+    Project::create(['client_id' => $client->id, 'name' => 'Draft Proj', 'status' => 'draft']);
+    Livewire::actingAs(cpAdmin())->test(Show::class, ['client' => $client])
+        ->assertSee('Live Proj')->assertSee('Draft Proj')->assertSee('1 visible in the client portal')
+        ->assertSee('In client portal')->assertSee('Hidden from portal')->assertSee('0 / 0 done');
+});
+
+it('blocking portal access stops client sign-in and signs out active sessions', function () {
+    $client = cpClient();
+    $user = User::factory()->create(['client_id' => $client->id, 'password' => bcrypt('pass-123456')]);
+    $user->assignRole('client');
+    $staff = cpAdmin();
+
+    Livewire::actingAs($staff)->test(Show::class, ['client' => $client])->assertSee('Block portal access')->call('togglePortalBlock');
+    expect($client->fresh()->portalBlocked())->toBeTrue();
+
+    $this->actingAs($user)->get(route('portal.dashboard'))->assertRedirect(route('login'));
+    $this->assertGuest();
+
+    Livewire::test('pages.auth.login')->set('form.email', $user->email)->set('form.password', 'pass-123456')->call('login')->assertHasErrors('form.email');
+    $this->assertGuest();
+
+    $this->actingAs($staff)->get(route('dashboard'))->assertOk(); // staff unaffected
+    Livewire::actingAs($staff)->test(Show::class, ['client' => $client])->call('togglePortalBlock');
+    expect($client->fresh()->portalBlocked())->toBeFalse();
+});
+
+it('records the date a client stopped being active', function () {
+    $client = cpClient();
+    $client->update(['status' => 'inactive']);
+    expect($client->fresh()->inactive_since->isToday())->toBeTrue();
+    $client->update(['status' => 'active']);
+    expect($client->fresh()->inactive_since)->toBeNull();
+});

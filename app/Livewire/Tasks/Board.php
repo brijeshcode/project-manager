@@ -369,7 +369,7 @@ class Board extends Component
 
     public function render()
     {
-        $modules = $this->project->modules()->when($this->client, fn ($q) => $q->where('client_visible', true))->get();
+        $modules = $this->project->modules()->when($this->client, fn ($q) => $q->approved()->whereIn('id', $this->clientTasks()->select('module_id')))->orderBy('position')->get();
         $canManage = auth()->user()->can('update', $this->project);
 
         return view('livewire.tasks.board', [

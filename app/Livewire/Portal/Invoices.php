@@ -3,12 +3,16 @@
 namespace App\Livewire\Portal;
 
 use App\Models\Invoice;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class Invoices extends Component
 {
     use WithPagination;
+
+    #[Url(as: 'view')]
+    public string $view = 'list';
 
     public function mount(): void
     {
@@ -18,6 +22,7 @@ class Invoices extends Component
 
     public function render()
     {
+        $this->view = in_array($this->view, ['cards', 'list'], true) ? $this->view : 'list';
         // sent only (void hidden); explicit columns; one withSum for paid state
         $invoices = Invoice::where('client_id', auth()->user()->client_id)
             ->where('status', 'sent')

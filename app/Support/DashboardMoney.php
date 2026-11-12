@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\BillableLine;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -21,10 +22,11 @@ class DashboardMoney
     public static function forPeriodLocal(CarbonInterface $from, CarbonInterface $to): array
     {
         $local = LocalCurrency::code();
+        // income: payments minus pass-through costs invoiced in the same window
         $received = fn (CarbonInterface $a, CarbonInterface $b) => (int) Payment::query()
             ->whereDate('paid_on', '>=', $a->toDateString())->whereDate('paid_on', '<=', $b->toDateString())
             ->where('local_currency', $local)
-            ->sum('local_amount_cents');
+            ->sum('local_amount_cents') - self::passThroughLocal($a, $b)->sum('cents');
 
         $outstanding = 0;
         $missing = 0;
@@ -50,6 +52,7 @@ class DashboardMoney
         return [
             'currency' => $local,
             'received' => $received($from, $to),
+            'pass_through' => self::passThroughLocal($from, $to)->sum('cents'),
             'this_month' => $received(now()->startOfMonth(), now()->endOfMonth()),
             'outstanding' => $outstanding,
             'outstanding_missing_rate' => $missing,
@@ -57,6 +60,29 @@ class DashboardMoney
                 ->whereDate('paid_on', '>=', $from->toDateString())->whereDate('paid_on', '<=', $to->toDateString())
                 ->whereNull('local_amount_cents')->count(),
         ];
+    }
+
+    /**
+     * Pass-through costs (server, hosting passed on to the client) on SENT invoices issued in [from, to], in local
+     * currency at each invoice's frozen rate, as rows of [issued_on, client_id, cents]. Payments can't be split into
+     * income and pass-through, so income = payments − these amounts in the same window (timing may differ by a month).
+     */
+    public static function passThroughLocal(CarbonInterface $from, CarbonInterface $to): \Illuminate\Support\Collection
+    {
+        $local = LocalCurrency::code();
+
+        return BillableLine::query()->join('invoices', 'invoices.id', '=', 'billable_lines.invoice_id')
+            ->join('currencies', 'currencies.id', '=', 'invoices.currency_id')
+            ->where('billable_lines.pass_through', true)->where('invoices.status', 'sent')
+            ->whereDate('invoices.issued_on', '>=', $from->toDateString())->whereDate('invoices.issued_on', '<=', $to->toDateString())
+            ->groupBy('invoices.id', 'invoices.issued_on', 'invoices.client_id', 'invoices.exchange_rate', 'currencies.code')
+            ->selectRaw('invoices.issued_on as d, invoices.client_id as c, invoices.exchange_rate as rate, currencies.code as cur, SUM(billable_lines.amount_cents) as s')
+            ->get()
+            ->map(function ($r) use ($local) {
+                $rate = strtoupper($r->cur) === $local ? '1' : ($r->rate !== null ? number_format((float) $r->rate, 6, '.', '') : null);
+
+                return ['d' => Carbon::parse($r->d)->toDateString(), 'client_id' => (int) $r->c, 'cents' => $rate === null ? 0 : Money::convert((int) $r->s, $rate)];
+            });
     }
 
     /**
@@ -73,7 +99,8 @@ class DashboardMoney
             ->selectRaw('DATE(paid_on) as d, SUM(local_amount_cents) as total')
             ->get();
 
-        if ($rows->isEmpty()) {
+        $pass = self::passThroughLocal($from, $to);
+        if ($rows->isEmpty() && $pass->isEmpty()) {
             return [];
         }
 
@@ -100,6 +127,11 @@ class DashboardMoney
         foreach ($rows as $row) {
             $k = $key(Carbon::parse($row->d));
             $sums[$k] = ($sums[$k] ?? 0) + (int) $row->total;
+        }
+        // income, not cash: pass-through costs come off in the bucket their invoice was issued (a bucket can dip below zero)
+        foreach ($pass as $p) {
+            $k = $key(Carbon::parse($p['d']));
+            $sums[$k] = ($sums[$k] ?? 0) - $p['cents'];
         }
 
         $series = [];
@@ -183,6 +215,9 @@ class DashboardMoney
             ->whereDate('paid_on', '>=', $from->toDateString())->whereDate('paid_on', '<=', $to->toDateString())
             ->where('local_currency', LocalCurrency::code())
             ->groupBy('client_id')->selectRaw('client_id, SUM(local_amount_cents) as s')->pluck('s', 'client_id');
+        foreach (self::passThroughLocal($from, $to)->groupBy('client_id') as $cid => $ps) {
+            $revenue[$cid] = (int) ($revenue[$cid] ?? 0) - $ps->sum('cents'); // income, not cash
+        }
         $invoices = Invoice::where('status', 'sent')
             ->whereDate('issued_on', '>=', $from->toDateString())->whereDate('issued_on', '<=', $to->toDateString())
             ->groupBy('client_id')->selectRaw('client_id, COUNT(*) as n')->pluck('n', 'client_id');

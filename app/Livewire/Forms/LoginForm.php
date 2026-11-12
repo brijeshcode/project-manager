@@ -39,6 +39,13 @@ class LoginForm extends Form
         }
 
         RateLimiter::clear($this->throttleKey());
+
+        $user = Auth::user();
+        if ($user->hasRole('client') && $user->client?->portalBlocked()) {
+            Auth::guard('web')->logout();
+
+            throw ValidationException::withMessages(['form.email' => \App\Http\Middleware\EnsurePortalAccess::MESSAGE]);
+        }
     }
 
     /**
