@@ -39,7 +39,7 @@ it('owner sees single local-currency money cards, never a second currency line',
     $r->assertSee('Total Revenue')->assertSee('Outstanding Balance')->assertSee('Active Clients')->assertSee('This Month');
     $r->assertSee('₹105,566.00', false)->assertDontSee('$1,234.00', false);
     $html = $r->getContent();
-    $cards = substr($html, 0, strpos($html, 'Revenue Trend'));
+    $cards = substr($html, 0, strpos($html, 'Income Trend'));
     expect($cards)->toContain('₹105,566.00')->not->toContain('₹5,566.00')->not->toContain('₹100,000.00');
     $r->assertSeeInOrder(['Top Clients', '₹100,000.00', '₹5,566.00'], false);
     $r->assertDontSee('no exchange rate')->assertDontSee('without a rate');
@@ -57,10 +57,12 @@ it('dashboard shows notices only when payments or clients lack a rate', function
         ->assertSee('1 client without a rate');
 });
 
-it('owner period falls back to 30 when invalid', function () {
+it('owner range and trend options fall back to defaults when invalid', function () {
     actingAs(dbUser('super_admin'));
-    Livewire::test('dashboard')->set('period', 5)->assertSet('period', 30)->assertOk();
-    Livewire::test('dashboard')->set('period', 90)->assertSet('period', 90);
+    Livewire::test('dashboard')->call('setRange', 'bogus')->assertSet('range', 'this_month')
+        ->set('trendBy', 'day')->assertSet('trendBy', 'month')
+        ->set('trendCount', 7)->assertSet('trendCount', 10)
+        ->set('trendChart', 'pie')->assertSet('trendChart', 'bar')->assertOk();
 });
 
 it('dashboard component forbids non-owners', function () {
@@ -96,31 +98,44 @@ it('owner sees one revenue chart in the local currency with tooltips', function 
     $usd = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
     $inr = Client::create(['name' => 'Bharat', 'currency' => 'INR', 'billing_mode' => 'fixed']);
     dbPay($usd, 123400, now()->toDateString(), 10_000_000);
-    dbPay($inr, 556600, now()->subDay()->toDateString(), 556600);
+    dbPay($inr, 556600, now()->toDateString(), 556600);
 
     $r = actingAs(dbUser('super_admin'))->get('/dashboard');
     $r->assertOk()->assertSee('Revenue')->assertSee('Payments received, in INR')
         ->assertSee('aria-label="Revenue in INR"', false)->assertDontSee('aria-label="Revenue in USD"', false)
-        ->assertSee(now()->format('M j').': ₹100,000.00', false)
-        ->assertSee(now()->subDay()->format('M j').': ₹5,566.00', false)
+        ->assertSee(now()->format('M Y').': ₹105,566.00', false)->assertSee('data-bar=', false)
         ->assertDontSee('No payments in this period');
 });
 
 it('chart shows an empty state when nothing was received in the period', function () {
     $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
-    dbPay($c, 5000, now()->subDays(200)->toDateString(), 400000);
+    dbPay($c, 5000, now()->subMonths(14)->toDateString(), 400000);
 
     actingAs(dbUser('super_admin'))->get('/dashboard')->assertOk()
         ->assertSee('No payments in this period')->assertDontSee('aria-label="Revenue in', false);
 });
 
-it('chart period switches granularity: 90 days by week, 12 months by month', function () {
+it('income trend switches grouping, count and chart type independent of the date range', function () {
     $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
     dbPay($c, 5000, now()->toDateString(), 400000);
     actingAs(dbUser('super_admin'));
 
-    Livewire::test('dashboard')->set('period', 90)->assertSee('by week');
-    Livewire::test('dashboard')->set('period', 365)->assertSee('by month, last 12 months')->assertSee(now()->format('M Y').': ₹4,000.00', false);
+    Livewire::test('dashboard')->call('setRange', 'last_year')->assertSee('last 10 months')->assertSee(now()->format('M Y').': ₹4,000.00', false)
+        ->set('trendBy', 'quarter')->set('trendCount', 5)->assertSee('last 5 quarters')->assertSee('Q'.now()->quarter.' '.now()->year.': ₹4,000.00', false)
+        ->set('trendBy', 'year')->assertSee(now()->format('Y').': ₹4,000.00', false)
+        ->set('trendChart', 'line')->assertDontSee('data-bar=', false)->assertSee('<circle', false);
+});
+
+it('date range presets and custom dates drive the revenue card', function () {
+    $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    dbPay($c, 5000, now()->subMonthNoOverflow()->startOfMonth()->addDays(2)->toDateString(), 700000);
+    actingAs(dbUser('super_admin'));
+
+    Livewire::test('dashboard')->assertSee('this month')
+        ->call('setRange', 'last_month')->assertSee('₹7,000.00')->assertSee('last month')
+        ->set('from', now()->toDateString())->set('to', now()->subDay()->toDateString())->call('applyRange')->assertHasErrors(['to'])->assertSet('range', 'last_month')
+        ->set('from', now()->subMonthNoOverflow()->startOfMonth()->toDateString())->set('to', now()->toDateString())->call('applyRange')
+        ->assertHasNoErrors()->assertSet('range', 'custom')->assertSee('₹7,000.00');
 });
 
 it('developers and clients never see the revenue chart', function (string $role) {
@@ -148,7 +163,7 @@ it('owner dashboard shows every reference section in order with sub-lines and qu
     $r = actingAs(dbUser('super_admin'))->get('/dashboard');
     $r->assertOk()
         ->assertSeeInOrder(['Dashboard', "Welcome back! Here&#039;s your business overview.", 'Total Revenue', 'Outstanding Balance', 'Active Clients', 'This Month',
-            'Revenue Trend', 'Payment Status', 'Quick Actions', 'Recent Invoices', 'Top Clients', 'Upcoming Due Dates', 'Work', 'Recent projects', 'Work Proj'], false)
+            'Income Trend', 'Payment Status', 'Quick Actions', 'Recent Invoices', 'Top Clients', 'Upcoming Due Dates', 'Work', 'Recent projects', 'Work Proj'], false)
         ->assertSee('1 overdue invoice')->assertSee('2 total clients')->assertSee('2 invoices sent')
         ->assertSee('Projects')->assertSee('Open tasks')->assertSee('Hours this week')
         ->assertSee('href="'.route('invoices.create').'"', false)->assertSee('href="'.route('payments.index').'"', false)
@@ -164,10 +179,10 @@ it('owner dashboard shows reference empty states', function () {
         ->assertSee('No recent invoices')->assertSee('No upcoming due dates')->assertSee('No invoices in this period');
 });
 
-it('period switching keeps the dashboard rendering for every period', function () {
+it('range switching keeps the dashboard rendering for every preset', function () {
     actingAs(dbUser('super_admin'));
-    foreach ([7, 30, 90, 365] as $p) {
-        Livewire::test('dashboard')->set('period', $p)->assertSet('period', $p)->assertSee('Payment Status');
+    foreach (array_keys(\App\Livewire\Dashboard::RANGES) as $r) {
+        Livewire::test('dashboard')->call('setRange', $r)->assertSet('range', $r)->assertSee('Payment Status');
     }
 });
 
@@ -180,7 +195,7 @@ it('developers and clients get none of the new owner sections', function (string
 
     $r = actingAs($u)->get($role === 'client' ? '/portal' : '/dashboard');
     $r->assertOk();
-    foreach (['Payment Status', 'Quick Actions', 'Top Clients', 'Upcoming Due Dates', 'Recent Invoices', 'Revenue Trend'] as $t) {
+    foreach (['Payment Status', 'Quick Actions', 'Top Clients', 'Upcoming Due Dates', 'Recent Invoices', 'Income Trend'] as $t) {
         $r->assertDontSee($t);
     }
 })->with(['developer', 'client']);
@@ -198,4 +213,17 @@ it('recent invoices and upcoming dues show local totals only, never the invoice 
     $r->assertOk()->assertSee('₹8,000.00', false)->assertSee('₹100.00', false)->assertDontSee('$100.00', false);
     expect(substr_count($r->getContent(), '₹8,000.00'))->toBe(2)   // recent + upcoming
         ->and(substr_count($r->getContent(), '>—</span>'))->toBeGreaterThanOrEqual(2);
+});
+
+it('income trend from/to dates chart a given year by month, and a count goes back to last N', function () {
+    $c = Client::create(['name' => 'Acme', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    dbPay($c, 5000, '2024-03-10', 400000);
+    actingAs(dbUser('super_admin'));
+
+    Livewire::test('dashboard')
+        ->set('trendFrom', '2024-12-31')->set('trendTo', '2024-01-01')->call('applyTrendRange')->assertHasErrors(['trendTo'])->assertSet('trendCustom', false)
+        ->set('trendFrom', '2024-01-01')->set('trendTo', '2024-12-31')->call('applyTrendRange')->assertHasNoErrors()
+        ->assertSee('Jan 1, 2024 to Dec 31, 2024')->assertSee('Mar 2024: ₹4,000.00', false)->assertSee('Dec 2024: ₹0.00', false)
+        ->assertDontSee('Jan 2025:', false)
+        ->set('trendCount', 5)->assertSet('trendCustom', false)->assertSee('last 5 months');
 });

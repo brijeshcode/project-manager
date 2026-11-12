@@ -9,7 +9,7 @@ import Sortable from 'sortablejs';
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const fmtHours = (h) => String(Math.round(h * 10) / 10) + 'h';
-const fmtMoney = (sym, cents) => sym + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 });
+const fmtMoney = (sym, cents, locale) => sym + (cents / 100).toLocaleString(locale || 'en-US', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 });
 
 /** Recompute a column's count (with its limit state) and totals from its cards; mirrors the Blade header. */
 function refreshColumn(ul) {
@@ -27,7 +27,7 @@ function refreshColumn(ul) {
     if (totals) {
         const sum = (k) => cards.reduce((t, c) => t + (parseFloat(c.dataset[k]) || 0), 0);
         const cents = sum('value'), hours = sum('hours'); // data-value only exists for manage-money users, so their totals stay server-side only
-        totals.textContent = [cents > 0 ? fmtMoney(col.dataset.sym, cents) : '', hours > 0 ? fmtHours(hours) : ''].filter(Boolean).join(' · ');
+        totals.textContent = [cents > 0 ? fmtMoney(col.dataset.sym, cents, col.dataset.locale) : '', hours > 0 ? fmtHours(hours) : ''].filter(Boolean).join(' · ');
     }
 }
 

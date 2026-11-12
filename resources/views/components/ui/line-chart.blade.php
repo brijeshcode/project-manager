@@ -1,8 +1,9 @@
-{{-- Server-rendered SVG line chart (no JS library). points: [['label' => 'Oct 5', 'cents' => 1500], ...] --}}
-@props(['points', 'currency'])
+{{-- Server-rendered SVG line or bar chart (no JS library). points: [['label' => 'Oct 5', 'cents' => 1500], ...] --}}
+@props(['points', 'currency', 'type' => 'line', 'width' => 600])
 
 @php
-    $w = 600; $h = 256; $padL = 56; $padR = 14; $padT = 26; $padB = 60;
+    $bar = $type === 'bar';
+    $w = (int) $width; $h = 256; $padL = 56; $padR = 14; $padT = 26; $padB = 60;
     $plotW = $w - $padL - $padR; $plotH = $h - $padT - $padB; $baseY = $padT + $plotH;
     $n = count($points);
     $peak = (int) collect($points)->max('cents');
@@ -21,7 +22,7 @@
 
     $xs = []; $ys = [];
     foreach ($points as $i => $p) {
-        $xs[$i] = $n > 1 ? $padL + $plotW * $i / ($n - 1) : $padL + $plotW / 2;
+        $xs[$i] = $bar ? $padL + $plotW * ($i + 0.5) / $n : ($n > 1 ? $padL + $plotW * $i / ($n - 1) : $padL + $plotW / 2);
         $ys[$i] = $baseY - $plotH * $p['cents'] / $top;
     }
 
@@ -40,16 +41,8 @@
         [$c1x, $c1y] = $cp($i - 1, 1); [$c2x, $c2y] = $cp($i, -1);
         $d .= ' C'.round($c1x, 2).' '.round($c1y, 2).' '.round($c2x, 2).' '.round($c2y, 2).' '.round($x, 2).' '.round($ys[$i], 2);
     }
-    // value labels above the dots: compact text from integer minor units (display rounding only)
-    $compact = function (int $cents) {
-        $u = intdiv($cents + 50, 100);
-        if ($u < 10000) { return number_format($u); }
-        $t = intdiv($u + 50, 100); // tenths of K
-        if ($t < 10000) { return intdiv($t, 10).($t % 10 ? '.'.($t % 10) : '').'K'; }
-        $t = intdiv($u + 50000, 100000); // tenths of M
-
-        return number_format(intdiv($t, 10)).($t % 10 ? '.'.($t % 10) : '').'M';
-    };
+    // value labels above the dots: compact text in the system number format (display rounding only)
+    $compact = fn (int $cents) => \App\Support\Money::compact($cents);
     $order = collect($points)->map(fn ($p, $i) => [$p['cents'], $i])->filter(fn ($r) => $r[0] > 0)
         ->sort(fn ($a, $b) => [$b[0], $a[1]] <=> [$a[0], $b[1]])->pluck(1);
     $labels = []; $spans = [];
@@ -67,21 +60,40 @@
 
 <div {{ $attributes }}>
     <svg viewBox="0 0 {{ $w }} {{ $h }}" class="h-64 w-full" role="img" aria-label="Revenue in {{ $currency }}">
+        @if ($bar)
+            @php $gid = 'bar-grad-'.uniqid(); @endphp
+            <defs>
+                <linearGradient id="{{ $gid }}" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#3b82f6"/>
+                    <stop offset="100%" stop-color="#60a5fa" stop-opacity="0.75"/>
+                </linearGradient>
+            </defs>
+        @endif
         @foreach ($ticks as $t)
             @php $y = round($baseY - $plotH * $t / $top, 2); @endphp
             <line x1="{{ $padL }}" y1="{{ $y }}" x2="{{ $w - $padR }}" y2="{{ $y }}" class="stroke-gray-200 dark:stroke-gray-700" stroke-width="1" data-grid="h"/>
-            <text x="{{ $padL - 8 }}" y="{{ $y + 3.5 }}" text-anchor="end" class="fill-gray-500 dark:fill-gray-400" font-size="11">{{ number_format($t / 100, 2) }}</text>
+            <text x="{{ $padL - 8 }}" y="{{ $y + 3.5 }}" text-anchor="end" class="fill-gray-500 dark:fill-gray-400" font-size="11">{{ \App\Support\Money::number($t) }}</text>
         @endforeach
         @foreach ($points as $i => $p)
             <line x1="{{ round($xs[$i], 2) }}" y1="{{ $padT }}" x2="{{ round($xs[$i], 2) }}" y2="{{ $baseY }}" class="stroke-gray-200 dark:stroke-gray-700" stroke-width="1" data-grid="v"/>
         @endforeach
-        @if ($n > 1)
+        @if ($n > 1 && ! $bar)
             <path d="{{ $d }}" fill="none" class="stroke-blue-500" stroke-width="2"/>
         @endif
         @foreach ($points as $i => $p)
             <g>
                 <title>{{ $p['label'] }}: {{ \App\Support\Money::format($p['cents'], $currency) }}</title>
-                <circle cx="{{ round($xs[$i], 2) }}" cy="{{ round($ys[$i], 2) }}" r="3.5" class="fill-blue-500 stroke-white dark:stroke-gray-800" stroke-width="1"/>
+                @if ($bar)
+                    @php
+                        // rounded top corners only, flat on the axis
+                        $bw = $plotW / $n * 0.6; $barY = min($baseY, $ys[$i]);
+                        $x0 = round($xs[$i] - $bw / 2, 2); $x1 = round($xs[$i] + $bw / 2, 2); $y0 = round($barY, 2);
+                        $r = round(min(8, $bw / 3, $baseY - $barY), 2);
+                    @endphp
+                    <path d="M{{ $x0 }} {{ $baseY }} V{{ $y0 + $r }} Q{{ $x0 }} {{ $y0 }} {{ $x0 + $r }} {{ $y0 }} H{{ $x1 - $r }} Q{{ $x1 }} {{ $y0 }} {{ $x1 }} {{ $y0 + $r }} V{{ $baseY }} Z" fill="url(#{{ $gid }})" class="transition-opacity duration-200 hover:opacity-80" data-bar="{{ $i }}"/>
+                @else
+                    <circle cx="{{ round($xs[$i], 2) }}" cy="{{ round($ys[$i], 2) }}" r="3.5" class="fill-blue-500 stroke-white dark:stroke-gray-800" stroke-width="1"/>
+                @endif
                 @if (isset($labels[$i]))
                     <text x="{{ round($labels[$i][1], 2) }}" y="{{ round($labels[$i][2], 2) }}" text-anchor="{{ $labels[$i][3] }}" class="fill-gray-700 dark:fill-gray-200" font-size="10" data-label="{{ $i }}">{{ $labels[$i][0] }}</text>
                 @endif

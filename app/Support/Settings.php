@@ -11,8 +11,10 @@ class Settings
 
     public const SIDEBARS = ['full' => 'Full', 'half' => 'Half (icons only)', 'mini' => 'Mini (menu button)'];
 
+    public const NUMBER_FORMATS = ['international' => 'International — 1,234,567.00 · K, M', 'indian' => 'Indian — 12,34,567.00 · K, L, Cr'];
+
     /** Group a key is stored under when the caller names none. */
-    private const GROUPS = ['local_currency' => 'currency', 'page_size' => 'system', 'sidebar_layout' => 'system'];
+    private const GROUPS = ['local_currency' => 'currency', 'page_size' => 'system', 'sidebar_layout' => 'system', 'number_format' => 'system'];
 
     public static function get(string $key, ?string $default = null): ?string
     {
@@ -46,6 +48,14 @@ class Settings
         $n = (int) self::get('page_size', '15');
 
         return in_array($n, self::PAGE_SIZES, true) ? $n : 15;
+    }
+
+    /** Digit grouping for every amount: 'international' or 'indian'. */
+    public static function numberFormat(): string
+    {
+        $v = self::get('number_format', 'international');
+
+        return array_key_exists($v, self::NUMBER_FORMATS) ? $v : 'international';
     }
 
     public static function sidebarLayout(): string

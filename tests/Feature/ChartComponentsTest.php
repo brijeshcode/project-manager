@@ -93,3 +93,15 @@ it('line chart labels a lone point and nothing for an all-zero series', function
     expect(lineChart([8350000]))->toContain('>83.5K<')->and(lineChart([83500]))->toContain('>835<')
         ->and(lineChart([0, 0, 0]))->not->toContain('data-label=');
 });
+
+it('bar chart draws one bar per point with its value on top and no line path', function () {
+    $html = Blade::render('<x-ui.line-chart :points="$p" currency="INR" type="bar" :width="1000" />', ['p' => [
+        ['label' => 'Oct 2026', 'cents' => 1234500], ['label' => 'Nov 2026', 'cents' => 0], ['label' => 'Dec 2026', 'cents' => 500000],
+    ]]);
+
+    expect(substr_count($html, 'data-bar='))->toBe(3)
+        ->and($html)->toContain('viewBox="0 0 1000 256"')->not->toContain('stroke-blue-500')->not->toContain('<circle')
+        ->toContain('fill="url(#bar-grad-')->toContain(' Q')
+        ->toContain('data-label="0">12.3K<')->toContain('data-label="2">5,000<')->not->toContain('data-label="1"')
+        ->toContain('<title>Oct 2026: ₹12,345.00</title>');
+});

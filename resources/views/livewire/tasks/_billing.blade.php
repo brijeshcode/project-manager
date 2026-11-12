@@ -18,7 +18,7 @@
         @endif
     </p>
     @if ($isHourly)
-        <p class="text-xs text-slate-500" data-test="billing-line">Logged {{ $h($logged) }} h &middot; Billed {{ $h($task->billedHours()) }} h &times; {{ $rate === null ? 'no rate' : $h($rate) }} = {{ $task->budget_amount === null ? '—' : number_format((float) $task->budget_amount, 2) }}@if ($task->billable_hours !== null) <span class="text-slate-400">(adjusted)</span>@endif</p>
+        <p class="text-xs text-slate-500" data-test="billing-line">Logged {{ $h($logged) }} h &middot; Billed {{ $h($task->billedHours()) }} h &times; {{ $rate === null ? 'no rate' : $h($rate) }} = {{ $task->budget_amount === null ? '—' : \App\Support\Money::number(\App\Support\Money::toCents((string) $task->budget_amount)) }}@if ($task->billable_hours !== null) <span class="text-slate-400">(adjusted)</span>@endif</p>
     @endif
     <x-slot:editor>
         <div class="space-y-2">

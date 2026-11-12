@@ -148,7 +148,7 @@
                                 @if ($billingMode === 'hourly')
                                     <div><label class="text-xs text-slate-500" for="budget-hours">Budget hours</label><input id="budget-hours" type="number" step="0.01" min="0" wire:model.live.debounce.300ms="hours" class="input h-8 text-sm" data-test="hours-input"></div>
                                     <div><label class="text-xs text-slate-500" for="hourly-rate">Hourly rate ({{ $project->currency }})</label><input id="hourly-rate" type="text" wire:model.live.debounce.300ms="rate" class="input h-8 text-sm" data-test="rate-input"></div>
-                                    <p class="text-xs text-slate-500" data-test="hourly-formula">{{ rtrim(rtrim(number_format((float) $hours, 2), '0'), '.') ?: '0' }} h &times; {{ $rate === '' ? '0' : $rate }} = {{ number_format((float) $hours * (float) str_replace(',', '', $rate), 2) }}</p>
+                                    <p class="text-xs text-slate-500" data-test="hourly-formula">{{ rtrim(rtrim(number_format((float) $hours, 2), '0'), '.') ?: '0' }} h &times; {{ $rate === '' ? '0' : $rate }} = {{ \App\Support\Money::number((int) round((float) $hours * (float) str_replace(',', '', $rate) * 100)) }}</p>
                                 @else
                                     <div><label class="text-xs text-slate-500" for="budget-amount">Budget amount ({{ $project->currency }})</label><input id="budget-amount" type="text" wire:model="amount" class="input h-8 text-sm" data-test="amount-input"></div>
                                 @endif

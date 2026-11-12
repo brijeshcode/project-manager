@@ -28,7 +28,7 @@
                 <p class="text-xs text-slate-500">Local total unavailable, no exchange rate</p>
             @endif
             @if ($hourly)
-                <p class="text-xs text-slate-500" data-test="bp-formula">{{ $h($module->budget_hours) }} h &times; {{ $h($module->hourly_rate) }} = {{ number_format($s['cap'] / 100, 2) }}</p>
+                <p class="text-xs text-slate-500" data-test="bp-formula">{{ $h($module->budget_hours) }} h &times; {{ $h($module->hourly_rate) }} = {{ \App\Support\Money::number($s['cap']) }}</p>
             @endif
         </div>
 

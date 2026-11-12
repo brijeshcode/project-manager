@@ -179,7 +179,7 @@
                     @endphp
                     @php $drag = ! $client || $col->client_movable; @endphp
                     @continue($client && $cards->isEmpty() && ! $col->client_movable)
-                    <div data-col class="flex min-h-0 min-w-[16rem] max-w-80 flex-1 basis-64 shrink-0 flex-col rounded-xl bg-gray-100 dark:bg-gray-800/60" wire:key="col-{{ $lane?->id ?? 'all' }}-{{ $col->id }}" data-stage="{{ $col->stage }}" data-sym="{{ $sym }}" @if($limit) data-limit="{{ $limit }}" @endif>
+                    <div data-col class="flex min-h-0 min-w-[16rem] max-w-80 flex-1 basis-64 shrink-0 flex-col rounded-xl bg-gray-100 dark:bg-gray-800/60" wire:key="col-{{ $lane?->id ?? 'all' }}-{{ $col->id }}" data-stage="{{ $col->stage }}" data-sym="{{ $sym }}" data-locale="{{ \App\Support\Money::indian() ? 'en-IN' : 'en-US' }}" @if($limit) data-limit="{{ $limit }}" @endif>
                         <div class="shrink-0 px-3 py-2">
                             <div class="flex items-center gap-2">
                                 <span class="h-2 w-2 shrink-0 rounded-full {{ $stageDot[$col->stage] ?? 'bg-slate-400' }}" data-tip="{{ $stages[$col->stage] ?? $col->stage }}"></span>

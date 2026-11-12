@@ -86,7 +86,7 @@ class DashboardMoney
     }
 
     /**
-     * Local-currency payments per bucket, zero-filled. $granularity: 'day' | 'week' (Monday start) | 'month'.
+     * Local-currency payments per bucket, zero-filled. $granularity: 'day' | 'week' (Monday start) | 'month' | 'quarter' | 'year'.
      * Returns [['label' => 'Oct 5', 'cents' => 1500], ...]; [] when nothing was received.
      */
     public static function revenueSeriesLocal(CarbonInterface $from, CarbonInterface $to, string $granularity = 'day'): array
@@ -107,10 +107,14 @@ class DashboardMoney
         $key = fn (CarbonInterface $d) => match ($granularity) {
             'week' => $d->copy()->startOfWeek()->toDateString(),
             'month' => $d->copy()->startOfMonth()->toDateString(),
+            'quarter' => $d->copy()->startOfQuarter()->toDateString(),
+            'year' => $d->copy()->startOfYear()->toDateString(),
             default => $d->toDateString(),
         };
         $label = fn (CarbonInterface $d) => match ($granularity) {
             'month' => $d->format('M Y'),
+            'quarter' => 'Q'.$d->quarter.' '.$d->year,
+            'year' => $d->format('Y'),
             default => $d->format('M j'),
         };
 
@@ -118,6 +122,8 @@ class DashboardMoney
         for ($d = Carbon::parse($key($from)); $d->lte($to); $d = match ($granularity) {
             'week' => $d->copy()->addWeek(),
             'month' => $d->copy()->addMonth(),
+            'quarter' => $d->copy()->addQuarter(),
+            'year' => $d->copy()->addYear(),
             default => $d->copy()->addDay(),
         }) {
             $buckets[$d->toDateString()] = $label($d);
