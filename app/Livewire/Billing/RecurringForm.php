@@ -27,6 +27,8 @@ class RecurringForm extends Component
     public string $amount = '';
     public string $frequency = 'monthly';
     public string $next_due_on = '';
+    public string $starts_on = '';
+    public string $ends_on = '';
     public bool $needsApproval = true;
     public bool $pass_through = false;
 
@@ -44,6 +46,7 @@ class RecurringForm extends Component
                 'client_id' => $charge->client_id, 'project_id' => $charge->project_id, 'description' => $charge->description,
                 'amount' => Money::toInput($charge->amount_cents), 'frequency' => $charge->frequency->value,
                 'next_due_on' => $charge->next_due_on->toDateString(), 'pass_through' => (bool) $charge->pass_through,
+                'starts_on' => ($charge->starts_on ?? $charge->next_due_on)->toDateString(), 'ends_on' => (string) $charge->ends_on?->toDateString(),
             ]);
 
             return;
@@ -73,13 +76,16 @@ class RecurringForm extends Component
             'amount'      => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('The amount must be greater than zero.')],
             'frequency'   => ['required', new Enum(RecurringFrequency::class)],
             'next_due_on' => 'required|date_format:Y-m-d',
+            'starts_on'   => $charge ? 'required|date_format:Y-m-d' : 'nullable',
+            'ends_on'     => ['nullable', 'date_format:Y-m-d', 'after_or_equal:'.($charge ? 'starts_on' : 'next_due_on')],
         ]);
 
         $attrs = [
             'client_id' => $data['client_id'], 'project_id' => $data['project_id'] ?: null,
             'description' => $data['description'], 'amount_cents' => Money::toCents($data['amount']),
             'frequency' => $data['frequency'], 'next_due_on' => $data['next_due_on'], 'pass_through' => $this->pass_through,
-        ];
+            'ends_on' => $data['ends_on'] ?: null,
+        ] + ($charge ? ['starts_on' => $data['starts_on']] : []);
 
         if ($charge) {
             // a new due date re-anchors the day; a null rate is re-read so a currency change (project switch) is priced right

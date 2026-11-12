@@ -55,6 +55,18 @@
                     <input wire:model.live="next_due_on" id="next_due_on" type="date" class="input dark:[color-scheme:dark]" />
                     @error('next_due_on') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
+                @if ($chargeId)
+                    <div>
+                        <label for="starts_on" class="label">Started on</label>
+                        <input wire:model="starts_on" id="starts_on" type="date" class="input dark:[color-scheme:dark]" />
+                        @error('starts_on') <p class="field-error">{{ $message }}</p> @enderror
+                    </div>
+                @endif
+                <div>
+                    <label for="ends_on" class="label">Ends on <span class="font-normal text-slate-400">(optional)</span></label>
+                    <input wire:model="ends_on" id="ends_on" type="date" class="input dark:[color-scheme:dark]" />
+                    @error('ends_on') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
             </div>
             <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-gray-300" data-test="pass-through">
                 <input type="checkbox" wire:model="pass_through" class="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700">

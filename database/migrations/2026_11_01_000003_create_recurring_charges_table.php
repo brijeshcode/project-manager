@@ -19,6 +19,8 @@ return new class extends Migration
             $t->string('frequency');
             $t->date('next_due_on');
             $t->unsignedTinyInteger('due_day'); // anchor day so Jan 31 -> Feb 28 -> Mar 31 does not drift
+            $t->date('starts_on')->nullable(); // first billed period; a past invoice date lists the services running then
+            $t->date('ends_on')->nullable();   // last day billed; nothing falls due after it
             $t->boolean('active')->default(true);
             $t->timestamps();
         });

@@ -6,7 +6,7 @@
     $row = 'flex items-start gap-3 px-4 py-3 text-sm';
     $box = 'mt-1 h-4 w-4 rounded text-brand-600 focus:ring-brand-500 disabled:opacity-40 dark:border-gray-600 dark:bg-gray-700';
     $empty = 'rounded-lg border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-500 dark:border-gray-700 dark:text-gray-400';
-    $ticked = count($pickSprints) + count($pickModules) + count($pickTasks) + count($pickCharges);
+    $ticked = count($pickSprints) + count($pickModules) + count($pickTasks) + count($pickCharges) + count($pickSubs);
 @endphp
 <div class="mx-auto max-w-5xl">
     <x-ui.page-header :title="'Edit invoice '.$invoice->number" :subtitle="$client->name.' · '.$invoice->currency">
@@ -22,7 +22,7 @@
             <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                     <label for="issuedOn" class="label">Invoice date</label>
-                    <input wire:model="issuedOn" id="issuedOn" type="date" class="input" />
+                    <input wire:model.live="issuedOn" id="issuedOn" type="date" class="input" />
                     @error('issuedOn') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
                 <div>

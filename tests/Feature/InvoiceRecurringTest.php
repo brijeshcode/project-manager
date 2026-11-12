@@ -75,3 +75,35 @@ it('edits a recurring item on an existing invoice', function () {
         ->set('groups.0.amount', '40')->call('save')->assertHasNoErrors();
     expect($inv->fresh()->total_cents)->toBe(4000)->and($line->fresh()->amount_cents)->toBe(4000);
 });
+
+it('lists the subscriptions running in the invoice month without adding them', function () {
+    RecurringCharge::create(['client_id' => $this->client->id, 'description' => 'Domain', 'amount_cents' => 1500, 'frequency' => 'yearly', 'next_due_on' => '2027-03-01', 'active' => true]);
+    $old = RecurringCharge::create(['client_id' => $this->client->id, 'description' => 'Old app', 'amount_cents' => 8000, 'frequency' => 'monthly', 'next_due_on' => '2026-01-01', 'active' => false]);
+    $old->forceFill(['client_state' => RecurringCharge::ENDED, 'starts_on' => '2022-01-01', 'ends_on' => '2025-12-31'])->save();
+    $items = fn ($c) => collect($c->get('groups'))->pluck('label')->all();
+
+    $c = irBuilder($this)->set('issuedOn', '2022-03-10')->assertSet('tab', 'subs')
+        ->assertSee('Old app')->assertSee('Mar 2022')->assertDontSee('Domain');
+    expect($items($c))->toBe(['Hosting (Nov 2026)']); // nothing added by the date change
+
+    $c->set('issuedOn', '2026-03-05')->assertDontSee('Old app'); // ended before that month
+    $c->set('issuedOn', '2022-03-10')->set('pickSubs', [(string) $old->id])->call('addPicked');
+    expect($items($c))->toBe(['Hosting (Nov 2026)', 'Old app (Mar 2022)'])
+        ->and(BillableLine::where('recurring_charge_id', $old->id)->exists())->toBeFalse(); // created only on save
+    $c->assertSee('on this invoice');
+    $c->call('save')->assertHasNoErrors();
+    expect(BillableLine::where('recurring_charge_id', $old->id)->where('period', '2022-03')->whereNotNull('invoice_id')->exists())->toBeTrue();
+});
+
+it('stops billing after the end date and ends the service', function () {
+    $this->charge->update(['ends_on' => '2026-12-15']);
+    $this->travelTo('2027-02-10');
+    $this->artisan('billing:generate-recurring')->assertSuccessful();
+    expect(BillableLine::where('recurring_charge_id', $this->charge->id)->pluck('period')->sort()->values()->all())->toBe(['2026-11', '2026-12'])
+        ->and($this->charge->fresh()->active)->toBeFalse()->and($this->charge->fresh()->client_state)->toBe(RecurringCharge::ENDED);
+});
+
+it('does not load pending subscription lines of a later month', function () {
+    $this->charge->lineFor('2026-12');
+    expect(collect(irBuilder($this)->get('groups'))->pluck('label')->all())->toBe(['Hosting (Nov 2026)']);
+});

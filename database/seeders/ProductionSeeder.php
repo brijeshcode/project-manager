@@ -142,7 +142,7 @@ class ProductionSeeder extends Seeder
                 $charge->startApproved(false, today());
             } else {
                 $end = $month($s['last_period'])->endOfMonth();
-                $charge->forceFill(['client_state' => RecurringCharge::ENDED, 'client_approved_at' => $start, 'ended_at' => $end, 'next_due_on' => $end->copy()->addDay()->startOfDay()])->save();
+                $charge->forceFill(['client_state' => RecurringCharge::ENDED, 'client_approved_at' => $start, 'ended_at' => $end, 'ends_on' => $end->toDateString(), 'next_due_on' => $end->copy()->addDay()->startOfDay()])->save();
             }
             $n['subscriptions']++;
         }

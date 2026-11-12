@@ -48,7 +48,7 @@ it('seeds subscriptions, sent invoices and payments from the history file, once'
         ->and(BillableLine::whereNull('invoice_id')->count())->toBe(0);
 
     $casa = RecurringCharge::where('description', 'Casajose')->first();
-    expect($casa->active)->toBeFalse()->and($casa->statusBadge()[0])->toBe('Ended')->and($casa->ended_at->toDateString())->toBe('2026-09-30');
+    expect($casa->active)->toBeFalse()->and($casa->statusBadge()[0])->toBe('Ended')->and($casa->ended_at->toDateString())->toBe('2026-09-30')->and($casa->ends_on->toDateString())->toBe('2026-09-30')->and($casa->starts_on->toDateString())->toBe('2021-09-01');
     // one linked line per subscription and month; the server line of the same month stays unlinked
     expect($casa->lines()->pluck('period')->all())->toBe(['2022-09']);
 

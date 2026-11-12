@@ -35,6 +35,7 @@ trait BuildsInvoiceItems
     public array $pickModules = [];
     public array $pickTasks = [];
     public array $pickCharges = [];
+    public array $pickSubs = [];
 
     public bool $showQuantity = false;
 
@@ -45,14 +46,39 @@ trait BuildsInvoiceItems
 
     protected function resetPicks(): void
     {
-        $this->pickSprints = $this->pickModules = $this->pickTasks = $this->pickCharges = [];
+        $this->pickSprints = $this->pickModules = $this->pickTasks = $this->pickCharges = $this->pickSubs = [];
+    }
+
+    /** A new invoice date shows the subscriptions running in that month. */
+    public function updatedIssuedOn(): void
+    {
+        $this->pickSubs = [];
+        $this->tab = 'subs';
+    }
+
+    /** Subscriptions running and due in the invoice-date month, with that period's line if one exists and why it can't be picked. */
+    protected function subscriptions(Client $client, array $used): Collection
+    {
+        $month = rescue(fn () => \Carbon\Carbon::parse($this->issuedOn), today(), false);
+        $picked = collect([...$this->groups, ...$this->parkedGroups])->pluck('sub')->filter()->all();
+
+        return $client->recurringCharges()->where(fn ($q) => $q->whereNull('client_state')->orWhere('client_state', '!=', \App\Models\RecurringCharge::AWAITING))->orderBy('description')->get()
+            ->filter(fn ($c) => $c->fallsDueIn($month) && ! in_array($c->periodOf($month), $c->skipped_periods ?? [], true))
+            ->map(function ($c) use ($month, $used, $picked) {
+                $period = $c->periodOf($month);
+                $line = BillableLine::with('invoice')->where('recurring_charge_id', $c->id)->where('period', $period)->first();
+                $here = in_array("{$c->id}:{$period}", $picked, true) || ($line && in_array($line->id, $used, true));
+                $why = $line?->invoice ? 'on '.$line->invoice->number : ($here ? 'on this invoice' : null);
+
+                return ['charge' => $c, 'period' => $period, 'line' => $line, 'why' => $why];
+            })->values();
     }
 
     /** Opens the first tab that has something to pick. */
     protected function pickFirstTab(Client $client): void
     {
         $p = $this->picker($client);
-        $this->tab = $p['sprints']->isNotEmpty() ? 'sprints' : ($p['modules']->isNotEmpty() ? 'modules' : ($p['charges']->isNotEmpty() ? 'charges' : 'sprints'));
+        $this->tab = $p['sprints']->isNotEmpty() ? 'sprints' : ($p['modules']->isNotEmpty() ? 'modules' : ($p['subs']->whereNull('why')->isNotEmpty() ? 'subs' : ($p['charges']->isNotEmpty() ? 'charges' : 'sprints')));
     }
 
     /** Line ids already on the invoice or set aside: hidden from the picker. */
@@ -83,6 +109,7 @@ trait BuildsInvoiceItems
             'modules' => $lines->groupBy(fn ($l) => $l->task->module_id)
                 ->map(fn ($g) => ['module' => $g->first()->task->module, 'lines' => $g, 'free' => $g->reject(fn ($l) => in_array($l->id, $bySprint, true))])->values(),
             'charges' => $charges,
+            'subs' => $this->subscriptions($client, $used),
             'bySprint' => $bySprint,
             'byModule' => $byModule,
         ];
@@ -102,12 +129,37 @@ trait BuildsInvoiceItems
         ];
     }
 
-    /** Every due recurring service of the client goes on the invoice by default; removing one sets it aside (stays pending). */
+    /** A picked subscription period with no line yet: the line is only created when the invoice is saved. */
+    protected static function subGroup(\App\Models\RecurringCharge $c, string $period): array
+    {
+        $shown = strlen($period) === 7 ? \Carbon\Carbon::createFromFormat('!Y-m', $period)->format('M Y') : $period;
+
+        return ['label' => "{$c->description} ($shown)", 'lines' => [], 'sub' => "{$c->id}:{$period}",
+            'amount' => Money::toInput((int) $c->amount_cents), 'period' => $shown, 'currency' => strtoupper($c->currency())];
+    }
+
+    /** On save: creates the lines of picked subscription periods (only the client's own services). */
+    protected function createPickedSubLines(): void
+    {
+        $client = $this->itemsClient();
+        foreach ($this->groups as $i => $g) {
+            if (isset($g['sub'])) {
+                [$id, $period] = explode(':', (string) $g['sub'], 2);
+                $charge = $client->recurringCharges()->findOrFail((int) $id);
+                abort_unless(preg_match('/^\d{4}(-\d{2})?$/', $period) && strlen($period) === ($charge->frequency === \App\Enums\RecurringFrequency::Monthly ? 7 : 4), 422);
+                $this->groups[$i]['lines'] = [(string) $charge->lineFor($period)->id];
+                unset($this->groups[$i]['sub']);
+            }
+        }
+    }
+
+    /** Every due recurring service of the client up to the invoice month goes on the invoice by default; removing one sets it aside (stays pending). */
     protected function addDueRecurring(Client $client): void
     {
         $used = $this->usedLineIds();
+        $month = rescue(fn () => \Carbon\Carbon::parse($this->issuedOn), today(), false);
         BillableLine::pending()->where('client_id', $client->id)->whereNotNull('recurring_charge_id')->orderBy('period')->orderBy('id')->get()
-            ->reject(fn ($l) => in_array($l->id, $used, true))
+            ->reject(fn ($l) => in_array($l->id, $used, true) || $l->period > $month->format(strlen((string) $l->period) === 7 ? 'Y-m' : 'Y'))
             ->each(fn ($l) => $this->groups[] = self::recurringGroup($l));
     }
 
@@ -149,6 +201,15 @@ trait BuildsInvoiceItems
         foreach ($p['charges'] as $c) {
             if (in_array((string) $c->id, $this->pickCharges, true)) {
                 $this->groups[] = $c->recurring_charge_id ? self::recurringGroup($c) : ['label' => $c->description, 'lines' => [(string) $c->id]];
+            }
+        }
+        foreach ($p['subs'] as $s) {
+            if (! $s['why'] && in_array((string) $s['charge']->id, $this->pickSubs, true)) {
+                if (! $s['line']) {
+                    $this->groups[] = self::subGroup($s['charge'], $s['period']);
+                } elseif (! in_array($s['line']->id, $this->usedLineIds(), true)) {
+                    $this->groups[] = self::recurringGroup($s['line']);
+                }
             }
         }
         $this->resetPicks();
@@ -261,7 +322,7 @@ trait BuildsInvoiceItems
         return [
             'groups' => 'array|max:200',
             'groups.*.label' => ['bail', 'required', 'string', 'max:500'],
-            'groups.*.lines' => 'required|array|max:500',
+            'groups.*.lines' => 'required_without:groups.*.sub|array|max:500',
             'groups.*.lines.*' => ['bail', 'regex:/^\d{1,18}$/'],
             'groups.*.amount' => ['bail', 'sometimes', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('Must be greater than zero.')],
             'custom' => 'array|max:50',
@@ -271,6 +332,7 @@ trait BuildsInvoiceItems
     /** @return array{0: array<int,int>, 1: array<int,string>} line ids in item order, and line id => printed label */
     protected function groupLines(): array
     {
+        $this->createPickedSubLines(); // called after validation, right before the invoice is written
         $ids = [];
         $labels = [];
         foreach ($this->groups as $g) {
@@ -313,7 +375,8 @@ trait BuildsInvoiceItems
         $ids = collect([...$this->groups, ...$this->parkedGroups])->pluck('lines')->flatten()->map(fn ($i) => (int) $i)->unique();
         $work = BillableLine::with(['project', 'client'])->where('client_id', $client->id)->whereIn('id', $ids)->get()->keyBy('id');
         $sum = fn (array $g) => (int) collect($g['lines'])->sum(fn ($id) => ($l = $work[(int) $id] ?? null)
-            ? $conv(isset($g['amount']) ? self::num($g['amount']) : (int) $l->amount_cents, $l->lineCurrency()) : 0);
+            ? $conv(isset($g['amount']) ? self::num($g['amount']) : (int) $l->amount_cents, $l->lineCurrency()) : 0)
+            + (isset($g['sub']) ? $conv(self::num($g['amount']), $g['currency']) : 0);
         $custom = array_map(fn ($r) => $this->rowAmount($r), $this->custom);
         $subtotal = array_sum(array_map($sum, $this->groups)) + array_sum($custom) + $extra;
         $tax = $subtotal < intdiv(PHP_INT_MAX, 20000) ? intdiv($subtotal * min(self::num($this->taxPercent, 3), 10000) + 5000, 10000) : 0;

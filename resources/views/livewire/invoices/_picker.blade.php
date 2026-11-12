@@ -5,6 +5,7 @@
 
                     @php
                         $tabs = ['sprints' => ['Sprints', $picker['sprints']->count()], 'modules' => ['Modules', $picker['modules']->count()], 'tasks' => ['Tasks', $picker['lines']->count()]];
+                        $tabs['subs'] = ['Subscriptions', $picker['subs']->whereNull('why')->count()];
                         if ($picker['charges']->isNotEmpty()) $tabs['charges'] = ['Other charges', $picker['charges']->count()];
                         if (! isset($tabs[$tab])) $tab = 'sprints';
                     @endphp
@@ -79,6 +80,23 @@
                                 @if ($loop->last)</ul>@endif
                             @empty
                                 <p class="{{ $empty }}">No completed, unbilled tasks.</p>
+                            @endforelse
+                        @elseif ($tab === 'subs')
+                            @forelse ($picker['subs'] as $s)
+                                @if ($loop->first)<ul class="divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-gray-700 dark:border-gray-700">@endif
+                                <li wire:key="psub-{{ $s['charge']->id }}">
+                                    <label class="{{ $row }} {{ $s['why'] ? 'opacity-60' : 'cursor-pointer' }}">
+                                        <input type="checkbox" wire:model.live="pickSubs" value="{{ $s['charge']->id }}" @disabled($s['why']) class="{{ $box }}" />
+                                        <span class="min-w-0 flex-1">
+                                            <span class="text-slate-800 dark:text-gray-100">{{ $s['charge']->description }}</span>
+                                            <span class="mt-0.5 flex items-center gap-1 text-xs text-slate-500 dark:text-gray-400"><x-icon name="repeat" class="h-3 w-3" />{{ ucfirst($s['charge']->frequency->value) }} · {{ strlen($s['period']) === 7 ? \Carbon\Carbon::createFromFormat('!Y-m', $s['period'])->format('M Y') : $s['period'] }}@if ($s['why']) · {{ $s['why'] }}@endif</span>
+                                        </span>
+                                        <span class="tabular-nums text-slate-800 dark:text-gray-100">{{ \App\Support\Money::format((int) $s['charge']->amount_cents, $s['charge']->currency()) }}</span>
+                                    </label>
+                                </li>
+                                @if ($loop->last)</ul>@endif
+                            @empty
+                                <p class="{{ $empty }}">No active subscription falls due in the invoice month.</p>
                             @endforelse
                         @else
                             <ul class="divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-gray-700 dark:border-gray-700">

@@ -18,7 +18,7 @@ class RecurringCharge extends Model
     use FreezesLocalAmounts;
 
     protected $fillable = ['client_id', 'project_id', 'description', 'amount_cents', 'exchange_rate', 'local_amount_cents', 'frequency', 'next_due_on', 'due_day', 'active',
-        'client_state', 'client_note', 'client_approved_at', 'cancel_note', 'cancel_requested_at', 'ended_at', 'skipped_periods', 'resume_on', 'pass_through'];
+        'client_state', 'client_note', 'client_approved_at', 'cancel_note', 'cancel_requested_at', 'ended_at', 'skipped_periods', 'resume_on', 'pass_through', 'starts_on', 'ends_on'];
 
     public const AWAITING = 'awaiting';
     public const CANCEL_REQUESTED = 'cancel_requested';
@@ -28,7 +28,7 @@ class RecurringCharge extends Model
     {
         return ['frequency' => RecurringFrequency::class, 'next_due_on' => 'date', 'active' => 'boolean',
             'client_approved_at' => 'datetime', 'cancel_requested_at' => 'datetime', 'ended_at' => 'datetime',
-            'skipped_periods' => 'array', 'resume_on' => 'date', 'pass_through' => 'boolean'];
+            'skipped_periods' => 'array', 'resume_on' => 'date', 'pass_through' => 'boolean', 'starts_on' => 'date', 'ends_on' => 'date'];
     }
 
     /** [label, badge colour] for every list and page. */
@@ -64,7 +64,7 @@ class RecurringCharge extends Model
     {
         abort_unless($this->client_state === self::CANCEL_REQUESTED, 422);
         $approve
-            ? $this->update(['client_state' => self::ENDED, 'active' => false, 'ended_at' => now()])
+            ? $this->update(['client_state' => self::ENDED, 'active' => false, 'ended_at' => now(), 'ends_on' => $this->ends_on ?? today()])
             : $this->update(['client_state' => null]);
     }
 
@@ -72,6 +72,7 @@ class RecurringCharge extends Model
     {
         static::creating(function (self $c) {
             $c->due_day ??= Carbon::parse($c->next_due_on)->day;
+            $c->starts_on ??= $c->next_due_on;
         });
     }
 
@@ -170,9 +171,36 @@ class RecurringCharge extends Model
         }
     }
 
-    private function periodOf(CarbonInterface $due): string
+    public function periodOf(CarbonInterface $due): string
     {
         return $due->format($this->frequency === RecurringFrequency::Monthly ? 'Y-m' : 'Y');
+    }
+
+    /** Running in that month (between start and end), and due in it: monthly every month, yearly in its start month. */
+    public function fallsDueIn(CarbonInterface $month): bool
+    {
+        $start = $this->starts_on ?? $this->next_due_on;
+
+        return $start->lte($month->copy()->endOfMonth())
+            && (! $this->ends_on || $this->ends_on->gte($month->copy()->startOfMonth()))
+            && ($this->frequency === RecurringFrequency::Monthly || $start->month === $month->month);
+    }
+
+    /** Ends every running service whose end date has passed. Returns how many ended. */
+    public static function endDue(CarbonInterface $today): int
+    {
+        return static::where('active', true)->whereNotNull('ends_on')->whereDate('ends_on', '<', $today)
+            ->update(['active' => false, 'client_state' => self::ENDED, 'ended_at' => now()]);
+    }
+
+    /** The one billable line of a period, created pending if missing (DB unique on charge + period). */
+    public function lineFor(string $period): BillableLine
+    {
+        return BillableLine::createOrFirst(
+            ['recurring_charge_id' => $this->id, 'period' => $period],
+            ['client_id' => $this->client_id, 'project_id' => $this->project_id, 'description' => $this->description,
+                'quantity' => 1, 'unit_price_cents' => $this->amount_cents, 'amount_cents' => $this->amount_cents, 'pass_through' => (bool) $this->pass_through],
+        );
     }
 
     /** How many periods are already due on or before $today (for the "add past periods" hint). */
@@ -237,13 +265,9 @@ class RecurringCharge extends Model
     public function generateDue(CarbonInterface $today): int
     {
         $created = 0;
-        for ($i = 0; $i < self::MAX_PERIODS_PER_RUN && $this->active && $this->next_due_on->lte($today); $i++) {
+        for ($i = 0; $i < self::MAX_PERIODS_PER_RUN && $this->active && $this->next_due_on->lte($today) && (! $this->ends_on || $this->next_due_on->lte($this->ends_on)); $i++) {
             $due = $this->next_due_on;
-            $line = BillableLine::createOrFirst(
-                ['recurring_charge_id' => $this->id, 'period' => $this->periodOf($due)],
-                ['client_id' => $this->client_id, 'project_id' => $this->project_id, 'description' => $this->description,
-                    'quantity' => 1, 'unit_price_cents' => $this->amount_cents, 'amount_cents' => $this->amount_cents, 'pass_through' => (bool) $this->pass_through],
-            );
+            $line = $this->lineFor($this->periodOf($due));
             $created += (int) $line->wasRecentlyCreated;
 
             $this->next_due_on = $this->advance($due);
