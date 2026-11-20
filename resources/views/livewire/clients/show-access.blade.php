@@ -26,7 +26,9 @@
         <div class="mt-3 space-y-2">
             @foreach (\App\Models\Client::PORTAL_FEATURES as $key => [$label, $hint])
                 <label class="flex items-start gap-3 text-sm" wire:key="pf-{{ $key }}">
-                    <input type="checkbox" class="mt-0.5 rounded border-slate-300 dark:border-gray-600" @checked($client->portalShows($key)) wire:click="togglePortalFeature('{{ $key }}')" data-test="portal-feature-{{ $key }}" />
+                    @php $on = $client->portalShows($key); @endphp
+                    <input type="checkbox" class="mt-0.5 rounded border-slate-300 dark:border-gray-600" @checked($on) data-test="portal-feature-{{ $key }}"
+                        x-on:click.prevent="ask = @js(['method' => 'togglePortalFeature', 'id' => $key, 'title' => ($on ? 'Hide ' : 'Show ').$label, 'text' => ($on ? 'Hide' : 'Show').' "'.$label.'" '.($on ? 'from' : 'in').' the portal for '.$client->name.'? '.$hint, 'button' => $on ? 'Hide' : 'Show'])" />
                     <span><span class="font-medium text-gray-900 dark:text-white">{{ $label }}</span> <span class="text-gray-500 dark:text-gray-400">· {{ $hint }}</span></span>
                 </label>
             @endforeach

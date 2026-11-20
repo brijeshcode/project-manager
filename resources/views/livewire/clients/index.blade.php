@@ -1,35 +1,41 @@
 <div x-data="{ del: null }">
     <x-ui.page-header title="Clients" subtitle="Manage your clients and their information">
         <x-slot name="actions">
+            <x-ui.filter-button :active="(int) ($status !== '')" />
             <a href="{{ route('clients.create') }}" wire:navigate class="btn btn-primary">
                 <x-nav.icon name="plus" class="h-5 w-5" /> Add Client
             </a>
         </x-slot>
     </x-ui.page-header>
 
-    <x-ui.filter-card>
-        <div class="sm:col-span-2">
-            <label for="search" class="label">Search Clients</label>
+    <x-ui.filter-panel>
+        <x-slot:bar>
+            <label for="search" class="sr-only">Search Clients</label>
             <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by name, code, contact or email..." class="input" />
+        </x-slot:bar>
+        <x-slot:chips>
+            @if ($status !== '')<x-ui.filter-chip :label="'Status: '.ucfirst($status)" wire:click="$set('status', '')" />@endif
+        </x-slot:chips>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+                <label for="status" class="label">Status</label>
+                <select wire:model="status" id="status" class="select">
+                    <option value="">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="archived">Archived</option>
+                </select>
+            </div>
+            <div>
+                <label for="per-page" class="label">Per Page</label>
+                <select wire:model="perPage" id="per-page" class="select">
+                    @foreach (\App\Support\Settings::PAGE_SIZES as $n)
+                        <option value="{{ $n }}">{{ $n }}</option>
+                    @endforeach
+                </select>
+            </div>
         </div>
-        <div>
-            <label for="status" class="label">Status</label>
-            <select wire:model.live="status" id="status" class="select">
-                <option value="">All statuses</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="archived">Archived</option>
-            </select>
-        </div>
-        <div>
-            <label for="per-page" class="label">Per Page</label>
-            <select wire:model.live="perPage" id="per-page" class="select">
-                @foreach (\App\Support\Settings::PAGE_SIZES as $n)
-                    <option value="{{ $n }}">{{ $n }}</option>
-                @endforeach
-            </select>
-        </div>
-    </x-ui.filter-card>
+    </x-ui.filter-panel>
 
     @if ($clients->isEmpty())
         @if ($search !== '' || $status !== '')

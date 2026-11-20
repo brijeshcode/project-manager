@@ -146,12 +146,35 @@
         </div>
 
         <div role="tabpanel" x-show="tab === 'payments'" x-cloak class="p-6">
-            @can('manage-money')
-                <div class="mb-4 flex justify-end">
+            @php
+                $paymentTypes = collect(\App\Enums\PaymentType::cases())->mapWithKeys(fn ($t) => [$t->value => ucfirst(str_replace('_', ' ', $t->value))])->all();
+                $paymentDates = ['label' => 'Paid', 'id' => 'payment', 'method' => 'setPaymentPeriod', 'fromModel' => 'paymentFrom', 'toModel' => 'paymentTo', 'from' => $paymentFrom, 'to' => $paymentTo, 'period' => $paymentPeriod];
+                $paymentActive = isset($paymentTypes[$paymentType]) + ($paymentFrom !== '' || $paymentTo !== '');
+            @endphp
+            <div class="mb-4 flex justify-end gap-2">
+                <x-ui.filter-button for="client-payments" :active="$paymentActive" />
+                @can('manage-money')
                     <a href="{{ route('payments.create', ['client' => $client->id]) }}" wire:navigate class="btn btn-primary" data-test="client-add-payment"><x-nav.icon name="plus" class="h-5 w-5" /> Record payment</a>
+                @endcan
+            </div>
+            <x-ui.filter-panel for="client-payments">
+                <div class="sm:w-60">
+                    <label for="paymentType" class="sr-only">Type</label>
+                    <select wire:model="paymentType" id="paymentType" class="select">
+                        @foreach (['' => 'All types'] + $paymentTypes as $value => $text)
+                            <option value="{{ $value }}">{{ $text }}</option>
+                        @endforeach
+                    </select>
                 </div>
-            @endcan
-            @if ($payments->isEmpty())
+                @include('livewire.clients._date-filter', $paymentDates)
+                <x-slot:chips>
+                    @isset($paymentTypes[$paymentType])<x-ui.filter-chip :label="'Type: '.$paymentTypes[$paymentType]" wire:click="$set('paymentType', '')" />@endisset
+                    @include('livewire.clients._date-filter', $paymentDates + ['chip' => true])
+                </x-slot:chips>
+            </x-ui.filter-panel>
+            @if ($payments->isEmpty() && $paymentActive)
+                <x-ui.empty-state title="No matches" message="No payments match your filters." name="credit-card" />
+            @elseif ($payments->isEmpty())
                 <x-ui.empty-state title="No payments yet" message="Payments received from this client will appear here." name="credit-card" />
             @else
                 <div class="overflow-x-auto">

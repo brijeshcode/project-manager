@@ -2,7 +2,7 @@
     <x-ui.page-header title="Invoices" subtitle="Bill clients for completed work. Payments settle the client balance.">
         <x-slot:actions>
             @include('livewire.projects._view-toggle', ['live' => true])
-            <a href="{{ route('payments.create') }}" class="btn btn-secondary">Record payment</a>
+            <x-ui.filter-button :active="in_array($status, ['draft', 'sent', 'void'], true) + ($clientFilter !== '') + ($from !== '' || $to !== '')" />
             <a href="{{ route('invoices.create') }}" class="btn btn-primary">New invoice</a>
         </x-slot:actions>
     </x-ui.page-header>
@@ -25,36 +25,52 @@
         <x-ui.stat label="Clients billed" :value="$stats['clients']" icon="users" color="yellow" hint="With a sent invoice" />
     </div>
 
-    @php $filtering = $search !== '' || $status !== '' || $clientFilter !== '' || $from !== '' || $to !== ''; @endphp
-    <div class="card mb-6 space-y-4 p-4">
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            <div class="sm:col-span-2">
-                <label for="search" class="sr-only">Search invoices</label>
-                <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by number or client..." class="input" />
-            </div>
+    @php
+        $filtering = $search !== '' || $status !== '' || $clientFilter !== '' || $from !== '' || $to !== '';
+        $statuses = ['draft' => 'Not sent', 'sent' => 'Sent', 'void' => 'Cancelled'];
+        $day = fn ($d) => rescue(fn () => \Carbon\Carbon::parse($d)->format('j M Y'), $d, false);
+        $dated = $from !== '' || $to !== '';
+        $dateChip = $period ? ['month' => 'This month', 'year' => 'This year', 'fy' => 'Financial year'][$period]
+            : ($year ?: ($from !== '' && $to !== '' ? $day($from).' – '.$day($to) : ($from !== '' ? 'from '.$day($from) : 'until '.$day($to))));
+    @endphp
+    <x-ui.filter-panel>
+        <x-slot:bar>
+            <label for="search" class="sr-only">Search invoices</label>
+            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by number or client..." class="input" />
+        </x-slot:bar>
+        <x-slot:chips>
+            @isset($statuses[$status])
+                <x-ui.filter-chip :label="'Status: '.$statuses[$status]" wire:click="$set('status', '')" />
+            @endisset
+            @if ($clientFilter !== '')
+                <x-ui.filter-chip :label="'Client: '.($clients->firstWhere('id', (int) $clientFilter)?->name ?? '—')" wire:click="$set('clientFilter', '')" />
+            @endif
+            @if ($dated)
+                <x-ui.filter-chip :label="'Issued: '.$dateChip" wire:click="setPeriod('')" />
+            @endif
+            @if ($filtering)
+                <button type="button" wire:click="clearFilters" class="link text-sm">Clear all filters</button>
+            @endif
+        </x-slot:chips>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
                 <label for="status" class="sr-only">Status</label>
-                <select wire:model.live="status" id="status" class="select">
-                    @foreach (['' => 'All statuses', 'draft' => 'Not sent', 'sent' => 'Sent', 'void' => 'Cancelled'] as $value => $text)
+                <select wire:model="status" id="status" class="select">
+                    @foreach (['' => 'All statuses'] + $statuses as $value => $text)
                         <option value="{{ $value }}">{{ $text }}</option>
                     @endforeach
                 </select>
             </div>
             <div>
                 <label for="clientFilter" class="sr-only">Client</label>
-                <select wire:model.live="clientFilter" id="clientFilter" class="select">
+                <select wire:model="clientFilter" id="clientFilter" class="select">
                     <option value="">All clients</option>
                     @foreach ($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
                 </select>
             </div>
         </div>
-        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-gray-700">
-            <x-ui.date-filter label="Issued" :from="$from" :to="$to" :period="$period" :years="$years" :year="$year" />
-            @if ($filtering)
-                <button type="button" wire:click="clearFilters" class="link text-sm">Clear all filters</button>
-            @endif
-        </div>
-    </div>
+        <x-ui.date-filter label="Issued" :from="$from" :to="$to" :period="$period" :years="$years" :year="$year" defer />
+    </x-ui.filter-panel>
 
     @if ($invoices->isEmpty())
         @if ($filtering)

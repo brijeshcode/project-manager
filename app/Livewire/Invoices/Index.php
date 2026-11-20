@@ -26,6 +26,9 @@ class Index extends Component
     public function mount(): void
     {
         $this->authorize('manage-money');
+        if (! request()->query->has('from') && ! request()->query->has('to')) {
+            [$this->from, $this->to] = $this->periods()['fy'];
+        }
     }
 
     /** Status by hand from the list: not sent or sent. Cancelling stays on the invoice page. */

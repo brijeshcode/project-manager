@@ -31,6 +31,9 @@ class Index extends Component
     public function mount(): void
     {
         $this->authorize('manage-money');
+        if (! request()->query->has('from') && ! request()->query->has('to')) {
+            [$this->from, $this->to] = $this->periods()['fy'];
+        }
     }
 
     public function updatedClientFilter(): void
@@ -82,6 +85,8 @@ class Index extends Component
         return view('livewire.payments.index', [
             'local' => LocalCurrency::code(),
             'stats' => MoneyStats::payments($filtered),
+            'byCurrency' => (clone $filtered)->reorder()->get(['currency_id', 'amount_cents'])->groupBy(fn ($p) => $p->currency ?? LocalCurrency::code())
+                ->map(fn ($rows) => ['total' => (int) $rows->sum('amount_cents'), 'average' => intdiv((int) $rows->sum('amount_cents'), $rows->count())])->all(),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'types' => PaymentType::cases(),
             'period' => $this->activePeriod(),

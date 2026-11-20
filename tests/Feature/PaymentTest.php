@@ -28,7 +28,7 @@ function payOwner(): User
 
 function payClient(string $name = 'Acme'): Client
 {
-    return Client::create(['name' => $name, 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    return Client::create(['name' => $name, 'currency' => 'USD', 'billing_mode' => 'fixed', 'portal_features' => array_keys(Client::PORTAL_FEATURES)]);
 }
 
 function payInvoice(Client $c, int $cents): Invoice

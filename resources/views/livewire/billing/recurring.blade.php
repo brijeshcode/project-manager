@@ -6,6 +6,7 @@
 <div>
     <x-ui.page-header title="Recurring services" subtitle="Hosting, retainers and other repeating fees. A billable line is added automatically each time one falls due.">
         <x-slot:actions>
+            <x-ui.filter-button :active="(int) ($clientFilter !== '')" />
             <a href="{{ route('billing.bank-accounts') }}" class="btn btn-ghost">Bank accounts</a>
             <a href="{{ route('billing.recurring.create') }}" wire:navigate class="btn btn-primary"><x-icon name="plus" class="h-4 w-4" /> New service</a>
         </x-slot:actions>
@@ -18,27 +19,31 @@
         <x-ui.stat label="Invoiced to date" :value="$sums($stats['invoiced'])" icon="check" color="purple" :hint="($foreign($stats['invoiced']) ? '≈ '.$money($stats['invoiced_local'], $local).' · ' : '').$stats['invoiced_count'].' '.\Illuminate\Support\Str::plural('time', $stats['invoiced_count']).' on sent invoices'" />
     </div>
 
-    <div class="card mb-6 p-4">
-        <div class="-mx-1 mb-4 flex gap-1 overflow-x-auto border-b border-slate-100 px-1 pb-3 dark:border-gray-700" role="tablist" aria-label="Filter by status">
-            @foreach (['' => 'All', 'active' => 'Active', 'paused' => 'Paused'] as $value => $text)
-                <button type="button" wire:click="$set('status', '{{ $value }}')" role="tab" aria-selected="{{ $status === $value ? 'true' : 'false' }}"
-                    class="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition {{ $status === $value ? 'bg-brand-50 text-brand-700 dark:bg-blue-900/30 dark:text-blue-300' : 'text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-700' }}">{{ $text }}</button>
-            @endforeach
-        </div>
+    <div class="-mx-1 mb-4 flex gap-1 overflow-x-auto px-1" role="tablist" aria-label="Filter by status">
+        @foreach (['' => 'All', 'active' => 'Active', 'paused' => 'Paused'] as $value => $text)
+            <button type="button" wire:click="$set('status', '{{ $value }}')" role="tab" aria-selected="{{ $status === $value ? 'true' : 'false' }}"
+                class="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition {{ $status === $value ? 'bg-brand-50 text-brand-700 dark:bg-blue-900/30 dark:text-blue-300' : 'text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-700' }}">{{ $text }}</button>
+        @endforeach
+    </div>
+
+    <x-ui.filter-panel>
+        <x-slot:bar>
+            <label for="search" class="sr-only">Search services</label>
+            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by service, client or project..." class="input" />
+        </x-slot:bar>
+        <x-slot:chips>
+            @if ($clientFilter !== '')<x-ui.filter-chip :label="'Client: '.($clients->firstWhere('id', (int) $clientFilter)?->name ?? $clientFilter)" wire:click="$set('clientFilter', '')" />@endif
+        </x-slot:chips>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div class="sm:col-span-2">
-                <label for="search" class="sr-only">Search services</label>
-                <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by service, client or project..." class="input" />
-            </div>
             <div>
-                <label for="clientFilter" class="sr-only">Client</label>
-                <select wire:model.live="clientFilter" id="clientFilter" class="select">
+                <label for="clientFilter" class="label">Client</label>
+                <select wire:model="clientFilter" id="clientFilter" class="select">
                     <option value="">All clients</option>
                     @foreach ($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
                 </select>
             </div>
         </div>
-    </div>
+    </x-ui.filter-panel>
 
     @if ($charges->isEmpty())
         @if ($search !== '' || $status !== '' || $clientFilter !== '')

@@ -6,21 +6,17 @@
     $portal ??= false;
 @endphp
 <div class="space-y-4">
-    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div class="flex flex-wrap items-center gap-2">
-            <label for="st-from" class="text-sm text-slate-500 dark:text-gray-400">Date</label>
-            <input wire:model.live="from" id="st-from" type="date" class="input w-auto dark:[color-scheme:dark]" aria-label="Statement from" />
-            <span class="text-sm text-slate-400">to</span>
-            <input wire:model.live="to" id="st-to" type="date" class="input w-auto dark:[color-scheme:dark]" aria-label="Statement to" />
-            @foreach (['month' => 'This month', 'year' => 'This year', 'fy' => 'This financial year'] as $p => $text)
-                <button type="button" wire:click="setPeriod('{{ $p }}')" @class(['rounded-lg px-3 py-1.5 text-sm font-medium transition', 'bg-brand-50 text-brand-700 dark:bg-blue-900/30 dark:text-blue-300' => $statement['period'] === $p, 'text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-700' => $statement['period'] !== $p]) data-test="statement-period-{{ $p }}">{{ $text }}</button>
-            @endforeach
-            @if ($filtered)
-                <button type="button" wire:click="setPeriod('')" class="link text-sm">Any date</button>
-            @endif
-        </div>
-        <p class="text-xs text-gray-500 dark:text-gray-400">Amounts in {{ $client->currency }}. Balance = payments − sent invoices; negative means {{ $portal ? 'you owe us' : 'the client owes you' }}.</p>
-    </div>
+    @php $dates = ['label' => 'Date', 'id' => 'statement', 'method' => 'setPeriod', 'fromModel' => 'from', 'toModel' => 'to', 'from' => $from, 'to' => $to, 'period' => $statement['period']]; @endphp
+    <x-ui.filter-panel for="client-statement" class="!mb-0">
+        <x-slot:bar>
+            <div class="flex items-center justify-between gap-3">
+                <p class="text-xs text-gray-500 dark:text-gray-400">Amounts in {{ $client->currency }}. Balance = payments − sent invoices; negative means {{ $portal ? 'you owe us' : 'the client owes you' }}.</p>
+                <x-ui.filter-button for="client-statement" :active="(int) $filtered" />
+            </div>
+        </x-slot:bar>
+        @include('livewire.clients._date-filter', $dates)
+        <x-slot:chips>@include('livewire.clients._date-filter', $dates + ['chip' => true])</x-slot:chips>
+    </x-ui.filter-panel>
 
     @if ($statement['rows']->isEmpty() && $statement['opening'] === 0)
         <x-ui.empty-state :title="$filtered ? 'Nothing in this period' : 'No transactions yet'" :message="$filtered ? 'No sent invoices or payments fall in these dates.' : 'Sent invoices and payments for this client will appear here.'" name="document" />

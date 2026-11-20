@@ -19,7 +19,7 @@ class Client extends Model
     public const PORTAL_FEATURES = [
         'payments'       => ['Payments', 'Payments pages and recent payments on the dashboard.'],
         'statement'      => ['Statement', 'Statement page and account balance on the dashboard.'],
-        'billing_totals' => ['Billing totals', 'Total invoiced on Invoices; invoiced amounts and the view icon on Subscriptions.'],
+        'billing_totals' => ['Billing totals', 'Invoice count and total invoiced on Invoices; invoiced amounts and the view icon on Subscriptions.'],
     ];
 
     protected $fillable = [

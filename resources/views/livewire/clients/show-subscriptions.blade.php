@@ -1,10 +1,35 @@
 <div class="space-y-4">
-    <div class="flex items-center justify-between">
+    @php $subStatuses = ['active' => 'Active', 'paused' => 'Paused']; @endphp
+    <div class="flex items-center justify-between gap-2">
         <p class="text-sm text-gray-500 dark:text-gray-400">Recurring services billed to this client.</p>
-        <a href="{{ route('billing.recurring.create', ['client' => $client->id]) }}" wire:navigate class="btn btn-primary"><x-nav.icon name="plus" class="h-5 w-5" /> Add subscription</a>
+        <div class="flex items-center gap-2">
+            <x-ui.filter-button for="client-subscriptions" :active="(int) isset($subStatuses[$subscriptionStatus])" />
+            <a href="{{ route('billing.recurring.create', ['client' => $client->id]) }}" wire:navigate class="btn btn-primary"><x-nav.icon name="plus" class="h-5 w-5" /> Add subscription</a>
+        </div>
     </div>
 
-    @if ($subscriptions->isEmpty())
+    <x-ui.filter-panel for="client-subscriptions" class="!mb-0">
+        <x-slot:bar>
+            <label for="subscriptionSearch" class="sr-only">Search subscriptions</label>
+            <input wire:model.live.debounce.300ms="subscriptionSearch" id="subscriptionSearch" type="search" maxlength="100" placeholder="Search by service or project..." class="input" />
+        </x-slot:bar>
+        <div class="sm:w-60">
+            <label for="subscriptionStatus" class="sr-only">Status</label>
+            <select wire:model="subscriptionStatus" id="subscriptionStatus" class="select">
+                @foreach (['' => 'All statuses'] + $subStatuses as $value => $text)
+                    <option value="{{ $value }}">{{ $text }}</option>
+                @endforeach
+            </select>
+        </div>
+        <x-slot:chips>
+            @if ($subscriptionSearch !== '')<x-ui.filter-chip :label="'Search: '.$subscriptionSearch" wire:click="$set('subscriptionSearch', '')" />@endif
+            @isset($subStatuses[$subscriptionStatus])<x-ui.filter-chip :label="'Status: '.$subStatuses[$subscriptionStatus]" wire:click="$set('subscriptionStatus', '')" />@endisset
+        </x-slot:chips>
+    </x-ui.filter-panel>
+
+    @if ($subscriptions->isEmpty() && ($subscriptionSearch !== '' || isset($subStatuses[$subscriptionStatus])))
+        <x-ui.empty-state title="No matches" message="No subscriptions match your filters." name="refresh" />
+    @elseif ($subscriptions->isEmpty())
         <x-ui.empty-state title="No subscriptions yet" message="Recurring services for this client, like hosting or maintenance, will appear here." name="refresh" />
     @else
         <div class="overflow-x-auto">

@@ -371,3 +371,18 @@ it('records the date a client stopped being active', function () {
     $client->update(['status' => 'active']);
     expect($client->fresh()->inactive_since)->toBeNull();
 });
+
+it('client page tab filters narrow the list and a chip clears its filter', function () {
+    $c = cpClient();
+    Project::create(['client_id' => $c->id, 'name' => 'Alpha Build', 'status' => 'active']);
+    Project::create(['client_id' => $c->id, 'name' => 'Beta Site', 'status' => 'completed']);
+
+    Livewire::actingAs(cpAdmin())->test(Show::class, ['client' => $c])
+        ->assertSee(['Alpha Build', 'Beta Site'])->assertDontSee('Status: Completed')
+        ->set('projectStatus', 'completed')
+        ->assertSee('Beta Site')->assertDontSee('Alpha Build')
+        ->assertSee('Status: Completed')->assertSeeHtml("wire:click=\"\$set('projectStatus', '')\"")
+        ->set('projectSearch', 'zzz')->assertSee('No projects match your filters.')
+        ->set('projectStatus', '')->set('projectSearch', '')
+        ->assertSee(['Alpha Build', 'Beta Site'])->assertDontSee('Status: Completed');
+});

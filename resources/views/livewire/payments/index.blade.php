@@ -1,6 +1,7 @@
 <div>
     <x-ui.page-header title="Payments" :subtitle="'Money received from clients settles their balance. Local currency: '.$local">
         <x-slot:actions>
+            <x-ui.filter-button :active="($clientFilter !== '') + ($typeFilter !== '') + ($from !== '' || $to !== '')" />
             <a href="{{ route('payments.create', $clientFilter !== '' ? ['client' => $clientFilter] : []) }}" wire:navigate class="btn btn-primary"><x-icon name="plus" class="h-4 w-4" />Record payment</a>
         </x-slot:actions>
     </x-ui.page-header>
@@ -9,13 +10,20 @@
         $fmt = fn ($c) => $c === null ? '—' : \App\Support\Money::format($c, $stats['currency']);
         $typeLabel = fn ($v) => ucfirst(str_replace('_', ' ', $v));
         $filtering = $clientFilter !== '' || $typeFilter !== '' || $from !== '' || $to !== '';
+        $sums = fn ($key) => collect($byCurrency)->map(fn ($r, $cur) => \App\Support\Money::format($r[$key], $cur))->implode(' + ');
+        $foreign = collect($byCurrency)->keys()->contains(fn ($cur) => strtoupper($cur) !== $local);
+        $day = fn ($d) => rescue(fn () => \Carbon\Carbon::parse($d)->format('j M Y'), $d, false);
+        $dated = $from !== '' || $to !== '';
+        $dateChip = $period ? ['month' => 'This month', 'year' => 'This year', 'fy' => 'Financial year'][$period]
+            : ($year ?: ($from !== '' && $to !== '' ? $day($from).' – '.$day($to) : ($from !== '' ? 'from '.$day($from) : 'until '.$day($to))));
+        $filterType = \App\Enums\PaymentType::tryFrom($typeFilter);
     @endphp
     <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <x-ui.stat label="Total received" :value="$fmt($stats['total'])" color="green" icon="credit-card"
-            :hint="'In '.$local.($stats['missing_rate'] ? ' · '.$stats['missing_rate'].' without a rate' : '')" />
+            :hint="($foreign ? $sums('total').' · ' : '').'In '.$local.($stats['missing_rate'] ? ' · '.$stats['missing_rate'].' without a rate' : '')" />
         <x-ui.stat label="Payments" :value="$stats['count']" color="blue" icon="document"
             :hint="'From '.$stats['clients'].' '.\Illuminate\Support\Str::plural('client', $stats['clients'])" />
-        <x-ui.stat label="Average payment" :value="$fmt($stats['average'])" color="purple" icon="currency" :hint="'In '.$local" />
+        <x-ui.stat label="Average payment" :value="$fmt($stats['average'])" color="purple" icon="currency" :hint="($foreign ? $sums('average').' · ' : '').'In '.$local" />
         @if ($stats['by_type'])
             <x-ui.stat label="By type" color="yellow"
                 :lines="collect($stats['by_type'])->take(3)->map(fn ($c, $t) => ['label' => $typeLabel($t), 'value' => $fmt($c)])->values()->all()" />
@@ -24,26 +32,39 @@
         @endif
     </div>
 
-    <div class="card mb-6 p-4">
+    <x-ui.filter-panel>
+        <x-slot:chips>
+            @if ($clientFilter !== '')
+                <x-ui.filter-chip :label="'Client: '.($clients->firstWhere('id', (int) $clientFilter)?->name ?? '—')" wire:click="$set('clientFilter', '')" />
+            @endif
+            @if ($filterType)
+                <x-ui.filter-chip :label="'Type: '.$typeLabel($filterType->value)" wire:click="$set('typeFilter', '')" />
+            @endif
+            @if ($dated)
+                <x-ui.filter-chip :label="'Paid: '.$dateChip" wire:click="setPeriod('')" />
+            @endif
+        </x-slot:chips>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
                 <label for="clientFilter" class="sr-only">Client</label>
-                <select wire:model.live="clientFilter" id="clientFilter" class="select">
+                <select wire:model="clientFilter" id="clientFilter" class="select">
                     <option value="">All clients</option>
                     @foreach ($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
                 </select>
             </div>
             <div>
                 <label for="typeFilter" class="sr-only">Type</label>
-                <select wire:model.live="typeFilter" id="typeFilter" class="select">
+                <select wire:model="typeFilter" id="typeFilter" class="select">
                     <option value="">All types</option>
                     @foreach ($types as $t)<option value="{{ $t->value }}">{{ $typeLabel($t->value) }}</option>@endforeach
                 </select>
             </div>
         </div>
-        <x-ui.date-filter label="Paid" :from="$from" :to="$to" :period="$period" :years="$years" :year="$year" class="mt-4" />
-        @if ($balanceClient)
-            <div class="mt-4 flex flex-wrap items-baseline gap-x-2 border-t border-slate-100 pt-4 text-sm dark:border-gray-700" data-test="client-balance">
+        <x-ui.date-filter label="Paid" :from="$from" :to="$to" :period="$period" :years="$years" :year="$year" defer />
+    </x-ui.filter-panel>
+    @if ($balanceClient)
+        <div class="card mb-6 p-4">
+            <div class="flex flex-wrap items-baseline gap-x-2 text-sm" data-test="client-balance">
                 <span class="text-slate-500 dark:text-gray-400">{{ $balanceClient->name }} balance</span>
                 <strong @class(['tabular-nums', 'text-rose-600 dark:text-rose-400' => $balance < 0, 'text-emerald-700 dark:text-emerald-400' => $balance >= 0])>{{ \App\Support\Money::format($balance, $balanceClient->currency) }}</strong>
                 @if ($balanceLocal !== null && strtoupper($balanceClient->currency) !== $local)
@@ -51,8 +72,8 @@
                 @endif
                 <x-ui.badge :color="$balance < 0 ? 'rose' : 'green'">{{ $balance < 0 ? 'Owes' : 'In credit' }}</x-ui.badge>
             </div>
-        @endif
-    </div>
+        </div>
+    @endif
 
     @if ($payments->isEmpty())
         @if ($filtering)

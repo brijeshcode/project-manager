@@ -3,6 +3,7 @@
 namespace App\Livewire\Clients;
 
 use App\Enums\ClientStatus;
+use App\Enums\PaymentType;
 use App\Livewire\Concerns\DeletesClient;
 use App\Livewire\Concerns\FiltersStatement;
 use App\Models\Client;
@@ -33,6 +34,29 @@ class Show extends Component
 
     /** Keyed by user id. */
     public array $newPassword = [];
+
+    // Tab filters: one set per tab, since the tabs share this component. The statement uses from/to.
+    public string $projectSearch = '';
+
+    public string $projectStatus = '';
+
+    public string $invoiceSearch = '';
+
+    public string $invoiceStatus = '';
+
+    public string $invoiceFrom = '';
+
+    public string $invoiceTo = '';
+
+    public string $paymentType = '';
+
+    public string $paymentFrom = '';
+
+    public string $paymentTo = '';
+
+    public string $subscriptionSearch = '';
+
+    public string $subscriptionStatus = '';
 
     public function mount(Client $client): void
     {
@@ -164,6 +188,30 @@ class Show extends Component
         $this->dispatch('toast', type: $ok ? 'success' : 'error', message: $ok ? 'Subscription deleted.' : RecurringCharge::KEEP_HISTORY);
     }
 
+    public function setInvoicePeriod(string $period): void
+    {
+        [$this->invoiceFrom, $this->invoiceTo] = $this->periods()[$period] ?? ['', ''];
+    }
+
+    public function setPaymentPeriod(string $period): void
+    {
+        [$this->paymentFrom, $this->paymentTo] = $this->periods()[$period] ?? ['', ''];
+    }
+
+    /** LIKE term for a tab search (use with ESCAPE '!'); null when empty. */
+    private function like(string $s): ?string
+    {
+        $t = mb_substr(trim($s), 0, 100);
+
+        return $t === '' ? null : '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $t).'%';
+    }
+
+    private function between($q, string $column, string $from, string $to)
+    {
+        return $q->when($this->validDate($from), fn ($q) => $q->whereDate($column, '>=', $from))
+            ->when($this->validDate($to), fn ($q) => $q->whereDate($column, '<=', $to));
+    }
+
     /** A client-role login of THIS client, or 404. */
     private function clientLogin(int $userId): User
     {
@@ -178,7 +226,14 @@ class Show extends Component
     /** Recurring charges with how often and how much they have been put on sent invoices (matches the recurring page). */
     private function subscriptions(Client $client)
     {
-        $charges = $client->recurringCharges()->with('project')->orderByDesc('active')->orderByRaw('CASE WHEN NOT active THEN COALESCE(ended_at, updated_at) END DESC')->orderBy('next_due_on')->get();
+        $like = $this->like($this->subscriptionSearch);
+        $charges = $client->recurringCharges()->with('project')
+            ->when($this->subscriptionStatus === 'active', fn ($q) => $q->where('active', true))
+            ->when($this->subscriptionStatus === 'paused', fn ($q) => $q->where('active', false))
+            ->when($like, fn ($q) => $q->where(fn ($w) => $w
+                ->whereRaw("description LIKE ? ESCAPE '!'", [$like])
+                ->orWhereHas('project', fn ($p) => $p->whereRaw("name LIKE ? ESCAPE '!'", [$like]))))
+            ->orderByDesc('active')->orderByRaw('CASE WHEN NOT active THEN COALESCE(ended_at, updated_at) END DESC')->orderBy('next_due_on')->get();
         $billed = BillableLine::whereIn('recurring_charge_id', $charges->pluck('id'))
             ->whereHas('invoice', fn ($q) => $q->where('status', 'sent'))
             ->groupBy('recurring_charge_id')->select('recurring_charge_id', DB::raw('count(*) as n'), DB::raw('sum(amount_cents) as s'))
@@ -213,6 +268,11 @@ class Show extends Component
             $receivedMissing = (int) $r->m;
         }
 
+        $listed = $this->between($client->invoices(), 'issued_on', $this->invoiceFrom, $this->invoiceTo)
+            ->when(in_array($this->invoiceStatus, ['sent', 'draft', 'void'], true), fn ($q) => $q->where('status', $this->invoiceStatus))
+            ->when($this->like($this->invoiceSearch), fn ($q, $like) => $q->whereRaw("number LIKE ? ESCAPE '!'", [$like]))
+            ->latest('issued_on')->latest('id')->get();
+
         return view('livewire.clients.show', [
             'client' => $client,
             'localCode' => $code,
@@ -222,10 +282,17 @@ class Show extends Component
             'receivedMissing' => $receivedMissing,
             'billed' => $t['billed'],
             'received' => $t['received'],
-            'projects' => $client->projects()->orderBy('name')->get(),
-            'payments' => $client->payments()->with(['project:id,name', 'documents'])->latest('paid_on')->latest('id')->get(),
-            'invoices' => $invoices->where('status', '!=', 'draft'),
-            'futureInvoices' => $invoices->where('status', 'draft'),
+            'projects' => $client->projects()
+                ->when($this->projectStatus !== '', fn ($q) => $q->where('status', $this->projectStatus))
+                ->when($this->like($this->projectSearch), fn ($q, $like) => $q->whereRaw("name LIKE ? ESCAPE '!'", [$like]))
+                ->orderBy('name')->get(),
+            'payments' => $this->between($client->payments(), 'paid_on', $this->paymentFrom, $this->paymentTo)
+                ->when(PaymentType::tryFrom($this->paymentType), fn ($q, $t) => $q->where('type', $t->value))
+                ->with(['project:id,name', 'documents'])->latest('paid_on')->latest('id')->get(),
+            'invoices' => $listed->where('status', '!=', 'draft'),
+            'futureInvoices' => $listed->where('status', 'draft'),
+            'invoicePeriod' => array_search([$this->invoiceFrom, $this->invoiceTo], $this->periods(), true),
+            'paymentPeriod' => array_search([$this->paymentFrom, $this->paymentTo], $this->periods(), true),
             'statement' => ($money = auth()->user()->can('manage-money')) ? $this->statement($client) : null,
             'subscriptions' => $money ? $this->subscriptions($client) : null,
             'logins' => User::role('client')->where('client_id', $client->id)->orderBy('name')->get(['id', 'name', 'email', 'created_at']),

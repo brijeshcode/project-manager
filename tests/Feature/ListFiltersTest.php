@@ -156,8 +156,36 @@ it('payments: page 2, beyond-last safe', function () {
         ->call('gotoPage', 99)->assertOk()->assertSee('7,777.00');
 });
 
+it('invoices and payments open on the financial year; chips clear one filter; ?from= shows any date', function () {
+    $this->travelTo('2026-11-20');
+    $a = lfClient('Acme');
+    lfInvoice($a, 'INV-NOW');
+    Invoice::create(['number' => 'INV-OLD', 'client_id' => $a->id, 'status' => 'sent', 'issued_on' => '2025-01-10', 'currency' => 'USD', 'subtotal_cents' => 100, 'tax_percent' => 0, 'tax_cents' => 0, 'total_cents' => 100]);
+    lfPayment($a, 111100, ['currency' => 'USD', 'exchange_rate' => '80', 'local_amount_cents' => 8888000, 'local_currency' => 'INR']);
+    lfPayment($a, 222200, ['paid_on' => '2025-01-10']);
+
+    Livewire::test(InvoicesIndex::class)->assertSet('from', '2026-04-01')->assertSet('to', '2027-03-31')
+        ->assertSee('INV-NOW')->assertDontSee('INV-OLD')->assertSee('Issued: Financial year')
+        ->set('status', 'sent')->assertSee('Status: Sent')->set('clientFilter', (string) $a->id)->assertSee('Client: Acme')
+        ->assertSeeHtml('data-test="filter-count">3<')
+        ->call('setPeriod', '')->assertSee('INV-OLD')->assertDontSee('Issued: Financial year');
+
+    Livewire::test(PaymentsIndex::class)->assertSet('from', '2026-04-01')->assertSee('1,111.00')->assertDontSee('2,222.00')
+        ->assertSeeInOrder(['Total received', '₹88,880.00', '$1,111.00 · In INR'])
+        ->set('typeFilter', 'project')->assertSee('Type: Project')->set('from', '2026-11-01')->assertSee('Paid: 1 Nov 2026 – 31 Mar 2027');
+    // withQueryParams sticks to later Livewire::test calls here, so keep it last
+    Livewire::withQueryParams(['from' => ''])->test(InvoicesIndex::class)->assertSet('from', '')->assertSee('INV-OLD');
+});
+
 it('clients cannot reach invoices or payments lists', function () {
     $this->actingAs(User::factory()->create()->assignRole('client'));
     $this->get(route('invoices.index'))->assertForbidden();
     $this->get(route('payments.index'))->assertForbidden();
+});
+
+it('clients: status sits in the collapsible filter panel with a chip that clears it', function () {
+    lfClient('Acme');
+    Livewire::test(ClientsIndex::class)->assertSeeHtml('data-test="filter-panel"')->assertDontSeeHtml('data-test="filter-chip"')
+        ->set('status', 'inactive')->assertSeeHtml('data-test="filter-count">1<')->assertSee('Status: Inactive')
+        ->call('$set', 'status', '')->assertDontSeeHtml('data-test="filter-chip"');
 });

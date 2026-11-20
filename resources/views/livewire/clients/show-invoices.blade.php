@@ -1,16 +1,40 @@
 @php
     $invStatus = fn ($s) => [['sent' => 'Sent', 'void' => 'Cancelled', 'draft' => 'Not sent'][$s] ?? ucfirst($s), ['sent' => 'green', 'void' => 'rose', 'draft' => 'amber'][$s] ?? 'slate'];
     $deleteAsk = fn ($i) => ['method' => 'deleteInvoice', 'id' => $i->id, 'title' => 'Delete invoice', 'text' => 'Delete '.$i->number.' permanently? Its lines return to pending and the client balance changes.'];
+    $invoiceStatuses = ['draft' => 'Not sent', 'sent' => 'Sent', 'void' => 'Cancelled'];
+    $dates = ['label' => 'Issued', 'id' => 'invoice', 'method' => 'setInvoicePeriod', 'fromModel' => 'invoiceFrom', 'toModel' => 'invoiceTo', 'from' => $invoiceFrom, 'to' => $invoiceTo, 'period' => $invoicePeriod];
+    $invoiceActive = isset($invoiceStatuses[$invoiceStatus]) + ($invoiceFrom !== '' || $invoiceTo !== '');
 @endphp
 <div class="space-y-4" data-test="client-invoices"
      x-data="{ view: (() => { try { return localStorage.getItem('clientInvoicesView') || 'list' } catch (e) { return 'list' } })(),
                setView(v) { this.view = v; try { localStorage.setItem('clientInvoicesView', v) } catch (e) {} } }">
     <div class="flex flex-wrap items-center justify-end gap-2">
         @include('livewire.projects._view-toggle', ['live' => false])
+        <x-ui.filter-button for="client-invoices" :active="$invoiceActive" />
         @can('manage-money')
             <a href="{{ route('invoices.create', ['client' => $client->id]) }}" wire:navigate class="btn btn-primary" data-test="client-add-invoice"><x-nav.icon name="plus" class="h-5 w-5" /> New invoice</a>
         @endcan
     </div>
+    <x-ui.filter-panel for="client-invoices" class="!mb-0">
+        <x-slot:bar>
+            <label for="invoiceSearch" class="sr-only">Search invoices</label>
+            <input wire:model.live.debounce.300ms="invoiceSearch" id="invoiceSearch" type="search" maxlength="100" placeholder="Search by number..." class="input" />
+        </x-slot:bar>
+        <div class="sm:w-60">
+            <label for="invoiceStatus" class="sr-only">Status</label>
+            <select wire:model="invoiceStatus" id="invoiceStatus" class="select">
+                @foreach (['' => 'All statuses'] + $invoiceStatuses as $value => $text)
+                    <option value="{{ $value }}">{{ $text }}</option>
+                @endforeach
+            </select>
+        </div>
+        @include('livewire.clients._date-filter', $dates)
+        <x-slot:chips>
+            @if ($invoiceSearch !== '')<x-ui.filter-chip :label="'Search: '.$invoiceSearch" wire:click="$set('invoiceSearch', '')" />@endif
+            @isset($invoiceStatuses[$invoiceStatus])<x-ui.filter-chip :label="'Status: '.$invoiceStatuses[$invoiceStatus]" wire:click="$set('invoiceStatus', '')" />@endisset
+            @include('livewire.clients._date-filter', $dates + ['chip' => true])
+        </x-slot:chips>
+    </x-ui.filter-panel>
     @if ($futureInvoices->isNotEmpty())
         <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/10">
             <div class="mb-2 flex items-center justify-between">
@@ -33,7 +57,9 @@
             </ul>
         </div>
     @endif
-    @if ($invoices->isEmpty() && $futureInvoices->isEmpty())
+    @if ($invoices->isEmpty() && $futureInvoices->isEmpty() && $invoiceActive)
+        <x-ui.empty-state title="No matches" message="No invoices match your filters." name="document" />
+    @elseif ($invoices->isEmpty() && $futureInvoices->isEmpty())
         <x-ui.empty-state title="No invoices yet" message="Invoices issued to this client will appear here." name="document" />
     @elseif ($invoices->isNotEmpty())
         <div x-show="view === 'list'" class="overflow-x-auto" data-test="client-invoices-list">
