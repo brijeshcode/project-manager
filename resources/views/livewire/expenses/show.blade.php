@@ -10,21 +10,36 @@
     <x-ui.breadcrumb :items="[['Expenses', route('expenses.index')], ['Expense #'.$expense->id, null]]" />
     <x-ui.page-header :title="$expense->description" :subtitle="$expense->incurred_on->format('M j, Y')">
         <x-slot:actions>
+            @if ($remaining > 0)
+                <button type="button" wire:click="openPayment" x-on:click="$dispatch('open-modal', 'add-payment')" class="btn btn-primary" data-test="add-payment"><x-icon name="plus" class="h-4 w-4" />Add payment</button>
+            @endif
             <a href="{{ route('expenses.edit', $expense) }}" wire:navigate class="btn btn-secondary"><x-icon name="pencil" class="h-4 w-4" />Edit</a>
             <button type="button" wire:click="delete" wire:confirm="Delete this expense and its payments?" class="btn btn-ghost text-rose-600 dark:text-rose-400"><x-icon name="trash-2" class="h-4 w-4" />Delete</button>
         </x-slot:actions>
     </x-ui.page-header>
 
-    <div class="grid gap-6 lg:grid-cols-3">
-        <div class="space-y-6 lg:col-span-2">
+    <div>
+        <div class="space-y-6">
             <div class="card p-6">
                 <div class="flex items-start justify-between gap-4">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">Amount</p>
-                        <p class="mt-1 text-3xl font-semibold tabular-nums text-gray-900 dark:text-white" data-test="amount">{{ $money($expense->amount_cents, $expense->currency) }}</p>
-                        @if ($loc($expense->amount_cents))<p class="text-sm tabular-nums text-slate-500 dark:text-gray-400">≈ {{ $loc($expense->amount_cents) }} at {{ rtrim(rtrim((string) $expense->exchange_rate, '0'), '.') }}</p>@endif
-                        <p class="mt-1 text-sm tabular-nums text-slate-500 dark:text-gray-400">Paid {{ $money($expense->paidCents(), $expense->currency) }}@if ($loc($expense->paidCents())) ({{ $loc($expense->paidCents()) }})@endif</p>
-                        @if ($remaining > 0)<p class="text-sm tabular-nums text-slate-500 dark:text-gray-400" data-test="due">{{ $money($remaining, $expense->currency) }}@if ($loc($remaining)) ({{ $loc($remaining) }})@endif still to pay</p>@endif
+                    <div @class(['grid gap-6', 'grid-cols-3' => $remaining > 0])>
+                        <div>
+                            <p class="{{ $dt }}">Amount</p>
+                            <p class="mt-1 text-2xl font-semibold tabular-nums text-gray-900 dark:text-white" data-test="amount">{{ $money($expense->amount_cents, $expense->currency) }}</p>
+                            @if ($loc($expense->amount_cents))<p class="text-sm tabular-nums text-slate-500 dark:text-gray-400">≈ {{ $loc($expense->amount_cents) }} at {{ rtrim(rtrim((string) $expense->exchange_rate, '0'), '.') }}</p>@endif
+                        </div>
+                        @if ($remaining > 0)
+                        <div>
+                            <p class="{{ $dt }}">Paid</p>
+                            <p class="mt-1 text-2xl font-semibold tabular-nums text-gray-900 dark:text-white">{{ $money($expense->paidCents(), $expense->currency) }}</p>
+                            @if ($loc($expense->paidCents()))<p class="text-sm tabular-nums text-slate-500 dark:text-gray-400">≈ {{ $loc($expense->paidCents()) }}</p>@endif
+                        </div>
+                        <div>
+                            <p class="{{ $dt }}">Due</p>
+                            <p class="mt-1 text-2xl font-semibold tabular-nums text-rose-600 dark:text-rose-400" data-test="due">{{ $money($remaining, $expense->currency) }}</p>
+                            @if ($loc($remaining))<p class="text-sm tabular-nums text-slate-500 dark:text-gray-400">≈ {{ $loc($remaining) }}</p>@endif
+                        </div>
+                        @endif
                     </div>
                     <div class="flex flex-wrap items-center justify-end gap-2">
                         <x-ui.expense-category :category="$expense->category" />
@@ -61,6 +76,7 @@
                                         <span class="font-medium text-gray-900 dark:text-white">{{ $money($p->amount_cents, $expense->currency) }}</span>
                                         @if ($foreign && $p->local_amount_cents !== null)<span class="block text-xs text-slate-500 dark:text-gray-400">{{ $money($p->local_amount_cents, $p->local_currency) }} at {{ rtrim(rtrim((string) $p->exchange_rate, '0'), '.') }}</span>@endif
                                     </span>
+                                    <button type="button" wire:click="editPayment({{ $p->id }})" x-on:click="$dispatch('open-modal', 'add-payment')" class="btn btn-ghost px-2" title="Edit" aria-label="Edit payment" data-test="edit-payment"><x-icon name="pencil" class="h-4 w-4" /></button>
                                     <button type="button" wire:click="deletePayment({{ $p->id }})" wire:confirm="Delete this payment and its files?" class="btn btn-ghost px-2 text-rose-600 dark:text-rose-400" title="Delete" aria-label="Delete payment"><x-icon name="trash-2" class="h-4 w-4" /></button>
                                 </div>
                                 @foreach ($p->attachments as $a)
@@ -83,9 +99,11 @@
             </form>
         </div>
 
-        <aside class="space-y-6">
-            <form wire:submit="addPayment" class="card space-y-4 p-6">
-                <h2 class="text-base font-semibold text-gray-900 dark:text-white">Add payment</h2>
+    </div>
+
+    <x-modal name="add-payment" maxWidth="md" focusable>
+            <form wire:submit="addPayment" class="space-y-4 p-6">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ $editingPaymentId ? 'Edit payment' : 'Add payment' }}</h2>
                 <div>
                     <label for="paid_on" class="label">Paid on *</label>
                     <input wire:model="paid_on" id="paid_on" type="date" max="{{ today()->toDateString() }}" class="input dark:[color-scheme:dark]" />
@@ -94,6 +112,7 @@
                 <div>
                     <label for="amount" class="label">Amount ({{ $expense->currency }}) *</label>
                     <input wire:model="amount" id="amount" type="text" inputmode="decimal" placeholder="0.00" class="input tabular-nums" />
+                    <p class="mt-1 text-xs text-slate-500 dark:text-gray-400">{{ $editingPaymentId ? 'Max' : 'Due' }}: {{ $money($remaining + ($expense->payments->firstWhere('id', $editingPaymentId)?->amount_cents ?? 0), $expense->currency) }}</p>
                     @error('amount') <p class="mt-1 field-error">{{ $message }}</p> @enderror
                 </div>
                 @if ($foreign)
@@ -114,8 +133,7 @@
                     @error('notes') <p class="mt-1 field-error">{{ $message }}</p> @enderror
                     @include('livewire.expenses._files', ['field' => 'files', 'attachments' => collect(), 'remove' => ''])
                 </div>
-                <button type="submit" class="btn btn-primary w-full justify-center" wire:loading.attr="disabled"><x-icon name="plus" class="h-4 w-4" />Add payment</button>
+                <button type="submit" class="btn btn-primary w-full justify-center" wire:loading.attr="disabled">{{ $editingPaymentId ? 'Save payment' : 'Add payment' }}</button>
             </form>
-        </aside>
-    </div>
+    </x-modal>
 </div>

@@ -73,7 +73,7 @@ class Index extends Component
         $this->validate($this->fileRules('files'));
         $data = $this->validate([
             'paid_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
-            'amount' => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('The amount must be greater than zero.')],
+            'amount' => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('The amount must be greater than zero.'), fn ($a, $v, $fail) => Money::toCents($v) <= $e->dueCents() || $fail('Cannot be more than the due amount ('.Money::format($e->dueCents(), (string) $e->currency).').')],
             'method' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
             'exchange_rate' => $foreign ? ['bail', 'required', 'string', fn ($a, $v, $fail) => Money::isValidRate((string) $v) || $fail('Enter a positive rate with up to 6 decimals (max 999999.999999).')] : 'nullable',

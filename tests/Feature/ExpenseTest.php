@@ -201,3 +201,49 @@ it('shows Expenses in the nav for the super admin only', function () {
     $this->actingAs(expOwner())->get(route('expenses.index'))->assertSee(route('expenses.index'), false);
     $this->actingAs(User::factory()->create()->assignRole('developer'))->get(route('dashboard'))->assertDontSee(route('expenses.index'), false);
 });
+
+it('never lets payments go over the due amount, on the page or from the list', function () {
+    $this->actingAs(expOwner());
+    $e = expMake(); // ₹1,000
+    $e->payments()->create(['paid_on' => today(), 'amount_cents' => 40000, 'exchange_rate' => '1', 'local_amount_cents' => 40000, 'local_currency' => 'INR']);
+
+    Livewire::test(Show::class, ['expense' => $e])->call('openPayment')->assertSet('amount', '600.00')
+        ->set('amount', '600.01')->call('addPayment')->assertHasErrors('amount');
+    Livewire::test(\App\Livewire\Expenses\Index::class)->call('openPay', $e->id)
+        ->set('amount', '700')->call('pay')->assertHasErrors('amount');
+    expect($e->payments()->sum('amount_cents'))->toBe(40000);
+
+    Livewire::test(Show::class, ['expense' => $e])->set('amount', '600')->call('addPayment')->assertHasNoErrors();
+    expect($e->fresh()->status())->toBe('paid');
+});
+
+it('shows the add payment button only while something is due, and no open payment form', function () {
+    $this->actingAs(expOwner());
+    $e = expMake();
+    $this->get(route('expenses.show', $e))->assertSee('data-test="add-payment"', false);
+    $e->payments()->create(['paid_on' => today(), 'amount_cents' => 100000, 'exchange_rate' => '1', 'local_amount_cents' => 100000, 'local_currency' => 'INR']);
+    $this->get(route('expenses.show', $e))->assertDontSee('data-test="add-payment"', false);
+});
+
+it('hides paid and due on the details page once fully paid', function () {
+    $this->actingAs(expOwner());
+    $e = expMake();
+    $this->get(route('expenses.show', $e))->assertSee('data-test="due"', false);
+    $e->payments()->create(['paid_on' => today(), 'amount_cents' => 100000, 'exchange_rate' => '1', 'local_amount_cents' => 100000, 'local_currency' => 'INR']);
+    $this->get(route('expenses.show', $e))->assertDontSee('data-test="due"', false);
+});
+
+it('edits a payment, allowing up to the due amount plus its own', function () {
+    $this->actingAs(expOwner());
+    $e = expMake(); // ₹1,000
+    $p = $e->payments()->create(['paid_on' => today(), 'amount_cents' => 40000, 'exchange_rate' => '1', 'local_amount_cents' => 40000, 'local_currency' => 'INR', 'method' => 'cash']);
+
+    $lw = Livewire::test(Show::class, ['expense' => $e])->call('editPayment', $p->id)
+        ->assertSet('amount', '400.00')->assertSet('method', 'cash')->assertSee('Edit payment');
+    $lw->set('amount', '1000.01')->call('addPayment')->assertHasErrors('amount');
+    $lw->set('amount', '1000')->set('method', 'bank')->call('addPayment')->assertHasNoErrors();
+
+    expect($e->payments()->count())->toBe(1)
+        ->and($p->fresh())->amount_cents->toBe(100000)->local_amount_cents->toBe(100000)->method->toBe('bank')
+        ->and($e->fresh()->status())->toBe('paid');
+});

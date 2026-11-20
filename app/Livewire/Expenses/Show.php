@@ -19,6 +19,10 @@ class Show extends Component
     #[Locked]
     public int $expenseId;
 
+/** The payment being edited in the modal; null = adding a new one. */
+    #[Locked]
+    public ?int $editingPaymentId = null;
+
     public string $paid_on = '';
     public string $amount = '';
     public string $method = '';
@@ -41,37 +45,65 @@ class Show extends Component
     /** Blank add-payment form: today, the remaining amount, the expense's rate. */
     private function resetPaymentForm(Expense $e): void
     {
-        $this->reset('method', 'notes', 'files');
+        $this->reset('method', 'notes', 'files', 'editingPaymentId');
         $this->resetValidation();
         $this->paid_on = today()->toDateString();
         $this->amount = Money::toInput($e->dueCents());
         $this->exchange_rate = (string) ($e->exchange_rate ?? LocalCurrency::rateFor((string) $e->currency));
     }
 
+    /** Opens the add-payment modal with the remaining amount filled in. */
+    public function openPayment(): void
+    {
+        $this->authorize('manage-money');
+        $this->resetPaymentForm(Expense::with('payments')->findOrFail($this->expenseId));
+    }
+
+    /** Opens the modal filled with an existing payment. */
+    public function editPayment(int $paymentId): void
+    {
+        $this->authorize('manage-money');
+        $p = Expense::findOrFail($this->expenseId)->payments()->findOrFail($paymentId);
+        $this->reset('files');
+        $this->resetValidation();
+        $this->editingPaymentId = $p->id;
+        $this->paid_on = $p->paid_on->toDateString();
+        $this->amount = Money::toInput($p->amount_cents);
+        $this->exchange_rate = (string) ($p->exchange_rate ?? '');
+        $this->method = (string) $p->method;
+        $this->notes = (string) $p->notes;
+    }
+
     public function addPayment(): void
     {
         $this->authorize('manage-money');
         $e = Expense::findOrFail($this->expenseId);
+        $editing = $this->editingPaymentId ? $e->payments()->findOrFail($this->editingPaymentId) : null;
+        // when editing, this payment's own amount is available again
+        $max = $e->dueCents() + ($editing?->amount_cents ?? 0);
         $local = LocalCurrency::code();
         $foreign = strtoupper((string) $e->currency) !== $local;
         $this->validate($this->fileRules('files'));
         $data = $this->validate([
             'paid_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
-            'amount' => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('The amount must be greater than zero.')],
+            'amount' => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('The amount must be greater than zero.'), fn ($a, $v, $fail) => Money::toCents($v) <= $max || $fail('Cannot be more than the due amount ('.Money::format($max, (string) $e->currency).').')],
             'method' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
             'exchange_rate' => $foreign ? ['bail', 'required', 'string', fn ($a, $v, $fail) => Money::isValidRate((string) $v) || $fail('Enter a positive rate with up to 6 decimals (max 999999.999999).')] : 'nullable',
         ]);
         $rate = $foreign ? $data['exchange_rate'] : '1';
         $cents = Money::toCents($data['amount']);
-        $p = $e->payments()->create([
+        $fields = [
             'paid_on' => $data['paid_on'], 'amount_cents' => $cents, 'exchange_rate' => $rate,
             'local_amount_cents' => Money::convert($cents, $rate), 'local_currency' => $local,
             'method' => $data['method'] ?: null, 'notes' => $data['notes'] ?: null,
-        ]);
+        ];
+        $editing?->update($fields);
+        $p = $editing ?? $e->payments()->create($fields);
         $this->storeFiles($p, $this->files);
         $this->resetPaymentForm($e->load('payments'));
-        $this->dispatch('toast', message: 'Payment added.');
+        $this->dispatch('close-modal', 'add-payment');
+        $this->dispatch('toast', message: $editing ? 'Payment updated.' : 'Payment added.');
     }
 
     public function uploadFiles(): void
