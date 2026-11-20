@@ -3,11 +3,24 @@
     $deleteAsk = fn ($i) => ['method' => 'deleteInvoice', 'id' => $i->id, 'title' => 'Delete invoice', 'text' => 'Delete '.$i->number.' permanently? Its lines return to pending and the client balance changes.'];
     $invoiceStatuses = ['draft' => 'Not sent', 'sent' => 'Sent', 'void' => 'Cancelled'];
     $dates = ['label' => 'Issued', 'id' => 'invoice', 'method' => 'setInvoicePeriod', 'fromModel' => 'invoiceFrom', 'toModel' => 'invoiceTo', 'from' => $invoiceFrom, 'to' => $invoiceTo, 'period' => $invoicePeriod];
-    $invoiceActive = isset($invoiceStatuses[$invoiceStatus]) + ($invoiceFrom !== '' || $invoiceTo !== '');
+    $invoiceActive = ($invoiceSearch !== '') + isset($invoiceStatuses[$invoiceStatus]) + ($invoiceFrom !== '' || $invoiceTo !== '');
 @endphp
 <div class="space-y-4" data-test="client-invoices"
      x-data="{ view: (() => { try { return localStorage.getItem('clientInvoicesView') || 'list' } catch (e) { return 'list' } })(),
                setView(v) { this.view = v; try { localStorage.setItem('clientInvoicesView', v) } catch (e) {} } }">
+    @if ($invoiceStats)
+        @php $iForeign = $isForeign($invoiceStats['invoiced']); $noRate = $invoiceStats['missing_rate'] ? ' · '.$invoiceStats['missing_rate'].' without a rate' : ''; @endphp
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-test="client-invoice-stats">
+            <x-ui.stat compact label="Invoices sent" :value="$invoiceStats['count']" icon="document" color="slate"
+                :hint="$invoiceStats['drafts'] ? $invoiceStats['drafts'].' '.Str::plural('draft', $invoiceStats['drafts']).' not sent yet' : 'No drafts waiting'" />
+            <x-ui.stat compact label="Total invoiced" :value="$smSum($invoiceStats['invoiced'])" icon="currency" color="blue"
+                :hint="($iForeign ? '≈ '.$sm($invoiceStats['invoiced_local'], $localCode).' · ' : '').'Sent invoices'.$noRate" />
+            <x-ui.stat compact label="This month" :value="$smSum($invoiceStats['month'])" icon="calendar" color="green"
+                :hint="$invoiceStats['month_count'].' sent in '.now()->format('F')" />
+            <x-ui.stat compact label="Average invoice" :value="$smSum($invoiceStats['average'])" icon="document" color="purple"
+                :hint="($iForeign && $invoiceStats['average_local'] !== null ? '≈ '.$sm($invoiceStats['average_local'], $localCode).' · ' : '').'Per sent invoice'.$noRate" />
+        </div>
+    @endif
     <div class="flex flex-wrap items-center justify-end gap-2">
         @include('livewire.projects._view-toggle', ['live' => false])
         <x-ui.filter-button for="client-invoices" :active="$invoiceActive" />
@@ -16,10 +29,10 @@
         @endcan
     </div>
     <x-ui.filter-panel for="client-invoices" class="!mb-0">
-        <x-slot:bar>
+        <div class="sm:w-80">
             <label for="invoiceSearch" class="sr-only">Search invoices</label>
-            <input wire:model.live.debounce.300ms="invoiceSearch" id="invoiceSearch" type="search" maxlength="100" placeholder="Search by number..." class="input" />
-        </x-slot:bar>
+            <input wire:model="invoiceSearch" id="invoiceSearch" type="search" maxlength="100" placeholder="Search by number..." class="input" />
+        </div>
         <div class="sm:w-60">
             <label for="invoiceStatus" class="sr-only">Status</label>
             <select wire:model="invoiceStatus" id="invoiceStatus" class="select">

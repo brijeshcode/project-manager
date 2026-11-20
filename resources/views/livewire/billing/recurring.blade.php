@@ -6,8 +6,7 @@
 <div>
     <x-ui.page-header title="Recurring services" subtitle="Hosting, retainers and other repeating fees. A billable line is added automatically each time one falls due.">
         <x-slot:actions>
-            <x-ui.filter-button :active="(int) ($clientFilter !== '')" />
-            <a href="{{ route('billing.bank-accounts') }}" class="btn btn-ghost">Bank accounts</a>
+            <x-ui.filter-button :active="($search !== '') + ($clientFilter !== '')" />
             <a href="{{ route('billing.recurring.create') }}" wire:navigate class="btn btn-primary"><x-icon name="plus" class="h-4 w-4" /> New service</a>
         </x-slot:actions>
     </x-ui.page-header>
@@ -27,14 +26,15 @@
     </div>
 
     <x-ui.filter-panel>
-        <x-slot:bar>
-            <label for="search" class="sr-only">Search services</label>
-            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by service, client or project..." class="input" />
-        </x-slot:bar>
         <x-slot:chips>
+            @if ($search !== '')<x-ui.filter-chip :label="'Search: '.$search" wire:click="$set('search', '')" />@endif
             @if ($clientFilter !== '')<x-ui.filter-chip :label="'Client: '.($clients->firstWhere('id', (int) $clientFilter)?->name ?? $clientFilter)" wire:click="$set('clientFilter', '')" />@endif
         </x-slot:chips>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="sm:col-span-2">
+                <label for="search" class="label">Search services</label>
+                <input wire:model="search" id="search" type="search" maxlength="100" placeholder="Search by service, client or project..." class="input" />
+            </div>
             <div>
                 <label for="clientFilter" class="label">Client</label>
                 <select wire:model="clientFilter" id="clientFilter" class="select">

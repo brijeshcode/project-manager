@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 use App\Services\ClientAccount;
 use App\Models\BillableLine;
 use App\Services\LocalCurrency;
-use Illuminate\Support\Facades\DB;
+use App\Support\MoneyStats;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Livewire\Attributes\Locked;
@@ -227,21 +227,16 @@ class Show extends Component
     private function subscriptions(Client $client)
     {
         $like = $this->like($this->subscriptionSearch);
-        $charges = $client->recurringCharges()->with('project')
+        $charges = $client->recurringCharges()->withUsage()->with('project')
             ->when($this->subscriptionStatus === 'active', fn ($q) => $q->where('active', true))
             ->when($this->subscriptionStatus === 'paused', fn ($q) => $q->where('active', false))
             ->when($like, fn ($q) => $q->where(fn ($w) => $w
                 ->whereRaw("description LIKE ? ESCAPE '!'", [$like])
                 ->orWhereHas('project', fn ($p) => $p->whereRaw("name LIKE ? ESCAPE '!'", [$like]))))
             ->orderByDesc('active')->orderByRaw('CASE WHEN NOT active THEN COALESCE(ended_at, updated_at) END DESC')->orderBy('next_due_on')->get();
-        $billed = BillableLine::whereIn('recurring_charge_id', $charges->pluck('id'))
-            ->whereHas('invoice', fn ($q) => $q->where('status', 'sent'))
-            ->groupBy('recurring_charge_id')->select('recurring_charge_id', DB::raw('count(*) as n'), DB::raw('sum(amount_cents) as s'))
-            ->get()->keyBy('recurring_charge_id');
-
-        return $charges->each(function ($c) use ($billed, $client) {
-            $c->times_invoiced = (int) ($billed[$c->id]->n ?? 0);
-            $c->total_invoiced = (int) ($billed[$c->id]->s ?? 0);
+        return $charges->each(function ($c) use ($client) {
+            $c->times_invoiced = (int) $c->invoiced_count;
+            $c->total_invoiced = (int) $c->invoiced_cents;
             $c->display_currency = $c->project?->currency ?? $client->currency;
         });
     }
@@ -268,10 +263,13 @@ class Show extends Component
             $receivedMissing = (int) $r->m;
         }
 
-        $listed = $this->between($client->invoices(), 'issued_on', $this->invoiceFrom, $this->invoiceTo)
-            ->when(in_array($this->invoiceStatus, ['sent', 'draft', 'void'], true), fn ($q) => $q->where('status', $this->invoiceStatus))
-            ->when($this->like($this->invoiceSearch), fn ($q, $like) => $q->whereRaw("number LIKE ? ESCAPE '!'", [$like]))
-            ->latest('issued_on')->latest('id')->get();
+        $invoiceQuery = $this->between(Invoice::where('client_id', $client->id), 'issued_on', $this->invoiceFrom, $this->invoiceTo)
+            ->when(in_array($this->invoiceStatus, ['sent', 'draft', 'void'], true), fn ($q) => $q->where('invoices.status', $this->invoiceStatus))
+            ->when($this->like($this->invoiceSearch), fn ($q, $like) => $q->whereRaw("number LIKE ? ESCAPE '!'", [$like]));
+        $listed = (clone $invoiceQuery)->latest('issued_on')->latest('id')->get();
+        $paymentQuery = $this->between(Payment::where('client_id', $client->id), 'paid_on', $this->paymentFrom, $this->paymentTo)
+            ->when(PaymentType::tryFrom($this->paymentType), fn ($q, $t) => $q->where('type', $t->value));
+        $money = auth()->user()->can('manage-money');
 
         return view('livewire.clients.show', [
             'client' => $client,
@@ -286,14 +284,16 @@ class Show extends Component
                 ->when($this->projectStatus !== '', fn ($q) => $q->where('status', $this->projectStatus))
                 ->when($this->like($this->projectSearch), fn ($q, $like) => $q->whereRaw("name LIKE ? ESCAPE '!'", [$like]))
                 ->orderBy('name')->get(),
-            'payments' => $this->between($client->payments(), 'paid_on', $this->paymentFrom, $this->paymentTo)
-                ->when(PaymentType::tryFrom($this->paymentType), fn ($q, $t) => $q->where('type', $t->value))
-                ->with(['project:id,name', 'documents'])->latest('paid_on')->latest('id')->get(),
+            'payments' => (clone $paymentQuery)->with(['project:id,name', 'documents'])->latest('paid_on')->latest('id')->get(),
+            'invoiceStats' => $money ? MoneyStats::invoices($invoiceQuery) : null,
+            'paymentStats' => $money ? MoneyStats::payments($paymentQuery) : null,
+            'paymentsByCurrency' => $money ? (clone $paymentQuery)->get(['currency_id', 'amount_cents'])->groupBy(fn ($p) => $p->currency ?? $code)
+                ->map(fn ($rows) => ['total' => (int) $rows->sum('amount_cents'), 'average' => intdiv((int) $rows->sum('amount_cents'), $rows->count())])->all() : [],
             'invoices' => $listed->where('status', '!=', 'draft'),
             'futureInvoices' => $listed->where('status', 'draft'),
             'invoicePeriod' => array_search([$this->invoiceFrom, $this->invoiceTo], $this->periods(), true),
             'paymentPeriod' => array_search([$this->paymentFrom, $this->paymentTo], $this->periods(), true),
-            'statement' => ($money = auth()->user()->can('manage-money')) ? $this->statement($client) : null,
+            'statement' => $money ?$this->statement($client) : null,
             'subscriptions' => $money ? $this->subscriptions($client) : null,
             'logins' => User::role('client')->where('client_id', $client->id)->orderBy('name')->get(['id', 'name', 'email', 'created_at']),
         ]);

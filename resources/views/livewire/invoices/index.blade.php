@@ -2,7 +2,7 @@
     <x-ui.page-header title="Invoices" subtitle="Bill clients for completed work. Payments settle the client balance.">
         <x-slot:actions>
             @include('livewire.projects._view-toggle', ['live' => true])
-            <x-ui.filter-button :active="in_array($status, ['draft', 'sent', 'void'], true) + ($clientFilter !== '') + ($from !== '' || $to !== '')" />
+            <x-ui.filter-button :active="($search !== '') + in_array($status, ['draft', 'sent', 'void'], true) + ($clientFilter !== '') + ($from !== '' || $to !== '')" />
             <a href="{{ route('invoices.create') }}" class="btn btn-primary">New invoice</a>
         </x-slot:actions>
     </x-ui.page-header>
@@ -34,11 +34,10 @@
             : ($year ?: ($from !== '' && $to !== '' ? $day($from).' – '.$day($to) : ($from !== '' ? 'from '.$day($from) : 'until '.$day($to))));
     @endphp
     <x-ui.filter-panel>
-        <x-slot:bar>
-            <label for="search" class="sr-only">Search invoices</label>
-            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by number or client..." class="input" />
-        </x-slot:bar>
         <x-slot:chips>
+            @if ($search !== '')
+                <x-ui.filter-chip :label="'Search: '.$search" wire:click="$set('search', '')" />
+            @endif
             @isset($statuses[$status])
                 <x-ui.filter-chip :label="'Status: '.$statuses[$status]" wire:click="$set('status', '')" />
             @endisset
@@ -53,6 +52,10 @@
             @endif
         </x-slot:chips>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div class="sm:col-span-2">
+                <label for="search" class="sr-only">Search invoices</label>
+                <input wire:model="search" id="search" type="search" maxlength="100" placeholder="Search by number or client..." class="input" />
+            </div>
             <div>
                 <label for="status" class="sr-only">Status</label>
                 <select wire:model="status" id="status" class="select">

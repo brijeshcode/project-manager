@@ -16,16 +16,16 @@
         </p>
         <div class="flex items-center gap-2">
             @include('livewire.projects._view-toggle', ['live' => false])
-            <x-ui.filter-button for="client-projects" :active="(int) isset($statuses[$projectStatus])" />
+            <x-ui.filter-button for="client-projects" :active="($projectSearch !== '') + isset($statuses[$projectStatus])" />
             <a href="{{ route('projects.create', ['client' => $client->id]) }}" wire:navigate class="btn btn-primary"><x-nav.icon name="plus" class="h-5 w-5" /> Add project</a>
         </div>
     </div>
 
     <x-ui.filter-panel for="client-projects" class="!mb-0">
-        <x-slot:bar>
+        <div class="sm:w-80">
             <label for="projectSearch" class="sr-only">Search projects</label>
-            <input wire:model.live.debounce.300ms="projectSearch" id="projectSearch" type="search" maxlength="100" placeholder="Search project…" class="input" />
-        </x-slot:bar>
+            <input wire:model="projectSearch" id="projectSearch" type="search" maxlength="100" placeholder="Search project…" class="input" />
+        </div>
         <div class="sm:w-60">
             <label for="projectStatus" class="sr-only">Status</label>
             <select wire:model="projectStatus" id="projectStatus" class="select">

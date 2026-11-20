@@ -386,3 +386,20 @@ it('client page tab filters narrow the list and a chip clears its filter', funct
         ->set('projectStatus', '')->set('projectSearch', '')
         ->assertSee(['Alpha Build', 'Beta Site'])->assertDontSee('Status: Completed');
 });
+
+it('client page list tabs show stats that follow the tab filters, and search is a counted chip', function () {
+    $c = cpClient();
+    cpInvoice($c, 20000, 'sent', 'INV-A');
+    cpInvoice($c, 5000, 'sent', 'INV-B');
+    cpPayment($c, 7000);
+
+    $stats = fn ($t) => Str::before(Str::after($t->html(), 'data-test="client-invoice-stats"'), 'data-test="filter-panel"');
+    $t = Livewire::actingAs(cpAdmin())->test(Show::class, ['client' => $c])
+        ->assertSeeHtml('data-test="client-financials"')->assertSeeHtml('data-test="client-payment-stats"')->assertSeeHtml('data-test="client-subscription-stats"')
+        ->assertSee(['Invoices sent', 'Total invoiced', 'Total received', 'Average payment', 'Monthly recurring'])
+        ->assertDontSeeHtml('wire:model.live.debounce.300ms="invoiceSearch"');
+    expect($stats($t))->toContain('$250.00');
+
+    $t->set('invoiceSearch', 'INV-A')->assertSee('Search: INV-A');
+    expect($stats($t))->toContain('$200.00')->not->toContain('$250.00');
+});

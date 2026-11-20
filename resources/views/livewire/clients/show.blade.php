@@ -21,8 +21,15 @@
     ];
     $dt = 'text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-gray-400';
     $dd = 'mt-1 whitespace-pre-line break-words text-sm font-medium text-gray-900 dark:text-white';
+    $tabs = ['details' => 'Details', 'projects' => 'Projects', 'invoices' => 'Invoices', 'payments' => 'Payments'] + ($statement ? ['statement' => 'Statement', 'subscriptions' => 'Subscriptions'] : []) + ['access' => 'Portal access'];
+    // money stat rows on the list tabs
+    $sm = fn ($c, $cur) => \App\Support\Money::format((int) $c, $cur);
+    $smSum = fn ($byCur) => collect($byCur)->map(fn ($c, $cur) => $sm($c, $cur))->implode(' + ') ?: $sm(0, $localCode);
+    $isForeign = fn ($byCur) => collect($byCur)->keys()->contains(fn ($cur) => strtoupper($cur) !== $localCode);
 @endphp
-<div x-data="{ tab: 'details', del: null, ask: null }" class="space-y-6">
+<div x-data="{ tab: (h => @js(array_keys($tabs)).includes(h) ? h : 'details')(location.hash.slice(1)), del: null, ask: null }"
+     x-init="$watch('tab', t => history.replaceState(history.state, '', t === 'details' ? location.pathname + location.search : '#' + t))"
+     class="space-y-6">
     {{-- Header --}}
     <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex items-center gap-4">
@@ -53,31 +60,11 @@
         </div>
     </div>
 
-    {{-- Financial summary --}}
-    <div class="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <x-ui.stat label="Total Billed" :value="$fmt($billed)" :hint="$localHint($billedLocal, $billedMissing)" icon="currency" color="green" />
-        <x-ui.stat label="Total Received" :value="$fmt($received)" :hint="$localHint($receivedLocal, $receivedMissing)" icon="credit-card" color="blue" />
-        <div class="card p-5">
-            <div class="flex items-center gap-4">
-                @if ($balance < 0)
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"><x-nav.icon name="alert" class="h-6 w-6" /></div>
-                @else
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"><x-nav.icon name="check" class="h-6 w-6" /></div>
-                @endif
-                <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Current Balance</p>
-                    <p class="mt-1 text-2xl font-bold tabular-nums {{ $balance < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400' }}">{{ $fmt($balance) }}</p>
-                    @if ($balance < 0)<p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Owing</p>@endif
-                </div>
-            </div>
-        </div>
-    </div>
-
     {{-- Tabs --}}
     <div class="card">
         <div class="border-b border-gray-200 dark:border-gray-700">
             <nav class="-mb-px flex gap-8 overflow-x-auto px-6" aria-label="Tabs" role="tablist">
-                @foreach (['details' => 'Details', 'projects' => 'Projects', 'invoices' => 'Invoices', 'payments' => 'Payments'] + ($statement ? ['statement' => 'Statement', 'subscriptions' => 'Subscriptions'] : []) + ['access' => 'Portal access'] as $key => $label)
+                @foreach ($tabs as $key => $label)
                     <button type="button" role="tab" :aria-selected="tab === '{{ $key }}'" x-on:click="tab = '{{ $key }}'"
                             :class="tab === '{{ $key }}' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:text-gray-300'"
                             class="whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium transition-colors">{{ $label }}</button>
@@ -85,7 +72,27 @@
             </nav>
         </div>
 
-        <div role="tabpanel" x-show="tab === 'details'" class="grid gap-6 bg-slate-50/60 p-4 sm:p-6 lg:grid-cols-3 dark:bg-gray-900/20" data-test="client-details">
+        <div role="tabpanel" x-show="tab === 'details'" class="space-y-6 bg-slate-50/60 p-4 sm:p-6 dark:bg-gray-900/20" data-test="client-details">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3" data-test="client-financials">
+                <x-ui.stat label="Total Billed" :value="$fmt($billed)" :hint="$localHint($billedLocal, $billedMissing)" icon="currency" color="green" />
+                <x-ui.stat label="Total Received" :value="$fmt($received)" :hint="$localHint($receivedLocal, $receivedMissing)" icon="credit-card" color="blue" />
+                <div class="card p-5">
+                    <div class="flex items-center gap-4">
+                        @if ($balance < 0)
+                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"><x-nav.icon name="alert" class="h-6 w-6" /></div>
+                        @else
+                            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"><x-nav.icon name="check" class="h-6 w-6" /></div>
+                        @endif
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Current Balance</p>
+                            <p class="mt-1 text-2xl font-bold tabular-nums {{ $balance < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400' }}">{{ $fmt($balance) }}</p>
+                            @if ($balance < 0)<p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Owing</p>@endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid gap-6 lg:grid-cols-3">
             <div class="space-y-6 lg:col-span-2">
                 @foreach ($sections as [$title, $icon, $cols, $fields])
                     <section class="card p-6">
@@ -135,6 +142,7 @@
                     <p class="mt-4 flex items-center gap-1.5 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-gray-700 dark:text-gray-400"><x-icon name="eye-off" class="h-3.5 w-3.5" />Only your team sees this; never shown in the portal.</p>
                 </section>
             </div>
+            </div>
         </div>
 
         <div role="tabpanel" x-show="tab === 'projects'" x-cloak class="p-6">
@@ -151,6 +159,25 @@
                 $paymentDates = ['label' => 'Paid', 'id' => 'payment', 'method' => 'setPaymentPeriod', 'fromModel' => 'paymentFrom', 'toModel' => 'paymentTo', 'from' => $paymentFrom, 'to' => $paymentTo, 'period' => $paymentPeriod];
                 $paymentActive = isset($paymentTypes[$paymentType]) + ($paymentFrom !== '' || $paymentTo !== '');
             @endphp
+            @if ($paymentStats)
+                @php
+                    $pFmt = fn ($c) => $c === null ? '—' : $sm($c, $paymentStats['currency']);
+                    $pSums = fn ($key) => collect($paymentsByCurrency)->map(fn ($r, $cur) => $sm($r[$key], $cur))->implode(' + ');
+                    $pForeign = $isForeign($paymentsByCurrency);
+                @endphp
+                <div class="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-test="client-payment-stats">
+                    <x-ui.stat compact label="Total received" :value="$pFmt($paymentStats['total'])" color="green" icon="credit-card"
+                        :hint="($pForeign ? $pSums('total').' · ' : '').'In '.$localCode.($paymentStats['missing_rate'] ? ' · '.$paymentStats['missing_rate'].' without a rate' : '')" />
+                    <x-ui.stat compact label="Payments" :value="$paymentStats['count']" color="blue" icon="document" :hint="$payments->isNotEmpty() ? 'Latest '.$payments->first()->paid_on?->format('M j, Y') : null" />
+                    <x-ui.stat compact label="Average payment" :value="$pFmt($paymentStats['average'])" color="purple" icon="currency" :hint="($pForeign ? $pSums('average').' · ' : '').'In '.$localCode" />
+                    @if ($paymentStats['by_type'])
+                        <x-ui.stat compact label="By type" color="yellow"
+                            :lines="collect($paymentStats['by_type'])->take(3)->map(fn ($c, $t) => ['label' => $paymentTypes[$t] ?? $t, 'value' => $pFmt($c)])->values()->all()" />
+                    @else
+                        <x-ui.stat compact label="By type" value="—" color="yellow" icon="tag" hint="No payments in view" />
+                    @endif
+                </div>
+            @endif
             <div class="mb-4 flex justify-end gap-2">
                 <x-ui.filter-button for="client-payments" :active="$paymentActive" />
                 @can('manage-money')
