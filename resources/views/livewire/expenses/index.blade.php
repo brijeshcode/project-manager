@@ -1,6 +1,7 @@
 <div>
     <x-ui.page-header title="Expenses" :subtitle="'Money going out: servers, domains, fees, rent. Only you see this. Local currency: '.$local">
         <x-slot:actions>
+            <x-ui.filter-button :active="($search !== '') + ($typeFilter !== '') + ($tab !== 'payments' && in_array($status, ['due', 'paid'], true)) + ($from !== '' || $to !== '')" />
             <a href="{{ route('expenses.create') }}" wire:navigate class="btn btn-primary"><x-icon name="plus" class="h-4 w-4" />Add expense</a>
         </x-slot:actions>
     </x-ui.page-header>
@@ -37,12 +38,11 @@
         </nav>
     </div>
 
-    <x-ui.filter-panel :active="(bool) $category + $statusOn + $dated">
-        <x-slot:bar>
-            <label for="search" class="sr-only">Search expenses</label>
-            <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by description or payee..." class="input" />
-        </x-slot:bar>
+    <x-ui.filter-panel>
         <x-slot:chips>
+            @if ($search !== '')
+                <x-ui.filter-chip :label="'Search: '.$search" wire:click="$set('search', '')" />
+            @endif
             @if ($category)
                 <x-ui.filter-chip :label="'Category: '.$category->name" wire:click="$set('typeFilter', '')" />
             @endif
@@ -53,10 +53,14 @@
                 <x-ui.filter-chip :label="($onPayments ? 'Paid: ' : 'Incurred: ').$dateChip" wire:click="setPeriod('')" />
             @endif
         </x-slot:chips>
+        <div>
+            <label for="search" class="sr-only">Search expenses</label>
+            <input wire:model="search" id="search" type="search" maxlength="100" placeholder="Search by description or payee..." class="input" />
+        </div>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
                 <label for="typeFilter" class="sr-only">Category</label>
-                <select wire:model.live="typeFilter" id="typeFilter" class="select">
+                <select wire:model="typeFilter" id="typeFilter" class="select">
                     <option value="">All categories</option>
                     @foreach ($categories as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
                 </select>
@@ -64,14 +68,14 @@
             @unless ($onPayments)
                 <div>
                     <label for="status" class="sr-only">Status</label>
-                    <select wire:model.live="status" id="status" class="select">
+                    <select wire:model="status" id="status" class="select">
                         <option value="">All</option>
                         @foreach ($statuses as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
                     </select>
                 </div>
             @endunless
         </div>
-        <x-ui.date-filter :label="$onPayments ? 'Paid' : 'Incurred'" :from="$from" :to="$to" :period="$period" :years="$years" :year="$year" />
+        <x-ui.date-filter :label="$onPayments ? 'Paid' : 'Incurred'" :from="$from" :to="$to" :period="$period" :years="$years" :year="$year" defer />
     </x-ui.filter-panel>
 
     @if ($rows->isEmpty())
