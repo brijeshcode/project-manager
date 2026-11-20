@@ -84,7 +84,7 @@ it('developer sees no money cards but sees own work', function () {
 });
 
 it('client portal dashboard shows own balance and not other clients', function () {
-    $mine = Client::create(['name' => 'Mine Co', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    $mine = Client::create(['name' => 'Mine Co', 'currency' => 'USD', 'billing_mode' => 'fixed', 'portal_features' => array_keys(Client::PORTAL_FEATURES)]);
     $other = Client::create(['name' => 'Other Co', 'currency' => 'USD', 'billing_mode' => 'fixed']);
     Payment::create(['client_id' => $mine->id, 'amount_cents' => 25000, 'paid_on' => now()->toDateString(), 'type' => PaymentType::Project]);
     Project::create(['client_id' => $other->id, 'name' => 'Other Co Secret', 'status' => 'active']);

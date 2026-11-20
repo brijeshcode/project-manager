@@ -17,7 +17,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
-    $this->client = Client::create(['name' => 'Mine', 'currency' => 'USD']);
+    $this->client = Client::create(['name' => 'Mine', 'currency' => 'USD', 'portal_features' => array_keys(Client::PORTAL_FEATURES)]);
     $this->other = Client::create(['name' => 'Theirs', 'currency' => 'USD']);
     $this->user = User::factory()->create(['client_id' => $this->client->id])->assignRole('client');
     foreach ([[$this->client, 'MINE'], [$this->other, 'THEIRS']] as [$c, $tag]) {

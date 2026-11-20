@@ -1,6 +1,7 @@
 @php
     $money = fn ($c, $cur) => \App\Support\Money::format((int) $c, $cur);
     $sums = fn ($byCur) => collect($byCur)->map(fn ($c, $cur) => $money($c, $cur))->implode(' + ') ?: $money(0, $client->currency);
+    $showTotals = $client->portalShows('billing_totals');
 @endphp
 <div>
     <x-ui.page-header title="Subscriptions" subtitle="Recurring services we provide for you." />
@@ -11,11 +12,13 @@
         </div>
     @endif
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-test="portal-subscription-stats">
+    <div @class(['mb-6 grid gap-4 sm:grid-cols-2', 'lg:grid-cols-4' => $showTotals, 'lg:grid-cols-3' => ! $showTotals]) data-test="portal-subscription-stats">
         <x-ui.stat label="Active services" :value="$stats['active']" icon="refresh" color="green" :hint="$stats['paused'].' not running'" />
         <x-ui.stat label="Monthly cost" :value="$sums($stats['monthly'])" icon="currency" color="blue" hint="Active services, yearly spread per month" />
         <x-ui.stat label="Due in 30 days" :value="$stats['due_soon']" icon="calendar" color="yellow" hint="Active services falling due" />
-        <x-ui.stat label="Invoiced to date" :value="$sums($stats['invoiced'])" icon="check" color="purple" :hint="$stats['invoiced_count'].' '.\Illuminate\Support\Str::plural('time', $stats['invoiced_count']).' on invoices sent to you'" />
+        @if ($showTotals)
+            <x-ui.stat label="Invoiced to date" :value="$sums($stats['invoiced'])" icon="check" color="purple" :hint="$stats['invoiced_count'].' '.\Illuminate\Support\Str::plural('time', $stats['invoiced_count']).' on invoices sent to you'" />
+        @endif
     </div>
 
     <div class="card mb-6 p-4">
@@ -46,9 +49,9 @@
                         <th class="table-th">Project</th>
                         <th class="table-th text-right">Amount</th>
                         <th class="table-th">Next due</th>
-                        <th class="table-th text-right">Invoiced</th>
+                        @if ($showTotals)<th class="table-th text-right">Invoiced</th>@endif
                         <th class="table-th">Status</th>
-                        <th class="table-th"><span class="sr-only">Actions</span></th>
+                        @if ($showTotals)<th class="table-th"><span class="sr-only">Actions</span></th>@endif
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-gray-700">
@@ -73,12 +76,16 @@
                                 @php $gaps = array_filter([count($s->skipped_periods ?? []) ? count($s->skipped_periods).' skipped' : null, count($s->paused_periods ?? []) ? count($s->paused_periods).' paused' : null]); @endphp
                                 @if ($gaps)<div class="text-xs text-slate-500 dark:text-gray-400" data-test="gaps">{{ implode(' · ', $gaps) }}</div>@endif
                             </td>
-                            <td class="table-td whitespace-nowrap text-right tabular-nums" data-test="sub-usage">
-                                <div class="font-medium text-gray-900 dark:text-white">{{ $money($s->invoiced_cents, $cur) }}</div>
-                                <div class="text-xs text-slate-500 dark:text-gray-400">{{ $s->invoiced_count }} {{ \Illuminate\Support\Str::plural('time', $s->invoiced_count) }}</div>
-                            </td>
+                            @if ($showTotals)
+                                <td class="table-td whitespace-nowrap text-right tabular-nums" data-test="sub-usage">
+                                    <div class="font-medium text-gray-900 dark:text-white">{{ $money($s->invoiced_cents, $cur) }}</div>
+                                    <div class="text-xs text-slate-500 dark:text-gray-400">{{ $s->invoiced_count }} {{ \Illuminate\Support\Str::plural('time', $s->invoiced_count) }}</div>
+                                </td>
+                            @endif
                             <td class="table-td"><x-ui.badge :color="$color">{{ $badge }}</x-ui.badge></td>
-                            <td class="table-td whitespace-nowrap text-right"><a href="{{ route('portal.subscription', $s->id) }}" wire:navigate class="btn btn-ghost px-2" title="View details" aria-label="View {{ $s->description }}"><x-icon name="eye" class="h-4 w-4" /></a></td>
+                            @if ($showTotals)
+                                <td class="table-td whitespace-nowrap text-right"><a href="{{ route('portal.subscription', $s->id) }}" wire:navigate class="btn btn-ghost px-2" title="View details" aria-label="View {{ $s->description }}"><x-icon name="eye" class="h-4 w-4" /></a></td>
+                            @endif
                         </tr>
                     @endforeach
                 </tbody>

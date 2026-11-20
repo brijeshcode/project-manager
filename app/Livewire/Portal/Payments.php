@@ -38,6 +38,7 @@ class Payments extends Component
     {
         abort_unless(auth()->user()->hasRole('client'), 403);
         abort_if(! auth()->user()->client_id, 403);
+        abort_unless(auth()->user()->client->portalShows('payments'), 404);
 
         return auth()->user()->client_id;
     }

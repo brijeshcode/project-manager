@@ -132,7 +132,7 @@ it('show has empty states and a 404 for an unknown client', function () {
 });
 
 it('portal never exposes client notes', function () {
-    $c = cpClient(['notes' => 'SECRET-INTERNAL']);
+    $c = cpClient(['notes' => 'SECRET-INTERNAL', 'portal_features' => array_keys(Client::PORTAL_FEATURES)]);
     $u = User::factory()->create(['client_id' => $c->id]);
     $u->assignRole('client');
     Project::create(['client_id' => $c->id, 'name' => 'P', 'status' => 'active']);
@@ -332,6 +332,36 @@ it('blocking portal access stops client sign-in and signs out active sessions', 
     $this->actingAs($staff)->get(route('dashboard'))->assertOk(); // staff unaffected
     Livewire::actingAs($staff)->test(Show::class, ['client' => $client])->call('togglePortalBlock');
     expect($client->fresh()->portalBlocked())->toBeFalse();
+});
+
+it('hides payments, statement and billing totals from the portal until ticked per client', function () {
+    $client = cpClient();
+    $user = User::factory()->create(['client_id' => $client->id])->assignRole('client');
+    $hidden = fn () => $this->actingAs($user);
+
+    $hidden()->get(route('portal.payments'))->assertNotFound();
+    $hidden()->get(route('portal.statement'))->assertNotFound();
+    $hidden()->get(route('portal.dashboard'))->assertOk()->assertDontSee('Account balance')->assertDontSee('Recent payments')->assertDontSee(route('portal.payments'));
+    $hidden()->get(route('portal.invoices'))->assertOk()->assertDontSee('Total invoiced');
+    $hidden()->get(route('portal.subscriptions'))->assertOk()->assertDontSee('Invoiced to date');
+
+    $show = Livewire::actingAs(cpAdmin())->test(Show::class, ['client' => $client]);
+    foreach (array_keys(Client::PORTAL_FEATURES) as $f) {
+        $show->call('togglePortalFeature', $f);
+    }
+    expect($client->fresh()->portal_features)->toBe(['payments', 'statement', 'billing_totals']);
+
+    $user->refresh();
+    $this->actingAs($user)->get(route('portal.payments'))->assertOk();
+    $this->actingAs($user)->get(route('portal.statement'))->assertOk();
+    $this->actingAs($user)->get(route('portal.dashboard'))->assertSee('Account balance')->assertSee('Recent payments');
+    $this->actingAs($user)->get(route('portal.invoices'))->assertSee('Total invoiced');
+    $this->actingAs($user)->get(route('portal.subscriptions'))->assertSee('Invoiced to date');
+
+    $show = Livewire::actingAs(cpAdmin())->test(Show::class, ['client' => $client])->call('togglePortalFeature', 'payments');
+    expect($client->fresh()->portal_features)->toBe(['statement', 'billing_totals']);
+    $this->actingAs($user->refresh())->get(route('portal.payments'))->assertNotFound();
+    $show->call('togglePortalFeature', 'bogus')->assertNotFound();
 });
 
 it('records the date a client stopped being active', function () {

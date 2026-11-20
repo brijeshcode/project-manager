@@ -15,6 +15,13 @@ class Client extends Model
 {
     use HasCurrency;
 
+    /** Opt-in portal pages and figures; every one is hidden until ticked on the client's Access tab. */
+    public const PORTAL_FEATURES = [
+        'payments'       => ['Payments', 'Payments pages and recent payments on the dashboard.'],
+        'statement'      => ['Statement', 'Statement page and account balance on the dashboard.'],
+        'billing_totals' => ['Billing totals', 'Total invoiced on Invoices; invoiced amounts and the view icon on Subscriptions.'],
+    ];
+
     protected $fillable = [
         'name',
         'company_name', // billed party on invoices
@@ -25,6 +32,7 @@ class Client extends Model
         'status',
         'inactive_since',
         'portal_blocked_at',
+        'portal_features',
         'notes', // internal only: never shown in the portal
         // Contact
         'contact_name',
@@ -54,6 +62,7 @@ class Client extends Model
             'status'              => ClientStatus::class,
             'inactive_since'      => 'date',
             'portal_blocked_at'   => 'datetime',
+            'portal_features'     => 'array',
             'bank_name'           => 'encrypted',
             'bank_account_number' => 'encrypted',
             'bank_swift'          => 'encrypted',
@@ -73,6 +82,11 @@ class Client extends Model
     public function portalBlocked(): bool
     {
         return $this->portal_blocked_at !== null;
+    }
+
+    public function portalShows(string $feature): bool
+    {
+        return in_array($feature, $this->portal_features ?? [], true);
     }
 
     /** Next CLI-0001 style code; save() retries if a concurrent create takes it. */

@@ -213,7 +213,7 @@ it('page size setting applies to the invoices and payments lists', function () {
 });
 
 it('page size setting applies to the portal invoices and payments lists', function () {
-    $client = Client::create(['name' => 'Acme', 'currency' => 'USD']);
+    $client = Client::create(['name' => 'Acme', 'currency' => 'USD', 'portal_features' => array_keys(Client::PORTAL_FEATURES)]);
     $u = b1User('client', ['client_id' => $client->id]);
     foreach (range(1, 12) as $i) {
         Payment::create(['client_id' => $client->id, 'amount_cents' => 1000 + $i, 'paid_on' => '2026-11-01', 'type' => 'project']);

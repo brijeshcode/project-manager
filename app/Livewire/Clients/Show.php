@@ -66,6 +66,16 @@ class Show extends Component
         $this->dispatch('toast', type: 'success', message: $client->portalBlocked() ? 'Portal access blocked.' : 'Portal access restored.');
     }
 
+    public function togglePortalFeature(string $feature): void
+    {
+        abort_unless(array_key_exists($feature, Client::PORTAL_FEATURES), 404);
+        $client = Client::findOrFail($this->clientId);
+        $this->authorize('update', $client);
+        $on = $client->portal_features ?? [];
+        $client->update(['portal_features' => array_values($client->portalShows($feature) ? array_diff($on, [$feature]) : [...$on, $feature])]);
+        $this->dispatch('toast', type: 'success', message: Client::PORTAL_FEATURES[$feature][0].($client->portalShows($feature) ? ' shown in the portal.' : ' hidden from the portal.'));
+    }
+
     /** A portal login for this client: a user with the client role, tied to this client only. */
     public function addLogin(): void
     {

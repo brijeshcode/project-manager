@@ -18,7 +18,7 @@ beforeEach(fn () => $this->seed(RoleSeeder::class));
 
 function pmClient(string $name, string $role = 'client', bool $link = true): array
 {
-    $c = Client::create(['name' => $name, 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    $c = Client::create(['name' => $name, 'currency' => 'USD', 'billing_mode' => 'fixed', 'portal_features' => array_keys(Client::PORTAL_FEATURES)]);
     $u = User::factory()->create(['client_id' => $link ? $c->id : null])->assignRole($role);
 
     return [$c, $u];

@@ -1,13 +1,17 @@
 @php
     $tasksTotal = $stats->sum('tasks');
     $tasksDone = $stats->sum('tasksDone');
+    $showBalance = auth()->user()->client->portalShows('statement');
+    $showPayments = auth()->user()->client->portalShows('payments');
 @endphp
 <div class="space-y-6">
     <x-ui.page-header title="Dashboard" subtitle="Where your projects and account stand today." />
 
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <x-ui.stat label="Account balance" icon="currency" color="blue"
-            :value="$balance < 0 ? 'You owe '.\App\Support\Money::format(-$balance, $currency) : ($balance > 0 ? 'Credit '.\App\Support\Money::format($balance, $currency) : 'All settled')" />
+    <div @class(['grid gap-4 sm:grid-cols-2', 'xl:grid-cols-4' => $showBalance, 'xl:grid-cols-3' => ! $showBalance])>
+        @if ($showBalance)
+            <x-ui.stat label="Account balance" icon="currency" color="blue"
+                :value="$balance < 0 ? 'You owe '.\App\Support\Money::format(-$balance, $currency) : ($balance > 0 ? 'Credit '.\App\Support\Money::format($balance, $currency) : 'All settled')" />
+        @endif
         <x-ui.stat label="Active projects" icon="folder" color="purple" :value="$projects->where('status', 'active')->count()" />
         <x-ui.stat label="Tasks completed" icon="check" color="green" :value="$tasksDone.' of '.$tasksTotal" />
         <x-ui.stat label="Active subscriptions" icon="refresh" color="yellow" :value="$activeSubs" />
@@ -63,7 +67,7 @@
             @endforelse
         </x-ui.card>
 
-        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+        <div @class(['grid gap-6', 'sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2' => $showPayments])>
             <x-ui.card data-test="dash-invoices">
                 <div class="mb-4 flex items-center justify-between">
                     <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Recent invoices</h2>
@@ -79,6 +83,7 @@
                 @endforelse
             </x-ui.card>
 
+            @if ($showPayments)
             <x-ui.card data-test="dash-payments">
                 <div class="mb-4 flex items-center justify-between">
                     <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Recent payments</h2>
@@ -93,6 +98,7 @@
                     <p class="text-sm text-slate-500 dark:text-gray-400">No payments yet.</p>
                 @endforelse
             </x-ui.card>
+            @endif
         </div>
     </div>
 </div>

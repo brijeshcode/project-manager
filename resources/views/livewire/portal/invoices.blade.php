@@ -2,15 +2,18 @@
     $money = fn ($c, $cur) => \App\Support\Money::format((int) $c, $cur);
     $sums = fn ($byCur) => collect($byCur)->map(fn ($c, $cur) => $money($c, $cur))->implode(' + ') ?: $money(0, $currency);
     $filtering = $search !== '' || $from !== '' || $to !== '';
+    $showTotals = auth()->user()->client->portalShows('billing_totals');
 @endphp
 <div>
     <x-ui.page-header title="Invoices" subtitle="The invoices we have sent you.">
         <x-slot:actions>@include('livewire.projects._view-toggle', ['live' => true])</x-slot:actions>
     </x-ui.page-header>
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-test="portal-invoice-stats">
+    <div @class(['mb-6 grid gap-4 sm:grid-cols-2', 'lg:grid-cols-4' => $showTotals, 'lg:grid-cols-3' => ! $showTotals]) data-test="portal-invoice-stats">
         <x-ui.stat label="Invoices" :value="$stats['count']" icon="document" color="slate" :hint="$stats['month_count'].' in '.now()->format('F')" />
-        <x-ui.stat label="Total invoiced" :value="$sums($stats['invoiced'])" icon="currency" color="blue" :hint="$stats['count'].' '.\Illuminate\Support\Str::plural('invoice', $stats['count'])" />
+        @if ($showTotals)
+            <x-ui.stat label="Total invoiced" :value="$sums($stats['invoiced'])" icon="currency" color="blue" :hint="$stats['count'].' '.\Illuminate\Support\Str::plural('invoice', $stats['count'])" />
+        @endif
         <x-ui.stat label="This month" :value="$sums($stats['month'])" icon="calendar" color="green" :hint="$stats['month_count'].' in '.now()->format('F')" />
         <x-ui.stat label="Average invoice" :value="$sums($stats['average'])" icon="document" color="purple" hint="Per invoice" />
     </div>

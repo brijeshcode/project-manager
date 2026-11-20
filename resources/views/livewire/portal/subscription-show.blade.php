@@ -12,11 +12,14 @@
         <x-slot:actions><x-ui.badge :color="$color">{{ $badge }}</x-ui.badge></x-slot:actions>
     </x-ui.page-header>
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    @php $showTotals = auth()->user()->client->portalShows('billing_totals'); @endphp
+    <div @class(['mb-6 grid gap-4 sm:grid-cols-2', 'lg:grid-cols-4' => $showTotals])>
         <x-ui.stat label="Amount" :value="$money($charge->amount_cents)" icon="currency" color="blue" :hint="'Billed '.$charge->frequency->value" />
         <x-ui.stat label="Next due" :value="$charge->active ? $charge->next_due_on->toFormattedDateString() : '—'" icon="calendar" color="yellow" :hint="$charge->active ? $charge->next_due_on->diffForHumans() : $badge" />
-        <x-ui.stat label="Times invoiced" :value="$charge->invoiced_count" icon="check" color="green" hint="On invoices sent to you" />
-        <x-ui.stat label="Invoiced to date" :value="$money($charge->invoiced_cents)" icon="refresh" color="purple" />
+        @if ($showTotals)
+            <x-ui.stat label="Times invoiced" :value="$charge->invoiced_count" icon="check" color="green" hint="On invoices sent to you" />
+            <x-ui.stat label="Invoiced to date" :value="$money($charge->invoiced_cents)" icon="refresh" color="purple" />
+        @endif
     </div>
 
     @php

@@ -28,8 +28,8 @@
                 ['Invoices',      'invoices.index',        'invoices.*',                           'document',    $money],
                 ['Invoices',      'portal.invoices',       ['portal.invoices', 'portal.invoice'],  'document',    $client],
                 ['Payments',      'payments.index',        'payments.*',                           'credit-card', $money],
-                ['Payments',      'portal.payments',       ['portal.payments', 'portal.payment'],  'credit-card', $client],
-                ['Statement',     'portal.statement',      'portal.statement',                     'document',    $client],
+                ['Payments',      'portal.payments',       ['portal.payments', 'portal.payment'],  'credit-card', $client && $u->client?->portalShows('payments')],
+                ['Statement',     'portal.statement',      'portal.statement',                     'document',    $client && $u->client?->portalShows('statement')],
                 ['Subscriptions', 'portal.subscriptions',  ['portal.subscriptions', 'portal.subscription'], 'refresh', $client],
             ])->filter(fn ($i) => $i[4]);
             $settingsNav = collect([

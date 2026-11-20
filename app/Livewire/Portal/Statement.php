@@ -13,6 +13,7 @@ class Statement extends Component
     {
         abort_unless(auth()->user()->hasRole('client'), 403);
         abort_if(! auth()->user()->client_id, 403);
+        abort_unless(auth()->user()->client->portalShows('statement'), 404);
     }
 
     public function render()

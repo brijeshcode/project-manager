@@ -22,7 +22,7 @@ beforeEach(function () {
     Storage::fake('public');
     $this->seed(RoleSeeder::class);
     $this->owner = User::factory()->create()->assignRole('super_admin');
-    $this->client = Client::create(['name' => 'Acme', 'currency' => 'INR', 'billing_mode' => 'fixed']);
+    $this->client = Client::create(['name' => 'Acme', 'currency' => 'INR', 'billing_mode' => 'fixed', 'portal_features' => array_keys(Client::PORTAL_FEATURES)]);
 });
 
 function pdPayment(array $o = []): Payment

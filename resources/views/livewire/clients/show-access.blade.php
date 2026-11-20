@@ -20,6 +20,19 @@
         @endif
     </div>
 
+    <div class="rounded-lg border border-slate-200 p-4 dark:border-gray-700" data-test="portal-features">
+        <p class="text-sm font-semibold text-gray-900 dark:text-white">What the portal shows</p>
+        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Projects, invoices and subscriptions are always shown. Tick to also show:</p>
+        <div class="mt-3 space-y-2">
+            @foreach (\App\Models\Client::PORTAL_FEATURES as $key => [$label, $hint])
+                <label class="flex items-start gap-3 text-sm" wire:key="pf-{{ $key }}">
+                    <input type="checkbox" class="mt-0.5 rounded border-slate-300 dark:border-gray-600" @checked($client->portalShows($key)) wire:click="togglePortalFeature('{{ $key }}')" data-test="portal-feature-{{ $key }}" />
+                    <span><span class="font-medium text-gray-900 dark:text-white">{{ $label }}</span> <span class="text-gray-500 dark:text-gray-400">· {{ $hint }}</span></span>
+                </label>
+            @endforeach
+        </div>
+    </div>
+
     @if ($logins->isEmpty())
         <x-ui.empty-state title="No portal logins yet" message="Add a login below so the client can follow their projects and billing." name="user" />
     @else

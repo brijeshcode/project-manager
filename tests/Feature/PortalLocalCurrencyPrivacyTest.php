@@ -21,7 +21,7 @@ beforeEach(function () {
     $this->owner = User::factory()->create()->assignRole('super_admin');
     app(ExchangeRates::class)->setRate('USD', '84.123456', $this->owner);
 
-    $this->k = Client::create(['name' => 'Kay', 'currency' => 'USD', 'billing_mode' => 'fixed']);
+    $this->k = Client::create(['name' => 'Kay', 'currency' => 'USD', 'billing_mode' => 'fixed', 'portal_features' => array_keys(Client::PORTAL_FEATURES)]);
     $this->ku = User::factory()->create(['client_id' => $this->k->id])->assignRole('client');
     $this->project = Project::create(['client_id' => $this->k->id, 'name' => 'Portal Project', 'status' => 'active']);
 

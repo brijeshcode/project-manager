@@ -16,7 +16,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function () {
     $this->seed(RoleSeeder::class);
-    $this->client = Client::create(['name' => 'SubCo', 'currency' => 'USD']);
+    $this->client = Client::create(['name' => 'SubCo', 'currency' => 'USD', 'portal_features' => array_keys(Client::PORTAL_FEATURES)]);
     $this->clientUser = User::factory()->create(['client_id' => $this->client->id])->assignRole('client');
     $this->owner = User::factory()->create()->assignRole('super_admin');
 });
