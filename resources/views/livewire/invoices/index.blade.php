@@ -13,15 +13,16 @@
         $foreign = collect($stats['invoiced'])->keys()->contains(fn ($cur) => strtoupper($cur) !== $local);
         $noRate = $stats['missing_rate'] ? ' · '.$stats['missing_rate'].' without a rate' : '';
     @endphp
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <x-ui.stat label="Invoices sent" :value="$stats['count']" icon="document" color="slate"
+            :hint="$stats['drafts'] ? $stats['drafts'].' '.\Illuminate\Support\Str::plural('draft', $stats['drafts']).' not sent yet' : 'No drafts waiting'" />
         <x-ui.stat label="Total invoiced" :value="$sums($stats['invoiced'])" icon="currency" color="blue"
             :hint="($foreign ? '≈ '.$money($stats['invoiced_local'], $local).' · ' : '').$stats['count'].' '.\Illuminate\Support\Str::plural('invoice', $stats['count']).$noRate" />
         <x-ui.stat label="This month" :value="$sums($stats['month'])" icon="calendar" color="green"
             :hint="$stats['month_count'].' sent in '.now()->format('F')" />
         <x-ui.stat label="Average invoice" :value="$sums($stats['average'])" icon="document" color="purple"
             :hint="($foreign && $stats['average_local'] !== null ? '≈ '.$money($stats['average_local'], $local).' · ' : '').'Per sent invoice'.$noRate" />
-        <x-ui.stat label="Clients billed" :value="$stats['clients']" icon="users" color="yellow"
-            :hint="$stats['drafts'] ? $stats['drafts'].' '.\Illuminate\Support\Str::plural('draft', $stats['drafts']).' not sent yet' : 'No drafts waiting'" />
+        <x-ui.stat label="Clients billed" :value="$stats['clients']" icon="users" color="yellow" hint="With a sent invoice" />
     </div>
 
     @php $filtering = $search !== '' || $status !== '' || $clientFilter !== '' || $from !== '' || $to !== ''; @endphp
@@ -48,7 +49,7 @@
             </div>
         </div>
         <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-gray-700">
-            <x-ui.date-filter label="Issued" :from="$from" :to="$to" :period="$period" />
+            <x-ui.date-filter label="Issued" :from="$from" :to="$to" :period="$period" :years="$years" :year="$year" />
             @if ($filtering)
                 <button type="button" wire:click="clearFilters" class="link text-sm">Clear all filters</button>
             @endif
@@ -69,13 +70,15 @@
         @include('livewire.invoices._cards')
         <div class="mt-6">{{ $invoices->links() }}</div>
     @else
-        <x-ui.table-card>
+        <x-ui.table-card sticky>
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
                 <thead>
                     <tr>
                         <th class="table-th">Invoice</th>
                         <th class="table-th">Client</th>
                         <th class="table-th">Issued</th>
+                        <th class="table-th">Invoice month</th>
+                        <th class="table-th">Billed for</th>
                         <th class="table-th text-right">Amount</th>
                         <th class="table-th">Status</th>
                         <th class="table-th"><span class="sr-only">Actions</span></th>
@@ -88,6 +91,8 @@
                             <td class="table-td whitespace-nowrap"><a href="{{ route('invoices.show', $i) }}" class="link font-medium">{{ $i->number }}</a></td>
                             <td class="table-td">{{ $i->client->name }}</td>
                             <td class="table-td whitespace-nowrap">{{ $i->issued_on->toFormattedDateString() }}</td>
+                            <td class="table-td whitespace-nowrap" data-test="month">{{ $i->issued_on->format('M Y') }}</td>
+                            <td class="table-td whitespace-nowrap" data-test="for-month">{{ $i->forMonthLabel() ?? '—' }}</td>
                             <td class="table-td whitespace-nowrap text-right tabular-nums">
                                 <span class="font-medium text-gray-900 dark:text-white">{{ \App\Support\Money::format($i->total_cents, $i->currency) }}</span>
                                 @if ($i->localTotalCents() !== null && strtoupper($i->currency) !== $local)

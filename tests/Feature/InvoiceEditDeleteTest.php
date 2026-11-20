@@ -124,9 +124,12 @@ it('edit page loads, saves and redirects; delete from the show page redirects to
 
     Livewire::actingAs($owner)->test(Edit::class, ['invoice' => $inv])
         ->assertSet('taxPercent', '0.00')
-        ->set('taxPercent', '5')
+        ->set('taxPercent', '5')->set('forMonth', '2024-01')
         ->call('save')->assertHasNoErrors()->assertRedirect(route('invoices.show', $inv));
-    expect($inv->fresh()->tax_cents)->toBe(500);
+    expect($inv->fresh()->tax_cents)->toBe(500)->and($inv->fresh()->for_month)->toBe('2024-01');
+    Livewire::actingAs($owner)->test(Index::class)->assertSeeInOrder(['Billed for', $inv->number, 'Jan 2024']);
+    Livewire::actingAs($owner)->test(Edit::class, ['invoice' => $inv->fresh()])->assertSet('forMonth', '2024-01')
+        ->set('forMonth', '2024-13')->call('save')->assertHasErrors('forMonth');
 
     Livewire::actingAs($owner)->test(Show::class, ['invoice' => $inv])->call('delete')->assertRedirect(route('invoices.index'));
     expect(Invoice::count())->toBe(0);
@@ -230,4 +233,24 @@ it('filters by issued date with month, year and financial year shortcuts', funct
         ->call('setPeriod', 'year')->assertSee($feb->number)->assertSee('3 invoices')
         ->set('from', '2026-05-01')->set('to', '2026-05-31')->assertSee($may->number)->assertDontSee($now->number)
         ->call('setPeriod', '')->assertSet('from', '')->assertSee($now->number);
+});
+
+it('year dropdown lists years back to the oldest invoice and filters to one', function () {
+    $this->travelTo('2026-11-11');
+    $c = ieClient();
+    $now = ieInvoice($c, [ieLine($c, 10000)->id]);
+    $old = ieInvoice($c, [ieLine($c, 20000)->id]);
+    $old->update(['issued_on' => '2024-07-01']);
+
+    Livewire::actingAs(ieOwner())->test(Index::class)
+        ->assertViewHas('years', [2026, 2025, 2024])
+        ->call('setYear', '2024')->assertSet('from', '2024-01-01')->assertSet('to', '2024-12-31')->assertViewHas('year', 2024)
+        ->assertSee($old->number)->assertDontSee($now->number)->assertSeeInOrder(['Invoices sent', '1', 'Total invoiced'])
+        ->assertSeeInOrder(['Invoice month', 'Jul 2024'])
+        ->call('setYear', '')->assertSeeInOrder(['Invoices sent', '2', 'Total invoiced'])->assertSet('from', '')->assertViewHas('year', null)->assertSee($now->number)
+        ->call('setYear', 'junk')->assertSet('from', '');
+
+    $portal = User::factory()->create(['client_id' => $c->id])->assignRole('client');
+    Livewire::actingAs($portal)->test(\App\Livewire\Portal\Invoices::class)
+        ->assertSeeHtml('data-test="year-filter"')->call('setYear', '2024')->assertSee($old->number)->assertDontSee($now->number);
 });

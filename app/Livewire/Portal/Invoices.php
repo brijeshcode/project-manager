@@ -35,7 +35,7 @@ class Invoices extends Component
         $month = $sent->filter(fn ($i) => $i->issued_on->isSameMonth(today()));
 
         return view('livewire.portal.invoices', [
-            'invoices' => $this->fitPage($filtered->latest('issued_on')->latest('id')->select(['id', 'number', 'client_id', 'issued_on', 'due_on', 'currency_id', 'total_cents']), \App\Support\Settings::pageSize()),
+            'invoices' => $this->fitPage($filtered->latest('issued_on')->latest('id')->select(['id', 'number', 'client_id', 'issued_on', 'for_month', 'due_on', 'currency_id', 'total_cents']), \App\Support\Settings::pageSize()),
             'stats' => [
                 'invoiced' => $byCur($sent),
                 'count' => $sent->count(),
@@ -45,6 +45,8 @@ class Invoices extends Component
             ],
             'currency' => auth()->user()->client->currency,
             'period' => $this->activePeriod(),
+            'years' => $this->yearsSince(Invoice::where('client_id', auth()->user()->client_id)->where('status', 'sent')->min('issued_on')),
+            'year' => $this->activeYear(),
         ])->layout('layouts.app');
     }
 }

@@ -22,6 +22,7 @@ trait PaymentFields
     public string $amount = '';
     public string $currency = '';
     public string $paid_on = '';
+    public string $for_month = '';
     public string $type = 'project';
     public string $method = '';
     public string $notes = '';
@@ -78,6 +79,7 @@ trait PaymentFields
             'project_id' => ['nullable', Rule::exists('projects', 'id')->where('client_id', $this->client_id)],
             'amount' => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('The amount must be greater than zero.')],
             'paid_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'for_month' => ['nullable', 'date_format:Y-m'],
             'type' => ['required', new Enum(PaymentType::class)],
             'method' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
@@ -91,7 +93,7 @@ trait PaymentFields
             'client_id' => $data['client_id'], 'project_id' => $data['project_id'] ?: null,
             'amount_cents' => $cents, 'currency' => $cur,
             'exchange_rate' => $rate, 'local_amount_cents' => Money::convert($cents, $rate), 'local_currency' => $local,
-            'paid_on' => $data['paid_on'], 'type' => $data['type'],
+            'paid_on' => $data['paid_on'], 'for_month' => $data['for_month'] ?: null, 'type' => $data['type'],
             'method' => $data['method'] ?: null, 'notes' => $data['notes'] ?: null,
             'documents_visible_to_client' => (bool) $data['documents_visible_to_client'],
         ];

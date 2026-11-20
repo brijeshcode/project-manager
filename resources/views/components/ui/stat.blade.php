@@ -6,6 +6,7 @@
         'yellow' => 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
         'blue' => 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
         'purple' => 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+        'slate' => 'bg-slate-100 text-slate-600 dark:bg-gray-700/50 dark:text-gray-300',
     ][$color] ?? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
 @endphp
 

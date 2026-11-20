@@ -25,7 +25,7 @@
     @if ($statement['rows']->isEmpty() && $statement['opening'] === 0)
         <x-ui.empty-state :title="$filtered ? 'Nothing in this period' : 'No transactions yet'" :message="$filtered ? 'No sent invoices or payments fall in these dates.' : 'Sent invoices and payments for this client will appear here.'" name="document" />
     @else
-        <div class="overflow-x-auto">
+        <div class="table-scroll">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700" data-test="statement">
                 <thead>
                     <tr>

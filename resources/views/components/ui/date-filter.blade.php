@@ -1,5 +1,6 @@
-{{-- Pairs with App\Livewire\Concerns\WithDateFilter. $period = activePeriod(); $label names the date ("Issued", "Paid"). --}}
-@props(['label', 'from', 'to', 'period' => false])
+{{-- Pairs with App\Livewire\Concerns\WithDateFilter. $period = activePeriod(); $label names the date ("Issued", "Paid").
+     $years (yearsSince()) adds a year dropdown; $year = activeYear(). --}}
+@props(['label', 'from', 'to', 'period' => false, 'years' => [], 'year' => null])
 <div {{ $attributes->merge(['class' => 'flex flex-wrap items-center gap-x-3 gap-y-2']) }}>
     <span class="text-sm font-medium text-slate-600 dark:text-gray-300">{{ $label }}</span>
     <div class="inline-flex overflow-hidden rounded-lg border border-slate-200 dark:border-gray-700" role="group" aria-label="{{ $label }} period">
@@ -8,6 +9,15 @@
             <button type="button" wire:click="setPeriod('{{ $p }}')" aria-pressed="{{ $on ? 'true' : 'false' }}" @class(['border-l border-slate-200 px-3 py-1.5 text-sm font-medium transition first:border-l-0 dark:border-gray-700', 'bg-brand-600 text-white' => $on, 'bg-white text-slate-600 hover:bg-slate-50 dark:bg-transparent dark:text-gray-300 dark:hover:bg-gray-800' => ! $on]) @if ($p !== '') data-test="period-{{ $p }}" @endif>{{ $text }}</button>
         @endforeach
     </div>
+    @if ($years)
+        <label for="year" class="sr-only">{{ $label }} year</label>
+        <select id="year" wire:change="setYear($event.target.value)" class="input w-auto" data-test="year-filter">
+            <option value="" @selected(! $year)>Year</option>
+            @foreach ($years as $y)
+                <option value="{{ $y }}" @selected($year === $y)>{{ $y }}</option>
+            @endforeach
+        </select>
+    @endif
     <div class="flex items-center gap-2">
         <label for="from" class="sr-only">{{ $label }} from</label>
         <input wire:model.live="from" id="from" type="date" class="input w-auto dark:[color-scheme:dark]" />

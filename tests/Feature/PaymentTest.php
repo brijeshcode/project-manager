@@ -142,6 +142,35 @@ it('filters by client, type and paid date; stats follow the filters', function (
     Livewire::test(Index::class)->set('from', '2026-12-01')->assertSee('No matches');
 });
 
+it('saves the month a payment is for and shows it in admin and the portal', function () {
+    $this->actingAs(payOwner());
+    $c = payClient('A');
+    payForm($c)->set('for_month', '2024-01')->call('save')->assertHasNoErrors();
+    $p = Payment::sole();
+    expect($p->for_month)->toBe('2024-01');
+    Livewire::test(Form::class, ['payment' => $p])->assertSet('for_month', '2024-01')->set('for_month', 'junk')->call('save')->assertHasErrors('for_month');
+    Livewire::test(Index::class)->assertSeeInOrder(['Paid for', 'Jan 2024']);
+
+    $portal = \App\Models\User::factory()->create(['client_id' => $c->id])->assignRole('client');
+    Livewire::actingAs($portal)->test(\App\Livewire\Portal\Payments::class)->assertSeeInOrder(['Paid for', 'Jan 2024']);
+});
+
+it('year dropdown filters payments to one year, in admin and the portal', function () {
+    $this->travelTo('2026-11-11');
+    $a = payClient('A');
+    $mk = fn ($cents, $date) => Payment::create(['client_id' => $a->id, 'amount_cents' => $cents, 'currency' => 'USD', 'exchange_rate' => '1', 'local_amount_cents' => $cents, 'local_currency' => 'INR', 'paid_on' => $date, 'type' => 'project']);
+    $mk(111100, '2026-03-01');
+    $mk(222200, '2025-06-01');
+
+    Livewire::actingAs(payOwner())->test(Index::class)->assertViewHas('years', [2026, 2025])
+        ->call('setYear', '2025')->assertSet('to', '2025-12-31')->assertSee('2,222.00')->assertDontSee('1,111.00')
+        ->assertSeeInOrder(['Payments', '1', 'From 1 client'])->assertSeeInOrder(['Paid month', 'Jun 2025']);
+
+    $portal = \App\Models\User::factory()->create(['client_id' => $a->id])->assignRole('client');
+    Livewire::actingAs($portal)->test(\App\Livewire\Portal\Payments::class)->assertSeeHtml('data-test="year-filter"')
+        ->call('setYear', '2026')->assertSee('1,111.00')->assertDontSee('2,222.00');
+});
+
 it('flags payments without a rate in the stats', function () {
     $this->actingAs(payOwner());
     $c = payClient();

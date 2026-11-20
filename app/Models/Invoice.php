@@ -14,7 +14,7 @@ class Invoice extends Model
 
     protected $fillable = [
         'number', 'client_id', 'status', 'issued_on', 'due_on', 'currency', 'subtotal_cents', 'tax_percent',
-        'tax_cents', 'total_cents', 'bank_account_id', 'bank_snapshot', 'exchange_rate', 'local_total_cents', 'terms', 'emailed_at', 'lines_snapshot', 'show_quantity',
+        'tax_cents', 'total_cents', 'bank_account_id', 'bank_snapshot', 'exchange_rate', 'local_total_cents', 'terms', 'emailed_at', 'lines_snapshot', 'show_quantity', 'for_month',
     ];
 
     protected $hidden = ['bank_snapshot'];
@@ -27,6 +27,12 @@ class Invoice extends Model
                 $i->local_total_cents = $i->exchange_rate === null ? null : Money::convert((int) $i->total_cents, (string) $i->exchange_rate);
             }
         });
+    }
+
+    /** The month it bills for, as "Jan 2024"; null when not set. */
+    public function forMonthLabel(): ?string
+    {
+        return $this->for_month ? \Carbon\Carbon::createFromFormat('!Y-m', $this->for_month)->format('M Y') : null;
     }
 
     protected function casts(): array

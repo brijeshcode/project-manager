@@ -263,6 +263,7 @@ class InvoiceService
             $bank = $bankId ? BankAccount::findOrFail($bankId) : null;
             $locked->update([
                 'issued_on' => $h['issued_on'], 'due_on' => $h['due_on'] ?? null, 'terms' => $h['terms'] ?? null,
+                'for_month' => array_key_exists('for_month', $h) ? $h['for_month'] : $locked->for_month,
                 'subtotal_cents' => $subtotal, 'tax_percent' => sprintf('%d.%02d', intdiv($pct, 100), $pct % 100),
                 'tax_cents' => $tax, 'total_cents' => $subtotal + $tax, 'exchange_rate' => $rate,
                 'local_total_cents' => $rate === null ? null : Money::convert($subtotal + $tax, $rate),

@@ -29,6 +29,7 @@ class Edit extends Component
     public string $bankAccountId = '';
     public string $exchangeRate = '';
     public string $issuedOn = '';
+    public string $forMonth = '';
     public string $dueOn = '';
     public string $terms = '';
 
@@ -41,6 +42,7 @@ class Edit extends Component
         $this->bankAccountId = (string) ($invoice->bank_account_id ?? '');
         $this->exchangeRate = $invoice->exchange_rate === null ? '' : (str_contains($r = (string) $invoice->exchange_rate, '.') ? rtrim(rtrim($r, '0'), '.') : $r);
         $this->issuedOn = $invoice->issued_on->toDateString();
+        $this->forMonth = (string) $invoice->for_month;
         $this->dueOn = $invoice->due_on?->toDateString() ?? '';
         $this->terms = (string) $invoice->terms;
         $this->showQuantity = (bool) $invoice->show_quantity;
@@ -89,6 +91,7 @@ class Edit extends Component
             'bankAccountId' => ['nullable', 'regex:/^\d{1,18}$/', Rule::exists('bank_accounts', 'id')],
             'exchangeRate' => $same ? 'nullable' : ['bail', 'required', 'string', fn ($a, $v, $fail) => Money::isValidRate((string) $v) || $fail('Enter a positive rate with up to 6 decimals (max 999999.999999).')],
             'issuedOn' => ['required', 'date_format:Y-m-d'],
+            'forMonth' => ['nullable', 'date_format:Y-m'],
             'dueOn' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:issuedOn'],
             'terms' => 'nullable|string|max:255',
             'edits.*.description' => ['bail', 'required', 'string', 'max:255'],
@@ -101,7 +104,7 @@ class Edit extends Component
 
         [$lineIds, $labels] = $this->groupLines();
         $svc->update($invoice, [...$lineIds, ...array_map('intval', array_keys($this->edits))], array_values($this->custom), [
-            'tax_percent' => $this->taxPercent, 'issued_on' => $this->issuedOn, 'due_on' => $this->dueOn ?: null,
+            'tax_percent' => $this->taxPercent, 'issued_on' => $this->issuedOn, 'for_month' => $this->forMonth ?: null, 'due_on' => $this->dueOn ?: null,
             'terms' => $this->terms ?: null, 'show_quantity' => $this->showQuantity, 'bank_account_id' => $this->bankAccountId === '' ? null : (int) $this->bankAccountId,
             'exchange_rate' => $same ? null : $this->exchangeRate,
         ], $this->edits, $labels, $this->groupAmounts());

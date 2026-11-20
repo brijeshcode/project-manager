@@ -10,6 +10,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
+beforeEach(fn () => $this->seed(\Database\Seeders\RoleSeeder::class));
+
 it('seeds subscriptions, sent invoices and payments from the history file, once', function () {
     $path = tempnam(sys_get_temp_dir(), 'hist');
     file_put_contents($path, json_encode([

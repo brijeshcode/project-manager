@@ -61,6 +61,8 @@ class Index extends Component
             'stats' => \App\Support\MoneyStats::invoices($filtered),
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'period' => $this->activePeriod(),
+            'years' => $this->yearsSince(Invoice::min('issued_on')),
+            'year' => $this->activeYear(),
         ]);
     }
 }

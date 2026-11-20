@@ -41,7 +41,7 @@
                 </select>
             </div>
         </div>
-        <x-ui.date-filter label="Paid" :from="$from" :to="$to" :period="$period" class="mt-4" />
+        <x-ui.date-filter label="Paid" :from="$from" :to="$to" :period="$period" :years="$years" :year="$year" class="mt-4" />
         @if ($balanceClient)
             <div class="mt-4 flex flex-wrap items-baseline gap-x-2 border-t border-slate-100 pt-4 text-sm dark:border-gray-700" data-test="client-balance">
                 <span class="text-slate-500 dark:text-gray-400">{{ $balanceClient->name }} balance</span>
@@ -65,11 +65,13 @@
             </x-ui.empty-state>
         @endif
     @else
-        <x-ui.table-card>
+        <x-ui.table-card sticky>
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
                 <thead>
                     <tr>
                         <th class="table-th">Date</th>
+                        <th class="table-th">Paid month</th>
+                        <th class="table-th">Paid for</th>
                         <th class="table-th">Client / project</th>
                         <th class="table-th">Type</th>
                         <th class="table-th hidden md:table-cell">Method</th>
@@ -88,6 +90,8 @@
                         @endphp
                         <tr wire:key="pay-{{ $p->id }}" class="hover:bg-slate-50 dark:hover:bg-gray-700/40">
                             <td class="table-td whitespace-nowrap text-slate-600 dark:text-gray-300">{{ $p->paid_on->format('M j, Y') }}</td>
+                            <td class="table-td whitespace-nowrap text-slate-600 dark:text-gray-300" data-test="month">{{ $p->paid_on->format('M Y') }}</td>
+                            <td class="table-td whitespace-nowrap text-slate-600 dark:text-gray-300" data-test="for-month">{{ $p->forMonthLabel() ?? '—' }}</td>
                             <td class="table-td max-w-xs">
                                 <a href="{{ route('payments.show', $p) }}" wire:navigate class="block truncate font-medium text-gray-900 hover:underline dark:text-white">{{ $p->client->name }}</a>
                                 <div class="truncate text-xs text-slate-500 dark:text-gray-400">{{ $p->project?->name ?? 'No project' }}</div>

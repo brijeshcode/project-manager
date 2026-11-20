@@ -85,6 +85,8 @@ class Index extends Component
             'clients' => Client::orderBy('name')->get(['id', 'name']),
             'types' => PaymentType::cases(),
             'period' => $this->activePeriod(),
+            'years' => $this->yearsSince(Payment::min('paid_on')),
+            'year' => $this->activeYear(),
             'payments' => $this->fitPage((clone $filtered)->with(['client', 'project'])->withCount('documents')
                 ->orderByDesc('paid_on')->orderByDesc('id'), \App\Support\Settings::pageSize()),
             'balanceClient' => $client,

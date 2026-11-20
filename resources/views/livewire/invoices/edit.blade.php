@@ -26,6 +26,11 @@
                     @error('issuedOn') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
                 <div>
+                    <label for="forMonth" class="label">Billed for (month)</label>
+                    <input wire:model="forMonth" id="forMonth" type="month" class="input dark:[color-scheme:dark]" />
+                    @error('forMonth') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+                <div>
                     <label for="dueOn" class="label">Due date</label>
                     <input wire:model="dueOn" id="dueOn" type="date" class="input" />
                     @error('dueOn') <p class="field-error">{{ $message }}</p> @enderror

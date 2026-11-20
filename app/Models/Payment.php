@@ -12,11 +12,17 @@ class Payment extends Model
 {
     use HasCurrency;
 
-    protected $fillable = ['client_id', 'project_id', 'amount_cents', 'paid_on', 'type', 'method', 'notes', 'exchange_rate', 'local_amount_cents', 'local_currency', 'currency', 'documents_visible_to_client'];
+    protected $fillable = ['client_id', 'project_id', 'amount_cents', 'paid_on', 'type', 'method', 'notes', 'exchange_rate', 'local_amount_cents', 'local_currency', 'currency', 'documents_visible_to_client', 'for_month'];
 
     protected function casts(): array
     {
         return ['paid_on' => 'date', 'type' => PaymentType::class, 'exchange_rate' => 'decimal:6', 'documents_visible_to_client' => 'boolean'];
+    }
+
+    /** The month it pays for, as "Jan 2024"; null when not set. */
+    public function forMonthLabel(): ?string
+    {
+        return $this->for_month ? \Carbon\Carbon::createFromFormat('!Y-m', $this->for_month)->format('M Y') : null;
     }
 
     protected static function booted(): void

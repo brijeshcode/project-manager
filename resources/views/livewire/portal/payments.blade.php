@@ -10,8 +10,8 @@
     </x-ui.page-header>
 
     <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-test="portal-payment-stats">
-        <x-ui.stat label="Total paid" :value="$sums($stats['total'])" color="green" icon="credit-card" hint="Received from you" />
         <x-ui.stat label="Payments" :value="$stats['count']" color="blue" icon="document" :hint="$filtering ? 'In this view' : 'All time'" />
+        <x-ui.stat label="Total paid" :value="$sums($stats['total'])" color="green" icon="credit-card" hint="Received from you" />
         <x-ui.stat label="Average payment" :value="$sums($stats['average'])" color="purple" icon="currency" hint="Per payment" />
         @if ($stats['by_type'])
             <x-ui.stat label="By type" color="yellow"
@@ -32,7 +32,7 @@
             </div>
         </div>
         <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-gray-700">
-            <x-ui.date-filter label="Paid" :from="$from" :to="$to" :period="$period" />
+            <x-ui.date-filter label="Paid" :from="$from" :to="$to" :period="$period" :years="$years" :year="$year" />
             @if ($filtering)
                 <button type="button" wire:click="clearFilters" class="link text-sm">Clear all filters</button>
             @endif
@@ -75,11 +75,13 @@
         </div>
         <div class="mt-6">{{ $payments->links() }}</div>
     @else
-        <x-ui.table-card data-test="portal-payments-list">
+        <x-ui.table-card sticky data-test="portal-payments-list">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
                 <thead>
                     <tr>
                         <th class="table-th">Date</th>
+                        <th class="table-th">Paid month</th>
+                        <th class="table-th">Paid for</th>
                         <th class="table-th">Project</th>
                         <th class="table-th">Type</th>
                         <th class="table-th hidden md:table-cell">Method</th>
@@ -92,6 +94,8 @@
                     @foreach ($payments as $payment)
                         <tr wire:key="ppl-{{ $payment->id }}" class="hover:bg-slate-50 dark:hover:bg-gray-700/40">
                             <td class="table-td whitespace-nowrap"><a href="{{ route('portal.payment', $payment) }}" wire:navigate class="link font-medium" data-test="portal-payment-view">{{ $payment->paid_on->toFormattedDateString() }}</a></td>
+                            <td class="table-td whitespace-nowrap" data-test="month">{{ $payment->paid_on->format('M Y') }}</td>
+                            <td class="table-td whitespace-nowrap" data-test="for-month">{{ $payment->forMonthLabel() ?? '—' }}</td>
                             <td class="table-td max-w-xs truncate">{{ $payment->project?->name ?? '—' }}</td>
                             <td class="table-td whitespace-nowrap"><x-ui.badge>{{ $typeLabel($payment->type->value) }}</x-ui.badge></td>
                             <td class="table-td hidden whitespace-nowrap text-slate-600 md:table-cell dark:text-gray-300">{{ $payment->method ?: '—' }}</td>

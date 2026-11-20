@@ -8,7 +8,8 @@
         <x-slot:actions>@include('livewire.projects._view-toggle', ['live' => true])</x-slot:actions>
     </x-ui.page-header>
 
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-test="portal-invoice-stats">
+    <div class="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-test="portal-invoice-stats">
+        <x-ui.stat label="Invoices" :value="$stats['count']" icon="document" color="slate" :hint="$stats['month_count'].' in '.now()->format('F')" />
         <x-ui.stat label="Total invoiced" :value="$sums($stats['invoiced'])" icon="currency" color="blue" :hint="$stats['count'].' '.\Illuminate\Support\Str::plural('invoice', $stats['count'])" />
         <x-ui.stat label="This month" :value="$sums($stats['month'])" icon="calendar" color="green" :hint="$stats['month_count'].' in '.now()->format('F')" />
         <x-ui.stat label="Average invoice" :value="$sums($stats['average'])" icon="document" color="purple" hint="Per invoice" />
@@ -20,7 +21,7 @@
             <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by invoice number..." class="input" />
         </div>
         <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-gray-700">
-            <x-ui.date-filter label="Issued" :from="$from" :to="$to" :period="$period" />
+            <x-ui.date-filter label="Issued" :from="$from" :to="$to" :period="$period" :years="$years" :year="$year" />
             @if ($filtering)
                 <button type="button" wire:click="clearFilters" class="link text-sm">Clear all filters</button>
             @endif
@@ -57,12 +58,14 @@
         </div>
         <div class="mt-6">{{ $invoices->links() }}</div>
     @else
-        <x-ui.table-card data-test="portal-invoices-list">
+        <x-ui.table-card sticky data-test="portal-invoices-list">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
                 <thead>
                     <tr>
                         <th class="table-th">Invoice</th>
                         <th class="table-th">Issued</th>
+                        <th class="table-th">Invoice month</th>
+                        <th class="table-th">Billed for</th>
                         <th class="table-th">Pay by</th>
                         <th class="table-th text-right">Amount</th>
                         <th class="table-th"><span class="sr-only">Actions</span></th>
@@ -73,6 +76,8 @@
                         <tr wire:key="pil-{{ $invoice->id }}" class="hover:bg-slate-50 dark:hover:bg-gray-700/40">
                             <td class="table-td whitespace-nowrap"><a href="{{ route('portal.invoice', $invoice) }}" wire:navigate class="link font-medium">{{ $invoice->number }}</a></td>
                             <td class="table-td whitespace-nowrap">{{ $invoice->issued_on->toFormattedDateString() }}</td>
+                            <td class="table-td whitespace-nowrap" data-test="month">{{ $invoice->issued_on->format('M Y') }}</td>
+                            <td class="table-td whitespace-nowrap" data-test="for-month">{{ $invoice->forMonthLabel() ?? '—' }}</td>
                             <td class="table-td whitespace-nowrap">{{ $invoice->due_on?->toFormattedDateString() ?? '—' }}</td>
                             <td class="table-td whitespace-nowrap text-right font-medium tabular-nums text-gray-900 dark:text-white">{{ $money($invoice->total_cents, $invoice->currency) }}</td>
                             <td class="table-td whitespace-nowrap text-right">

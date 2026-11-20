@@ -42,6 +42,28 @@ trait WithDateFilter
         $this->resetPage();
     }
 
+    /** A whole calendar year; '' clears the dates. */
+    public function setYear(string $year): void
+    {
+        $y = (int) $year;
+        [$this->from, $this->to] = $y >= 1900 && $y <= 9999 ? ["$y-01-01", "$y-12-31"] : ['', ''];
+        $this->resetPage();
+    }
+
+    /** The year the from/to dates cover exactly, else null. */
+    protected function activeYear(): ?int
+    {
+        $y = (int) substr($this->from, 0, 4);
+
+        return $this->from === "$y-01-01" && $this->to === "$y-12-31" ? $y : null;
+    }
+
+    /** Year dropdown choices: this year back to the earliest date (Y-m-d…) given; just this year when there is none. */
+    protected function yearsSince(?string $earliest): array
+    {
+        return range(today()->year, min(today()->year, (int) substr((string) $earliest, 0, 4) ?: today()->year));
+    }
+
     /** The active shortcut key, or false. */
     protected function activePeriod(): string|false
     {

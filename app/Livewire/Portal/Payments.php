@@ -73,7 +73,7 @@ class Payments extends Component
                 'documents' => fn ($q) => $q->whereHas('payment', self::visibleTo($cid))->select('id', 'payment_id', 'original_name'),
             ])
             ->latest('paid_on')->latest('id')
-            ->select(['id', 'client_id', 'project_id', 'currency_id', 'amount_cents', 'paid_on', 'type', 'method', 'documents_visible_to_client']), \App\Support\Settings::pageSize());
+            ->select(['id', 'client_id', 'project_id', 'currency_id', 'amount_cents', 'paid_on', 'for_month', 'type', 'method', 'documents_visible_to_client']), \App\Support\Settings::pageSize());
 
         return view('livewire.portal.payments', [
             'payments' => $payments,
@@ -81,6 +81,8 @@ class Payments extends Component
             'hasDocs' => $payments->contains(fn ($p) => $p->documents->isNotEmpty()),
             'types' => PaymentType::cases(),
             'period' => $this->activePeriod(),
+            'years' => $this->yearsSince(Payment::where('client_id', $cid)->min('paid_on')),
+            'year' => $this->activeYear(),
             'stats' => [
                 'total' => $byCur($all),
                 'count' => $all->count(),

@@ -81,6 +81,13 @@
     .table-th {
         @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400;
     }
+    /* Long tables: scroll inside the box so the header row stays in view (sticky needs the scrolling box itself) */
+    .table-scroll {
+        @apply max-h-[75vh] overflow-auto;
+    }
+    .table-scroll thead th {
+        @apply sticky top-0 z-10 bg-white shadow-[inset_0_-1px_0_theme(colors.slate.200)] dark:bg-gray-800 dark:shadow-[inset_0_-1px_0_theme(colors.gray.700)];
+    }
     .table-td {
         @apply px-4 py-3 text-sm text-slate-700 dark:text-gray-300;
     }

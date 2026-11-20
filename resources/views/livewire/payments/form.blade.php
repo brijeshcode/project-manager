@@ -29,6 +29,11 @@
                         @error('paid_on') <p class="mt-1 field-error">{{ $message }}</p> @enderror
                     </div>
                     <div>
+                        <label for="for_month" class="label">Paid for (month)</label>
+                        <input wire:model="for_month" id="for_month" type="month" class="input dark:[color-scheme:dark]" />
+                        @error('for_month') <p class="mt-1 field-error">{{ $message }}</p> @enderror
+                    </div>
+                    <div>
                         <label for="type" class="label">Type</label>
                         <select wire:model="type" id="type" class="select">
                             @foreach ($types as $t)<option value="{{ $t->value }}">{{ ucfirst(str_replace('_', ' ', $t->value)) }}</option>@endforeach
