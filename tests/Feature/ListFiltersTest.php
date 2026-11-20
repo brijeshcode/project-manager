@@ -74,7 +74,8 @@ it('projects: search by name or client, status filter, % literal', function () {
     Project::create(['client_id' => $a->id, 'name' => 'Website', 'status' => 'active']);
     Project::create(['client_id' => $b->id, 'name' => 'Mobile', 'status' => 'on_hold']);
     Project::create(['client_id' => $b->id, 'name' => '50% Off', 'status' => 'active']);
-    Livewire::test(ProjectsIndex::class)->assertOk()->assertSee('Website')->assertSee('Mobile')
+    Livewire::test(ProjectsIndex::class)->assertOk()->assertSet('status', 'active')->assertSee('Website')->assertDontSee('Mobile')
+        ->set('status', '')->assertSeeInOrder(['50% Off', 'Website', 'Mobile']) // active first, then by name
         ->set('search', 'web')->assertSee('Website')->assertDontSee('Mobile')
         ->set('search', 'bolt')->assertSee('Mobile')->assertDontSee('Website')
         ->set('search', '%')->assertSee('50% Off')->assertDontSee('Mobile')

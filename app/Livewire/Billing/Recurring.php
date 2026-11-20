@@ -22,6 +22,7 @@ class Recurring extends Component
     public function mount(): void
     {
         $this->authorize('manage-money');
+        $this->status = (string) request()->query('status', 'active');
     }
 
     public function updatedClientFilter(): void

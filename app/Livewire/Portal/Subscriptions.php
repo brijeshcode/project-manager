@@ -13,6 +13,9 @@ class Subscriptions extends Component
     {
         abort_unless(auth()->user()->hasRole('client'), 403);
         abort_if(! auth()->user()->client_id, 403);
+        // opens on active ones, unless one awaits approval (not active yet): then on all, so the banner's item is in the list
+        $awaiting = auth()->user()->client->recurringCharges()->where('client_state', \App\Models\RecurringCharge::AWAITING)->exists();
+        $this->status = (string) request()->query('status', $awaiting ? '' : 'active');
     }
 
     public function render()

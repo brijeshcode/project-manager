@@ -29,7 +29,7 @@ class Projects extends Component
         $progress = app(ProgressService::class);
         // explicit columns: no cost or internal fields; final_budget is the agreed project amount
         $projects = Project::where('client_id', $client->id)->whereIn('status', Project::CLIENT_STATUSES)
-            ->with('modules')->orderBy('name')
+            ->with('modules')->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")->orderBy('name')
             ->get(['id', 'name', 'status', 'client_id', 'currency_id', 'deadline', 'final_budget']);
 
         return view('livewire.portal.projects', [

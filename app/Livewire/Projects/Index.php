@@ -21,6 +21,12 @@ class Index extends Component
     #[Url(as: 'view')]
     public string $view = 'cards';
 
+    /** Opens on active projects; ?status= (empty for All) overrides. */
+    public function mount(): void
+    {
+        $this->status = (string) request()->query('status', 'active');
+    }
+
     /**
      * Last day anyone worked on each project: the latest time entry on its tasks or subtasks,
      * else the latest task change. Three grouped queries, whatever the number of projects.
@@ -61,7 +67,7 @@ class Index extends Component
     {
         $this->view = in_array($this->view, ['cards', 'list'], true) ? $this->view : 'cards';
         $user  = auth()->user();
-        $query = Project::with(['client', 'members'])->withCount('modules')->orderBy('name');
+        $query = Project::with(['client', 'members'])->withCount('modules')->orderByRaw("CASE WHEN projects.status = 'active' THEN 0 ELSE 1 END")->orderBy('name');
 
         if (! $user->hasRole('super_admin')) {
             $query->whereHas('members', fn ($q) => $q

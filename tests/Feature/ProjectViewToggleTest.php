@@ -38,7 +38,7 @@ it('shows started, completed and last-worked dates', function () {
     expect(Index::lastWorked([$held->id])[$held->id]->toDateString())->toBe('2026-04-20');
 
     foreach (['cards', 'list'] as $view) {
-        Livewire::withQueryParams(['view' => $view])->actingAs($this->admin)->test(Index::class)
+        Livewire::withQueryParams(['view' => $view, 'status' => ''])->actingAs($this->admin)->test(Index::class)
             ->assertSee('Started Jan 5, 2026')->assertSee('Completed Mar 10, 2026')->assertSee('Last worked Apr 20, 2026');
     }
     Livewire::actingAs($this->admin)->test(Show::class, ['client' => $this->client])

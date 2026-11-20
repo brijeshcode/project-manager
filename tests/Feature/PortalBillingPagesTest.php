@@ -114,6 +114,19 @@ it('subscriptions list shows stats and filters, hides internal flags', function 
         ->set('status', '')->set('search', 'host')->assertSee('Hosting')->assertDontSee('Domain');
 });
 
+it('subscriptions open on active ones, or on all while one awaits approval; the admin list opens on active', function () {
+    [$k, $ku] = pbClient('K');
+    RecurringCharge::create(['client_id' => $k->id, 'description' => 'Hosting', 'amount_cents' => 5000, 'frequency' => 'monthly', 'next_due_on' => today()->addDays(5), 'active' => true]);
+    $domain = RecurringCharge::create(['client_id' => $k->id, 'description' => 'Domain', 'amount_cents' => 1200, 'frequency' => 'yearly', 'next_due_on' => today()->addMonths(3), 'active' => false]);
+
+    Livewire\Livewire::actingAs($ku)->test(\App\Livewire\Portal\Subscriptions::class)->assertSet('status', 'active')->assertSee('Hosting')->assertDontSee('Domain');
+    Livewire\Livewire::actingAs(User::factory()->create()->assignRole('super_admin'))->test(\App\Livewire\Billing\Recurring::class)
+        ->assertSet('status', 'active')->assertSee('Hosting')->assertDontSee('Domain');
+
+    $domain->update(['client_state' => RecurringCharge::AWAITING]);
+    Livewire\Livewire::actingAs($ku)->test(\App\Livewire\Portal\Subscriptions::class)->assertSet('status', '')->assertSee('Domain');
+});
+
 it('subscription page shows dates and skipped periods but never draft invoices', function () {
     [$k, $ku] = pbClient('K');
     $c = RecurringCharge::create(['client_id' => $k->id, 'description' => 'Hosting', 'amount_cents' => 5000, 'frequency' => 'monthly', 'next_due_on' => '2026-01-01', 'starts_on' => '2026-01-01', 'active' => true, 'skipped_periods' => ['2026-02']]);
