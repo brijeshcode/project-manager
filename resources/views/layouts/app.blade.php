@@ -28,6 +28,7 @@
                 ['Invoices',      'invoices.index',        'invoices.*',                           'document',    $money],
                 ['Invoices',      'portal.invoices',       ['portal.invoices', 'portal.invoice'],  'document',    $client],
                 ['Payments',      'payments.index',        'payments.*',                           'credit-card', $money],
+                ['Expenses',      'expenses.index',        'expenses.*',                           'tag',         $money],
                 ['Payments',      'portal.payments',       ['portal.payments', 'portal.payment'],  'credit-card', $client && $u->client?->portalShows('payments')],
                 ['Statement',     'portal.statement',      'portal.statement',                     'document',    $client && $u->client?->portalShows('statement')],
                 ['Subscriptions', 'portal.subscriptions',  ['portal.subscriptions', 'portal.subscription'], 'refresh', $client],
@@ -35,6 +36,7 @@
             $settingsNav = collect([
                 ['Currencies',    'currencies.index',      'currencies.*',                         'coins',              $money],
                 ['Bank accounts', 'billing.bank-accounts', 'billing.bank-accounts',                'landmark',           $money],
+                ['Expense categories', 'settings.expense-categories', 'settings.expense-categories', 'tags',          $money],
                 ['Task types',    'settings.task-types',   'settings.task-types',                  'sliders-horizontal', $u && $u->can('manage-taxonomy')],
                 ['Labels',        'settings.labels',       'settings.labels',                      'tags',               $u && $u->can('manage-taxonomy')],
                 ['System',        'settings.system',       'settings.system',                      'settings',           $u && $u->can('manage-system')],

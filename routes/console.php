@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('billing:generate-recurring')->daily();
+Schedule::command('expenses:generate-recurring')->daily();
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

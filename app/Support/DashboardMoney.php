@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\BillableLine;
 use App\Models\Client;
+use App\Models\ExpensePayment;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\ClientAccount;
@@ -49,9 +50,18 @@ class DashboardMoney
             }
         }
 
+        // money going out: expense payments in the window, stored local amounts only (NULL-local counted)
+        $paidOut = fn () => ExpensePayment::query()
+            ->whereDate('paid_on', '>=', $from->toDateString())->whereDate('paid_on', '<=', $to->toDateString());
+        $expenses = (int) $paidOut()->where('local_currency', $local)->sum('local_amount_cents');
+        $income = $received($from, $to);
+
         return [
             'currency' => $local,
-            'received' => $received($from, $to),
+            'received' => $income,
+            'expenses' => $expenses,
+            'net' => $income - $expenses,
+            'expenses_missing_rate' => $paidOut()->whereNull('local_amount_cents')->count(),
             'pass_through' => self::passThroughLocal($from, $to)->sum('cents'),
             'this_month' => $received(now()->startOfMonth(), now()->endOfMonth()),
             'outstanding' => $outstanding,

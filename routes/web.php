@@ -74,6 +74,8 @@ Route::middleware(['auth', 'can:manage-money'])->prefix('currencies')->name('cur
 
 Route::get('settings', \App\Livewire\Settings\Index::class)
     ->middleware(['auth', 'can:manage-money'])->name('settings.index');
+Route::get('settings/expense-categories', \App\Livewire\Settings\ExpenseCategories::class)
+    ->middleware(['auth', 'can:manage-money'])->name('settings.expense-categories');
 Route::get('billing/bank-accounts', \App\Livewire\Billing\BankAccounts::class)
     ->middleware(['auth', 'can:manage-money'])->name('billing.bank-accounts');
 
@@ -86,6 +88,13 @@ Route::middleware(['auth', 'can:manage-money'])->prefix('payments')->name('payme
     Route::get('create', \App\Livewire\Payments\Form::class)->name('create');
     Route::get('{payment}', \App\Livewire\Payments\Show::class)->name('show');
     Route::get('{payment}/edit', \App\Livewire\Payments\Form::class)->name('edit');
+});
+
+Route::middleware(['auth', 'can:manage-money'])->prefix('expenses')->name('expenses.')->whereNumber('expense')->group(function () {
+    Route::get('/', \App\Livewire\Expenses\Index::class)->name('index');
+    Route::get('create', \App\Livewire\Expenses\Form::class)->name('create');
+    Route::get('{expense}', \App\Livewire\Expenses\Show::class)->name('show');
+    Route::get('{expense}/edit', \App\Livewire\Expenses\Form::class)->name('edit');
 });
 
 Route::get('payment-documents/{document}/download', \App\Http\Controllers\PaymentDocumentDownloadController::class)

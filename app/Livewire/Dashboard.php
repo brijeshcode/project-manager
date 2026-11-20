@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\Client;
+use App\Models\Expense;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
@@ -144,6 +145,8 @@ class Dashboard extends Component
             'openTasks' => Task::whereDoesntHave('column', fn ($q) => $q->where('stage', 'done'))->count(),
             'hoursWeek' => (float) TimeEntry::whereBetween('worked_on', [now()->startOfWeek(), now()->endOfWeek()])->sum('hours'),
             'recent' => Project::with('client')->latest()->take(5)->get(),
+            // PHP-side date math: MySQL locally, SQLite in tests
+            'bills' => Expense::due()->with('category', 'payments')->orderBy('incurred_on')->get()->filter->remindable()->values(),
         ]);
     }
 }

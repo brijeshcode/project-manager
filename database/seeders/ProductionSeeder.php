@@ -6,6 +6,8 @@ use App\Enums\PaymentType;
 use App\Enums\RecurringFrequency;
 use App\Models\BillableLine;
 use App\Models\Client;
+use App\Models\Expense;
+use App\Models\ExpenseCategory;
 use App\Models\Invoice;
 use App\Models\Module;
 use App\Models\Payment;
@@ -23,7 +25,7 @@ use Illuminate\Support\Facades\Hash;
 /**
  * Real clients, projects, subscriptions and billing history for production. Safe to run more than once: nothing
  * already there is duplicated or changed, and no past subscription periods are billed by the scheduler.
- * History (subscriptions, sent invoices, payments) comes from data/production-history.json when present.
+ * History (subscriptions, sent invoices, payments, expenses) comes from data/production-history.json when present.
  * Run: php artisan db:seed --class=ProductionSeeder
  */
 class ProductionSeeder extends Seeder
@@ -343,6 +345,27 @@ class ProductionSeeder extends Seeder
             $n['payments']++;
         }
 
-        $this->command?->info("History: {$n['subscriptions']} subscriptions, {$n['invoices']} invoices, {$n['payments']} payments created; {$n['skipped']} skipped.");
+        // money paid out (developer fees etc.), each fully paid on the day; admin only
+        $n['expenses'] = 0;
+        foreach ($data['expenses'] ?? [] as $e) {
+            $cid = isset($e['client']) ? ($clients[$e['client']] ?? null) : null;
+            $cents = Money::toCents((string) $e['amount']);
+            if (Expense::where('description', $e['description'])->whereDate('incurred_on', $e['paid_on'])->where('amount_cents', $cents)->exists()) {
+                $n['skipped']++;
+
+                continue;
+            }
+            $expense = Expense::create([
+                'expense_category_id' => ExpenseCategory::firstOrCreate(['name' => $e['category']])->id, 'description' => $e['description'], 'payee' => $e['payee'] ?? null, 'currency' => $e['currency'] ?? 'USD',
+                'amount_cents' => $cents, 'exchange_rate' => $e['exchange_rate'] ?? null, 'incurred_on' => $e['paid_on'], 'client_id' => $cid, 'project_id' => $cid ? $project($cid, $e['project'] ?? null) : null, 'notes' => $e['notes'] ?? null,
+            ]);
+            $expense->payments()->create([
+                'paid_on' => $e['paid_on'], 'amount_cents' => $cents, 'method' => $e['method'] ?? null, 'exchange_rate' => $e['exchange_rate'] ?? null,
+                'local_amount_cents' => isset($e['local_amount']) ? Money::toCents((string) $e['local_amount']) : null, 'local_currency' => $e['local_currency'] ?? null,
+            ]);
+            $n['expenses']++;
+        }
+
+        $this->command?->info("History: {$n['subscriptions']} subscriptions, {$n['invoices']} invoices, {$n['payments']} payments, {$n['expenses']} expenses created; {$n['skipped']} skipped.");
     }
 }

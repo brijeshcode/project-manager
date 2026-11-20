@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attachment;
+use App\Models\Expense;
+use App\Models\ExpensePayment;
 use App\Models\Resource;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
@@ -17,6 +19,8 @@ class AttachmentDownloadController extends Controller
         if ($owner instanceof Resource) {
             // resource files follow the resource's own viewers/editors (clients included)
             abort_unless($owner->canView($user) || $owner->canEdit($user), 403);
+        } elseif ($owner instanceof Expense || $owner instanceof ExpensePayment) {
+            abort_unless($user->can('manage-money'), 403);
         } else {
             // clients never see other attachments; staff need access to the owning project
             abort_if($user->hasRole('client'), 403);

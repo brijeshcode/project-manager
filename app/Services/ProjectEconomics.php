@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\CostRateType;
 use App\Models\BillableLine;
+use App\Models\ExpensePayment;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Models\Sprint;
@@ -57,13 +58,19 @@ class ProjectEconomics
         // income = received minus pass-through costs (server, hosting) billed on this project's sent invoices
         $received = $money['received_cents'] - $money['pass_through_cents'];
 
+        // ponytail: only expenses in the project's currency count (single-currency ceiling); convert via rates if projects mix currencies
+        $expenses = (int) ExpensePayment::query()->join('expenses', 'expenses.id', '=', 'expense_payments.expense_id')
+            ->where('expenses.project_id', $project->id)->where('expenses.currency_id', $project->currency_id)
+            ->sum('expense_payments.amount_cents');
+
         // cents per hour = cents * 100 / hundredths, half-up
         $perHour = fn (int $cents) => $totalH100 === 0 ? null : intdiv($cents * 200 + $totalH100, 2 * $totalH100);
 
         return [
             'hours'                => $totalH100 / 100.0,
             'cost_cents'           => $cost,
-            'profit_cents'         => $received - $cost,
+            'expense_cents'        => $expenses,
+            'profit_cents'         => $received - $cost - $expenses,
             'hourly_received_cents' => $perHour($received),
             'currency'             => $project->currency,
         ] + $money;

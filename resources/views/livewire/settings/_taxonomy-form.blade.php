@@ -1,4 +1,4 @@
-{{-- Create/edit form shared by the type and label pages: name, colour, icon. Uses the host's $editing, name, color, icon, save, cancel; $noun, $max, $current, $hint, $placeholder from the include. --}}
+{{-- Create/edit form shared by the type and label pages: name, colour, icon. Uses the host's $editing, name, color, icon, save, cancel; $noun, $max, $current, $hint, $placeholder (and optional $extra, a partial shown above the buttons) from the include. --}}
 <form wire:submit="save" class="card mb-6 max-w-3xl p-6" data-test="taxonomy-form">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ $current ? 'Edit '.$current->name : 'New '.$noun }}</h2>
     <p class="mt-1 text-sm text-slate-500 dark:text-gray-400">{{ $hint }}</p>
@@ -24,6 +24,7 @@
         <x-icon-picker model="icon" />
         @error('icon') <p class="mt-1 field-error">{{ $message }}</p> @enderror
     </div>
+    @includeWhen(! empty($extra), $extra ?? '')
 
     <div class="mt-6 flex flex-wrap gap-3">
         <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save" data-test="save">{{ $current ? 'Save changes' : 'Add '.$noun }}</button>

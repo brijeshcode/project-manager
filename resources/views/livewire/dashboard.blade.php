@@ -43,6 +43,9 @@
         @if ($money['payments_missing_rate'] > 0)
             <p class="mb-4 text-sm text-amber-700 dark:text-amber-400">{{ $money['payments_missing_rate'] }} {{ $money['payments_missing_rate'] === 1 ? 'payment has' : 'payments have' }} no exchange rate and {{ $money['payments_missing_rate'] === 1 ? 'is' : 'are' }} left out. <a href="{{ route('payments.index') }}" wire:navigate class="link">Set rates</a></p>
         @endif
+        @if ($money['expenses_missing_rate'] > 0)
+            <p class="mb-4 text-sm text-amber-700 dark:text-amber-400">{{ $money['expenses_missing_rate'] }} {{ $money['expenses_missing_rate'] === 1 ? 'expense payment has' : 'expense payments have' }} no exchange rate and {{ $money['expenses_missing_rate'] === 1 ? 'is' : 'are' }} left out of Expenses.</p>
+        @endif
         @if ($money['outstanding_missing_rate'] > 0)
             <p class="mb-4 text-sm text-amber-700 dark:text-amber-400">{{ $money['outstanding_missing_rate'] }} {{ $money['outstanding_missing_rate'] === 1 ? 'client' : 'clients' }} without a rate {{ $money['outstanding_missing_rate'] === 1 ? 'is' : 'are' }} left out of Outstanding.</p>
         @endif
@@ -52,8 +55,36 @@
             <x-ui.stat label="Outstanding Balance" icon="credit-card" color="yellow" :value="$loc($money['outstanding'])" :hint="$overdue.' overdue '.($overdue === 1 ? 'invoice' : 'invoices')" />
             <x-ui.stat label="Active Clients" icon="users" color="blue" :value="$activeClients" :hint="$clientCount.' total '.($clientCount === 1 ? 'client' : 'clients')" />
             <x-ui.stat label="This Month" icon="document" color="purple" :value="$loc($money['this_month'])" :hint="$sentThisMonth.' '.($sentThisMonth === 1 ? 'invoice' : 'invoices').' sent'" />
+            <x-ui.stat label="Expenses" icon="credit-card" color="slate" :value="$loc($money['expenses'])" :hint="$rangeLabel" />
+            <x-ui.stat label="Net Income" icon="currency" :color="$money['net'] < 0 ? 'yellow' : 'green'" :value="$loc($money['net'])" hint="Revenue − expenses" />
         </div>
     </div>
+
+    @if ($bills->isNotEmpty())
+        @php $billLocal = $bills->map(fn ($e) => $e->toLocal($e->dueCents())); @endphp
+        <div class="card p-6" data-test="bills-due">
+            <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+                <h2 class="{{ $h2 }}">Bills due</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Total <span class="font-semibold tabular-nums text-gray-900 dark:text-white" data-test="bills-total">{{ $loc($billLocal->filter(fn ($c) => $c !== null)->sum()) }}</span>@if ($billLocal->contains(null)) · {{ $billLocal->filter(fn ($c) => $c === null)->count() }} without a rate left out @endif</p>
+            </div>
+            @foreach ($bills as $i => $e)
+                @php $days = (int) today()->diffInDays($e->incurred_on, false); @endphp
+                <div class="flex items-center justify-between gap-4 border-b border-gray-100 py-3 last:border-0 dark:border-gray-700" data-test="bill-row">
+                    <div class="min-w-0">
+                        <a href="{{ route('expenses.show', $e) }}" wire:navigate class="link text-sm font-semibold">{{ $e->description }}</a>
+                        <p class="truncate text-xs text-gray-500 dark:text-gray-400"><x-ui.expense-category :category="$e->category" class="mr-1" /> {{ $e->incurred_on->format('M j, Y') }} ·
+                            <span @class(['font-medium text-rose-600 dark:text-rose-400' => $days < 0])>{{ $days < 0 ? 'overdue' : ($days === 0 ? 'due today' : 'due in '.$days.' '.Str::plural('day', $days)) }}</span></p>
+                    </div>
+                    <div class="shrink-0 text-right">
+                        <p class="text-sm font-medium tabular-nums text-gray-900 dark:text-white">{{ \App\Support\Money::format($e->dueCents(), $e->currency) }}</p>
+                        @if ($e->currency !== $money['currency'])
+                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ $billLocal[$i] === null ? 'no rate' : $loc($billLocal[$i]) }}</p>
+                        @endif
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    @endif
 
     <div class="card p-6" data-test="income-trend">
         <div class="mb-4">

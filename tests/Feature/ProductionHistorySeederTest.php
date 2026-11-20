@@ -87,3 +87,23 @@ it('rates each invoice at the client payment rate nearest its issue date', funct
         ->and(Invoice::where('number', 'INV-B')->value('exchange_rate'))->toBe('90.000000');
     unlink($path);
 });
+
+it('seeds paid expenses from the history file, once', function () {
+    $path = tempnam(sys_get_temp_dir(), 'hist');
+    file_put_contents($path, json_encode(['expenses' => [
+        ['category' => 'Developer fee', 'description' => 'Developer fee — mobile app', 'payee' => 'Gopal Sharma', 'client' => 'David Zouein', 'project' => 'Luigi Darbur App',
+            'currency' => 'USD', 'amount' => 400, 'paid_on' => '2025-03-06', 'method' => 'western_union', 'exchange_rate' => 86.260664, 'local_amount' => 34504.27, 'local_currency' => 'INR'],
+    ]]));
+    $seed = function () use ($path) {
+        $s = app(ProductionSeeder::class);
+        $s->historyPath = $path;
+        $s->run();
+    };
+    $seed();
+    $seed();
+
+    $e = \App\Models\Expense::sole();
+    expect($e->amount_cents)->toBe(40000)->and($e->currency)->toBe('USD')->and($e->project->name)->toBe('Luigi Darbur App')
+        ->and($e->category->name)->toBe('Developer fee')->and($e->status())->toBe('paid')->and($e->payments->sole()->local_amount_cents)->toBe(3450427);
+    unlink($path);
+});

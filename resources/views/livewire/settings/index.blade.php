@@ -6,6 +6,7 @@
         $links = collect([
             ['Currencies', 'currencies.index', 'coins', 'All currencies and their rate history.', true],
             ['Bank accounts', 'billing.bank-accounts', 'landmark', 'Accounts printed on invoices.', true],
+            ['Expense categories', 'settings.expense-categories', 'tags', 'Groups for expenses.', true],
             ['Task types', 'settings.task-types', 'sliders-horizontal', 'Kinds of work items.', $u->can('manage-taxonomy')],
             ['Labels', 'settings.labels', 'tags', 'Tags for work items.', $u->can('manage-taxonomy')],
             ['System', 'settings.system', 'settings', 'Page size and sidebar defaults.', $u->can('manage-system')],
