@@ -2,26 +2,36 @@
 
 namespace App\Livewire\Portal;
 
+use App\Enums\PaymentType;
 use App\Livewire\Concerns\RemembersView;
+use App\Livewire\Concerns\WithDateFilter;
+use App\Livewire\Concerns\WithListSearch;
 use App\Models\Payment;
 use App\Models\PaymentDocument;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Url;
 use Livewire\Component;
-use Livewire\WithPagination;
 
 class Payments extends Component
 {
     use RemembersView;
-    use WithPagination;
+    use WithListSearch, WithDateFilter;
 
     #[Url(as: 'view')]
     public string $view = 'list';
 
+    #[Url]
+    public string $typeFilter = '';
+
     public function mount(): void
     {
         $this->guard();
+    }
+
+    public function updatedTypeFilter(): void
+    {
+        $this->resetPage();
     }
 
     private function guard(): int
@@ -51,20 +61,32 @@ class Payments extends Component
     public function render()
     {
         $this->view = in_array($this->view, ['cards', 'list'], true) ? $this->view : 'list';
-        // notes deliberately not selected
         $cid = $this->guard();
-        $payments = Payment::where('client_id', $cid)
+        $type = PaymentType::tryFrom($this->typeFilter);
+        $filtered = $this->applyDateFilter(Payment::where('client_id', $cid)->when($type, fn ($q) => $q->where('type', $type->value)), 'paid_on');
+        // notes, rates and local amounts deliberately not selected; stats in each payment's own currency
+        $all = (clone $filtered)->get(['id', 'client_id', 'currency_id', 'amount_cents', 'type']);
+        $byCur = fn ($rows) => $rows->groupBy(fn ($p) => $p->currency)->map->sum('amount_cents')->all();
+        $payments = $this->fitPage($filtered
             ->with([
                 'project' => fn ($q) => $q->where('client_id', $cid)->select('id', 'name', 'client_id'),
                 'documents' => fn ($q) => $q->whereHas('payment', self::visibleTo($cid))->select('id', 'payment_id', 'original_name'),
             ])
             ->latest('paid_on')->latest('id')
-            ->paginate(\App\Support\Settings::pageSize(), ['id', 'client_id', 'project_id', 'currency_id', 'amount_cents', 'paid_on', 'type', 'method', 'documents_visible_to_client']);
+            ->select(['id', 'client_id', 'project_id', 'currency_id', 'amount_cents', 'paid_on', 'type', 'method', 'documents_visible_to_client']), \App\Support\Settings::pageSize());
 
         return view('livewire.portal.payments', [
             'payments' => $payments,
             'currency' => auth()->user()->client->currency,
             'hasDocs' => $payments->contains(fn ($p) => $p->documents->isNotEmpty()),
+            'types' => PaymentType::cases(),
+            'period' => $this->activePeriod(),
+            'stats' => [
+                'total' => $byCur($all),
+                'count' => $all->count(),
+                'average' => $all->groupBy(fn ($p) => $p->currency)->map(fn ($rows) => intdiv((int) $rows->sum('amount_cents'), $rows->count()))->all(),
+                'by_type' => $all->groupBy(fn ($p) => $p->type->value)->map($byCur)->all(),
+            ],
         ])->layout('layouts.app');
     }
 }

@@ -78,3 +78,47 @@ it('renders statement and subscriptions for the client only', function () {
     $this->actingAs($dev)->get('/portal/statement')->assertForbidden();
     $this->actingAs($dev)->get('/portal/subscriptions')->assertForbidden();
 });
+
+it('invoice stats and search count only own sent invoices', function () {
+    [$k, $ku] = pbClient('K');
+    [$l] = pbClient('L');
+    $a = pbInvoice($k, 10000);
+    pbInvoice($k, 30000)->update(['status' => 'draft']);
+    pbInvoice($l, 77700);
+
+    $page = Livewire\Livewire::actingAs($ku)->test(\App\Livewire\Portal\Invoices::class)
+        ->assertSeeInOrder(['Total invoiced', '$100.00', '1 invoice'])->assertDontSee('$300.00')->assertDontSee('$777.00');
+    $page->set('search', 'nope')->assertSee('No matches')->set('search', $a->number)->assertSee(route('portal.invoice', $a));
+});
+
+it('payment stats are in the payment currency and filter by type', function () {
+    [$k, $ku] = pbClient('K');
+    [$l] = pbClient('L');
+    pbPay($k, 5000, ['exchange_rate' => '83.5', 'local_amount_cents' => 417500, 'local_currency' => 'INR']);
+    pbPay($k, 2000, ['type' => PaymentType::Maintenance]);
+    pbPay($l, 99900);
+
+    Livewire\Livewire::actingAs($ku)->test(\App\Livewire\Portal\Payments::class)
+        ->assertSeeInOrder(['Total paid', '$70.00'])->assertDontSee('4,175')->assertDontSee('$999.00')
+        ->set('typeFilter', 'maintenance')->assertSeeInOrder(['Total paid', '$20.00']);
+});
+
+it('subscriptions list shows stats and filters, hides internal flags', function () {
+    [$k, $ku] = pbClient('K');
+    RecurringCharge::create(['client_id' => $k->id, 'description' => 'Hosting', 'amount_cents' => 5000, 'frequency' => 'monthly', 'next_due_on' => today()->addDays(5), 'active' => true, 'pass_through' => true]);
+    RecurringCharge::create(['client_id' => $k->id, 'description' => 'Domain', 'amount_cents' => 1200, 'frequency' => 'yearly', 'next_due_on' => today()->addMonths(3), 'active' => false]);
+
+    Livewire\Livewire::actingAs($ku)->test(\App\Livewire\Portal\Subscriptions::class)
+        ->assertSeeInOrder(['Active services', '1', 'Monthly cost', '$50.00'])->assertDontSee('Pass-through')
+        ->set('status', 'paused')->assertSee('Domain')->assertDontSee('Hosting')
+        ->set('status', '')->set('search', 'host')->assertSee('Hosting')->assertDontSee('Domain');
+});
+
+it('subscription page shows dates and skipped periods but never draft invoices', function () {
+    [$k, $ku] = pbClient('K');
+    $c = RecurringCharge::create(['client_id' => $k->id, 'description' => 'Hosting', 'amount_cents' => 5000, 'frequency' => 'monthly', 'next_due_on' => '2026-01-01', 'starts_on' => '2026-01-01', 'active' => true, 'skipped_periods' => ['2026-02']]);
+    $draft = app(InvoiceService::class)->create($k, [$c->lineFor('2026-01')->id], draft: true);
+
+    $this->actingAs($ku)->get(route('portal.subscription', $c->id))->assertOk()
+        ->assertSee('Started Jan 1, 2026')->assertSee('Feb 2026')->assertSee('Skipped')->assertDontSee($draft->number);
+});

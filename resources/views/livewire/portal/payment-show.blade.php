@@ -1,7 +1,5 @@
 <div>
-    <div class="mb-6">
-        <a href="{{ route('portal.payments') }}" wire:navigate class="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-700">&larr; Payments</a>
-    </div>
+    <x-ui.breadcrumb :items="[['Payments', route('portal.payments')], ['Payment #'.$payment->id, null]]" />
 
     <x-ui.page-header :title="'Payment #'.$payment->id" subtitle="A payment we have received from you." />
 
