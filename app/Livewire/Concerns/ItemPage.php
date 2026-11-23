@@ -213,6 +213,11 @@ trait ItemPage
             'labels' => $this->item()->syncLabels(Label::whereIn('id', $this->labelIds)->pluck('id')->all()),
             default => $this->saveExtra((string) $this->panel),
         };
+        if ($this->panel === 'assignees' && $this->item() instanceof \App\Models\Task) {
+            foreach ($this->item()->capacityWarnings() as $msg) {
+                $this->dispatch('toast', type: 'warning', message: $msg);
+            }
+        }
         if (! $this->getErrorBag()->any()) {
             $this->closePanel();
         }

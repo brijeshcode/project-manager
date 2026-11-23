@@ -175,6 +175,10 @@ class Form extends Component
             $task->update($data);
             $task->syncLabels($this->labelIds);
             $task->syncAssignees($this->assigneeIds);
+            if ($warn = $task->capacityWarnings()) {
+                session()->flash('toast', implode('. ', $warn));
+                session()->flash('toast_type', 'warning');
+            }
         } else {
             $module = Module::findOrFail($this->module_id);
             $this->authorize('update', $module->project);

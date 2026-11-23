@@ -166,25 +166,7 @@
                 </dl>
             </x-ui.card>
 
-            <x-ui.card>
-                <div class="mb-3 flex items-center justify-between">
-                    <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Team</h2>
-                    <span class="text-xs text-slate-500 dark:text-gray-400">{{ $project->members->count() }}</span>
-                </div>
-                @if ($project->members->isEmpty())
-                    <p class="text-sm text-slate-500 dark:text-gray-400">No members assigned yet.</p>
-                @else
-                    <ul class="space-y-2.5">
-                        @foreach ($project->members as $member)
-                            @php $mi = collect(explode(' ', trim($member->name)))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode(''); @endphp
-                            <li class="flex items-center gap-3">
-                                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">{{ $mi }}</span>
-                                <span class="text-sm font-medium text-slate-800 dark:text-gray-200">{{ $member->name }}</span>
-                            </li>
-                        @endforeach
-                    </ul>
-                @endif
-            </x-ui.card>
+            <livewire:projects.members :project="$project" :key="'members-'.$project->id" />
         </div>
     </div>
 @elseif ($active === 'modules')

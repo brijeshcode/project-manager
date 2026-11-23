@@ -17,6 +17,8 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->decimal('weekly_capacity_hours', 5, 2)->nullable(); // null = no limit
+            $table->boolean('active')->default(true);
             $table->rememberToken();
             $table->timestamps();
         });

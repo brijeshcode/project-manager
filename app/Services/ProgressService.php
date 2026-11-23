@@ -38,13 +38,13 @@ class ProgressService
 
     public function forModule(Module $module): float
     {
-        return $this->ofTasks($module->countedTasks(['column', 'checklistItems', 'subtasks']));
+        return $this->ofTasks($this->scoped($module->tasks()->counted()->with(['column', 'checklistItems', 'subtasks']))->get());
     }
 
     /** Constant number of queries however many modules the project has. */
     public function forProject(Project $project): float
     {
-        $modules = $project->modules()->approved()->with(['tasks' => fn ($q) => $q->counted()->with(['column', 'checklistItems', 'subtasks'])])->get();
+        $modules = $project->modules()->approved()->with(['tasks' => fn ($q) => $this->scoped($q->counted()->with(['column', 'checklistItems', 'subtasks']))])->get();
 
         return $this->weighted(
             $modules,
@@ -68,7 +68,7 @@ class ProgressService
     public function stats(Project $project, bool $clientOnly = false): array
     {
         $modules = $project->modules()->approved()->when($clientOnly, fn ($q) => $q->where('client_visible', true))
-            ->with(['tasks' => fn ($q) => $q->counted()->when($clientOnly, fn ($t) => $t->where('client_visible', true))->with(['column', 'checklistItems', 'subtasks'])])->get();
+            ->with(['tasks' => fn ($q) => $this->scoped($q->counted(), $clientOnly)->when($clientOnly, fn ($t) => $t->where('client_visible', true))->with(['column', 'checklistItems', 'subtasks'])])->get();
         $done = fn (Task $t) => $t->column?->stage === 'done';
         $tasks = $modules->flatMap->tasks;
 
@@ -79,6 +79,14 @@ class ProgressService
             'tasks' => $tasks->count(),
             'tasksDone' => $tasks->filter($done)->count(),
         ];
+    }
+
+    /** Developers' numbers cover only the tasks they can see (Task::visibleTo); everyone else sees all. */
+    private function scoped($query, bool $clientOnly = false)
+    {
+        $user = auth()->user();
+
+        return $user && ! $clientOnly && $user->hasRole('developer') ? $query->visibleTo($user) : $query;
     }
 
     private function ofTasks(Collection $tasks): float

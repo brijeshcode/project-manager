@@ -242,6 +242,9 @@ class Show extends Component
         $sprint = $sprintId ? $project->sprints()->whereIn('status', ['planned', 'active'])->find($sprintId) : null;
         abort_if($sprintId && ! $sprint, 422);
         $this->task->update(['sprint_id' => $sprint?->id]);
+        foreach ($this->task->capacityWarnings() as $msg) {
+            $this->dispatch('toast', type: 'warning', message: $msg);
+        }
     }
 
     // ── subtasks ──────────────────────────────────────────────────────────────

@@ -215,7 +215,7 @@ it('published tasks are visible to active members of the same project via visibl
     $project = makeTaskProject();
     $module  = makeModule($project);
     $creator = memberOfProject($project);
-    $other   = memberOfProject($project);
+    $other   = memberOfProject($project, 'project_manager');
 
     makeTask($module, $creator, ['status' => TaskStatus::Published]);
 
@@ -240,7 +240,7 @@ it('member of project A sees published task in project A via visibleTo', functio
     $projectA = makeTaskProject();
     $moduleA  = makeModule($projectA);
     $creator  = memberOfProject($projectA);
-    $userA    = memberOfProject($projectA);
+    $userA    = memberOfProject($projectA, 'project_manager');
 
     makeTask($moduleA, $creator, ['status' => TaskStatus::Published]);
 

@@ -60,11 +60,11 @@ function policyTask(Module $module, User $creator, array $attrs = []): Task
 
 // ── view policy ───────────────────────────────────────────────────────────────
 
-it('any project member can view a published task', function () {
+it('a project manager member can view a published task', function () {
     $project = policyProject();
     $module  = policyModule($project);
     $creator = policyMember($project);
-    $viewer  = policyMember($project);
+    $viewer  = policyMember($project, 'project_manager'); // developers see only assigned tasks (DeveloperTaskVisibilityTest)
 
     $task = policyTask($module, $creator, ['status' => TaskStatus::Published]);
 

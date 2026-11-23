@@ -168,7 +168,7 @@ it('member with revoked view override is denied project view', function () {
 it('member with access_scope=frontend sees frontend-sectioned and null-sectioned tasks', function () {
     $project    = overrideProject();
     $module     = overrideModule($project);
-    $frontDev   = overrideMember($project, 'developer', AccessScope::Frontend);
+    $frontDev   = overrideMember($project, 'project_manager', AccessScope::Frontend);
     $creator    = overrideMember($project, 'developer');
 
     $frontTask   = overrideTask($module, $creator, ['section' => 'frontend']);
@@ -185,7 +185,7 @@ it('member with access_scope=frontend sees frontend-sectioned and null-sectioned
 it('member with access_scope=backend sees backend-sectioned and null-sectioned tasks', function () {
     $project  = overrideProject();
     $module   = overrideModule($project);
-    $backDev  = overrideMember($project, 'developer', AccessScope::Backend);
+    $backDev  = overrideMember($project, 'project_manager', AccessScope::Backend);
     $creator  = overrideMember($project, 'developer');
 
     $frontTask = overrideTask($module, $creator, ['section' => 'frontend']);
@@ -202,7 +202,7 @@ it('member with access_scope=backend sees backend-sectioned and null-sectioned t
 it('member with access_scope=all sees all sectioned and unsectioned tasks', function () {
     $project = overrideProject();
     $module  = overrideModule($project);
-    $allDev  = overrideMember($project, 'developer', AccessScope::All);
+    $allDev  = overrideMember($project, 'project_manager', AccessScope::All);
     $creator = overrideMember($project, 'developer');
 
     $frontTask = overrideTask($module, $creator, ['section' => 'frontend']);
@@ -250,14 +250,14 @@ it('user with frontend scope on project A and backend scope on project B sees on
     ProjectMember::create([
         'project_id'      => $projectA->id,
         'user_id'         => $user->id,
-        'role_on_project' => 'developer',
+        'role_on_project' => 'project_manager',
         'access_scope'    => AccessScope::Frontend,
         'active'          => true,
     ]);
     ProjectMember::create([
         'project_id'      => $projectB->id,
         'user_id'         => $user->id,
-        'role_on_project' => 'developer',
+        'role_on_project' => 'project_manager',
         'access_scope'    => AccessScope::Backend,
         'active'          => true,
     ]);

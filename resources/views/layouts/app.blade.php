@@ -20,6 +20,7 @@
             // [label, route, active pattern, icon, visible]
             $nav = collect([
                 ['Dashboard',     'dashboard',             'dashboard',                            'home',        $u && ! $client],
+                ['My sprint',     'sprints.mine',          'sprints.mine',                         'zap',         $u && ! $client],
                 ['Dashboard',     'portal.dashboard',      'portal.dashboard',                     'home',        $client],
                 ['Projects',      'portal.projects',       ['portal.projects', 'portal.project'],  'folder',      $client],
                 ['Clients',       'clients.index',         'clients.*',                            'users',       $u && $u->hasRole('super_admin')],
@@ -40,6 +41,7 @@
                 ['Expense categories', 'settings.expense-categories', 'settings.expense-categories', 'tags',          $money, 'Financial'],
                 ['Task types',    'settings.task-types',   'settings.task-types',                  'sliders-horizontal', $u && $u->can('manage-taxonomy'), 'Project'],
                 ['Labels',        'settings.labels',       'settings.labels',                      'tags',               $u && $u->can('manage-taxonomy'), 'Project'],
+                ['Team',          'team.index',            'team.*',                               'users',              $u && $u->hasRole('super_admin'), 'General'],
                 ['System',        'settings.system',       'settings.system',                      'settings',           $u && $u->can('manage-system'), 'General'],
                 ['Profile',       'profile',               'profile',                              'user',               (bool) $u, 'General'],
             ])->filter(fn ($i) => $i[4]);

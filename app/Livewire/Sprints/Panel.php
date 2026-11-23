@@ -208,6 +208,9 @@ class Panel extends Component
         }
 
         $task->update(['sprint_id' => $target?->id]);
+        foreach ($task->capacityWarnings() as $msg) {
+            $this->dispatch('toast', type: 'warning', message: $msg);
+        }
         $this->reorderList($ids);
     }
 

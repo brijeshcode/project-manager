@@ -29,7 +29,7 @@ class TaskPolicy
             return $task->creator_id === $user->id;
         }
 
-        return true;
+        return Task::visibleTo($user)->whereKey($task->id)->exists();
     }
 
     /**

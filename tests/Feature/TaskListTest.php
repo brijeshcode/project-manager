@@ -31,7 +31,7 @@ function makeListModule(Project $project): Module
     return Module::create(['project_id' => $project->id, 'name' => 'Mod', 'position' => 1]);
 }
 
-function makeListMember(Project $project, string $role = 'developer'): User
+function makeListMember(Project $project, string $role = 'project_manager'): User
 {
     $user = User::factory()->create();
     $user->assignRole($role);

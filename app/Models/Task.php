@@ -265,6 +265,22 @@ class Task extends Model
         return $this->belongsToMany(User::class, 'task_user');
     }
 
+    /**
+     * Over-capacity warnings ("Brijesh is at 42h / 30h this sprint") for this task's assignees (or just `$userIds`)
+     * when it sits in an active sprint. Warn only, never block; every assign/move path calls this after saving.
+     */
+    public function capacityWarnings(?array $userIds = null): array
+    {
+        if ($this->sprint()->value('status') !== 'active') {
+            return [];
+        }
+
+        return $this->assignees()->when($userIds !== null, fn ($q) => $q->whereIn('users.id', $userIds))->get()
+            ->map(fn (User $u) => [$u, $u->sprintLoad()])->filter(fn ($p) => $p[1]['over'])
+            ->map(fn ($p) => "{$p[0]->name} is at ".(0 + $p[1]['committed'])."h / ".(0 + $p[1]['capacity']).'h this sprint')
+            ->values()->all();
+    }
+
     public function subtasks(): HasMany
     {
         return $this->hasMany(Subtask::class)->orderBy('position');
@@ -489,7 +505,15 @@ class Task extends Model
                           ->where(fn (Builder $s) => $s
                               ->where('project_members.access_scope', AccessScope::All->value)
                               ->orWhereNull('tasks.section')
-                              ->orWhereColumn('tasks.section', 'project_members.access_scope'));
+                              ->orWhereColumn('tasks.section', 'project_members.access_scope'))
+                          // Developers on this project see only tasks they (or one of its subtasks) are assigned to.
+                          ->where(fn (Builder $d) => $d
+                              ->where('project_members.role_on_project', '!=', 'developer')
+                              ->orWhereExists(fn ($e) => $e->from('task_user')
+                                  ->whereColumn('task_user.task_id', 'tasks.id')->where('task_user.user_id', $user->id))
+                              ->orWhereExists(fn ($e) => $e->from('subtask_user')
+                                  ->join('subtasks', 'subtasks.id', '=', 'subtask_user.subtask_id')
+                                  ->whereColumn('subtasks.task_id', 'tasks.id')->where('subtask_user.user_id', $user->id)));
                     });
                 }
             });

@@ -28,9 +28,13 @@ trait TogglesTaskAssignee
             $ids = array_values(array_diff($current, [$userId]));
         } elseif ($this->assignable()->contains('id', $userId)) {
             $ids = [...$current, $userId];
+            $added = $userId;
         } else {
             return;
         }
         $task->syncAssignees($ids);
+        foreach ($task->capacityWarnings(isset($added) ? [$added] : []) as $msg) {
+            $this->dispatch('toast', type: 'warning', message: $msg);
+        }
     }
 }

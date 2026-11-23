@@ -10,6 +10,7 @@ new class extends Component
 {
     public string $name = '';
     public string $email = '';
+    public $weekly_capacity_hours = null;
 
     /**
      * Mount the component.
@@ -18,6 +19,7 @@ new class extends Component
     {
         $this->name = Auth::user()->name;
         $this->email = Auth::user()->email;
+        $this->weekly_capacity_hours = Auth::user()->weekly_capacity_hours;
     }
 
     /**
@@ -30,8 +32,10 @@ new class extends Component
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)->ignore($user->id)],
+            'weekly_capacity_hours' => ['nullable', 'numeric', 'min:0', 'max:168'],
         ]);
 
+        $validated['weekly_capacity_hours'] = $validated['weekly_capacity_hours'] === '' ? null : $validated['weekly_capacity_hours'];
         $user->fill($validated);
 
         if ($user->isDirty('email')) {
@@ -79,6 +83,12 @@ new class extends Component
                 <label for="email" class="label">Email</label>
                 <input wire:model="email" id="email" type="email" maxlength="255" required autocomplete="username" placeholder="you@example.com" class="input" />
                 @error('email') <p class="field-error">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label for="weekly_capacity_hours" class="label">Weekly capacity (hours)</label>
+                <input wire:model="weekly_capacity_hours" id="weekly_capacity_hours" type="number" min="0" max="168" step="0.5" placeholder="No limit" class="input" />
+                <p class="mt-1 text-xs text-slate-500 dark:text-gray-400">You get a warning when active sprints assign you more than this.</p>
+                @error('weekly_capacity_hours') <p class="field-error">{{ $message }}</p> @enderror
             </div>
         </div>
 

@@ -46,6 +46,7 @@ Route::middleware(['auth', 'role:client'])->prefix('portal')->name('portal.')->g
 
 // Client management — super_admin only
 Route::middleware(['auth', 'role:super_admin'])->group(function () {
+    Route::get('team', \App\Livewire\Team\Index::class)->name('team.index');
     Route::get('clients', ClientIndex::class)->name('clients.index');
     Route::get('clients/create', ClientForm::class)->name('clients.create');
     Route::get('clients/{client}/edit', ClientForm::class)->name('clients.edit');
@@ -111,6 +112,7 @@ Route::middleware(['auth', 'can:manage-money'])->prefix('invoices')->name('invoi
 
 Route::middleware(['auth'])->group(function () {
     Route::get('invoices/{invoice}/pdf', \App\Http\Controllers\InvoicePdfController::class)->name('invoices.pdf');
+    Route::get('my-sprint', \App\Livewire\Sprints\Mine::class)->name('sprints.mine');
     Route::get('projects', ProjectIndex::class)->name('projects.index');
     Route::get('projects/create', ProjectForm::class)->name('projects.create');
     Route::get('projects/{project}', ProjectShow::class)->name('projects.show');

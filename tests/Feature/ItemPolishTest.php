@@ -288,6 +288,7 @@ it('toggling a description checkbox updates the stored markdown and logs an edit
 it('only editors may toggle a description checkbox; comment checkboxes belong to the author', function () {
     $s = polSetup();
     $t = polTask($s, ['description' => '- [ ] a']);
+    $t->subtasks()->create(["title" => "Sub", "position" => 1])->assignees()->attach($s["dev"]->id); // devs see only tasks they work on
     $outsider = User::factory()->create();
     $outsider->assignRole('developer');
     Livewire::actingAs($outsider)->test(TaskShow::class, ['task' => $t])->assertNotFound();
@@ -313,6 +314,7 @@ it('shows the "..." menu on the description and comment cards with copy, quote a
 it('edits a comment in place and shows who last edited it', function () {
     $s = polSetup();
     $t = polTask($s);
+    $t->subtasks()->create(["title" => "Sub", "position" => 1])->assignees()->attach($s["dev"]->id); // devs see only tasks they work on
     $c = $t->addComment($s['dev'], 'Original');
     $lw = Livewire::actingAs($s['admin'])->test(TaskShow::class, ['task' => $t]);
     $lw->call('editComment', $c->id)->assertSet('commentEditBody', 'Original')->assertSeeHtml('data-test="comment-editor"')

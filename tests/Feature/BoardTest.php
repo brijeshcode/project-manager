@@ -110,7 +110,7 @@ it('board renders the template column names', function () {
 it('board shows tasks in their column', function () {
     $project = boardProject();
     $module  = boardModule($project);
-    $user    = boardMember($project);
+    $user    = boardMember($project, 'project_manager');
 
     boardTask($module, $user, ['title' => 'Backlog Task']);
     boardTask($module, $user, ['title' => 'InProg Task', 'board_column_id' => colId($module, 'In progress')]);
