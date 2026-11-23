@@ -4,12 +4,12 @@
     @php
         $u = auth()->user();
         $links = collect([
-            ['Currencies', 'currencies.index', 'coins', 'All currencies and their rate history.', true],
-            ['Bank accounts', 'billing.bank-accounts', 'landmark', 'Accounts printed on invoices.', true],
-            ['Expense categories', 'settings.expense-categories', 'tags', 'Groups for expenses.', true],
-            ['Task types', 'settings.task-types', 'sliders-horizontal', 'Kinds of work items.', $u->can('manage-taxonomy')],
-            ['Labels', 'settings.labels', 'tags', 'Tags for work items.', $u->can('manage-taxonomy')],
-            ['System', 'settings.system', 'settings', 'Page size and sidebar defaults.', $u->can('manage-system')],
+            ['Currencies', 'currencies.index', 'coins', 'All currencies and their rate history.', true, 'Financial'],
+            ['Bank accounts', 'billing.bank-accounts', 'landmark', 'Accounts printed on invoices.', true, 'Financial'],
+            ['Expense categories', 'settings.expense-categories', 'tags', 'Groups for expenses.', true, 'Financial'],
+            ['Task types', 'settings.task-types', 'sliders-horizontal', 'Kinds of work items.', $u->can('manage-taxonomy'), 'Project'],
+            ['Labels', 'settings.labels', 'tags', 'Tags for work items.', $u->can('manage-taxonomy'), 'Project'],
+            ['System', 'settings.system', 'settings', 'Page size and sidebar defaults.', $u->can('manage-system'), 'General'],
         ])->filter(fn ($l) => $l[4]);
     @endphp
 
@@ -117,13 +117,13 @@
                 <p class="mt-1 text-sm text-slate-500 dark:text-gray-400">Other setup pages, also in the sidebar.</p>
             </div>
             <div class="grid gap-3 sm:grid-cols-2 lg:col-span-2">
-                @foreach ($links as [$label, $route, $icon, $hint])
-                    <a href="{{ route($route) }}" wire:navigate class="card flex items-start gap-3 p-4 transition hover:border-brand-300 hover:shadow-md dark:hover:border-brand-500" data-test="link-{{ Str::slug($label) }}">
+                @foreach ($links as [$label, $route, $icon, $hint, , $grp])
+                    <a href="{{ route($route) }}" wire:navigate title="{{ $grp }}" class="card flex items-start gap-3 p-4 transition hover:border-brand-300 hover:shadow-md dark:hover:border-brand-500" data-test="link-{{ Str::slug($label) }}">
                         <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
                             <x-icon :name="$icon" class="h-5 w-5" />
                         </span>
                         <span>
-                            <span class="block text-sm font-semibold text-slate-900 dark:text-white">{{ $label }}</span>
+                            <span class="block text-sm font-semibold text-slate-900 dark:text-white">{{ $label }} <span class="text-xs font-normal text-slate-400">{{ $grp }}</span></span>
                             <span class="block text-sm text-slate-500 dark:text-gray-400">{{ $hint }}</span>
                         </span>
                     </a>

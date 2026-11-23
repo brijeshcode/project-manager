@@ -14,7 +14,9 @@ class Settings
     public const NUMBER_FORMATS = ['international' => 'International — 1,234,567.00 · K, M', 'indian' => 'Indian — 12,34,567.00 · K, L, Cr'];
 
     /** Group a key is stored under when the caller names none. */
-    private const GROUPS = ['local_currency' => 'currency', 'page_size' => 'system', 'sidebar_layout' => 'system', 'number_format' => 'system'];
+    private const GROUPS = ['local_currency' => 'currency', 'page_size' => 'system', 'sidebar_layout' => 'system', 'number_format' => 'system', 'dashboard_default_tab' => 'system'];
+
+    public const DASHBOARD_TABS = ['financial' => 'Financial', 'project' => 'Project'];
 
     public static function get(string $key, ?string $default = null): ?string
     {
@@ -63,5 +65,12 @@ class Settings
         $v = self::get('sidebar_layout', 'full');
 
         return array_key_exists($v, self::SIDEBARS) ? $v : 'full';
+    }
+
+    public static function dashboardDefaultTab(): string
+    {
+        $v = self::get('dashboard_default_tab', 'financial');
+
+        return array_key_exists($v, self::DASHBOARD_TABS) ? $v : 'financial';
     }
 }

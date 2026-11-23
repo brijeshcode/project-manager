@@ -10,15 +10,15 @@
     ][$color] ?? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
 @endphp
 
-<div class="card {{ $compact ? 'p-3' : 'p-5' }}">
-    <div class="flex items-center {{ $compact ? 'gap-3' : 'gap-4' }}">
+<div class="card {{ $compact ? 'px-3 py-2' : 'px-4 py-3' }}">
+    <div class="flex items-center {{ $compact ? 'gap-2.5' : 'gap-3' }}">
         @if ($icon)
-            <div class="flex {{ $compact ? 'h-9 w-9' : 'h-12 w-12' }} shrink-0 items-center justify-center rounded-lg {{ $tint }}">
-                <x-nav.icon :name="$icon" class="{{ $compact ? 'h-5 w-5' : 'h-6 w-6' }}" />
+            <div class="flex {{ $compact ? 'h-8 w-8' : 'h-10 w-10' }} shrink-0 items-center justify-center rounded-lg {{ $tint }}">
+                <x-nav.icon :name="$icon" class="{{ $compact ? 'h-4 w-4' : 'h-5 w-5' }}" />
             </div>
         @endif
         <div class="min-w-0 flex-1">
-            <p class="{{ $compact ? 'text-xs' : 'text-sm' }} font-medium text-gray-500 dark:text-gray-400">{{ $label }}</p>
+            <p class="{{ $compact ? 'text-xs' : 'text-xs' }} font-medium text-gray-500 dark:text-gray-400">{{ $label }}</p>
             @if ($lines)
                 <div class="mt-1 space-y-0.5">
                     @foreach ($lines as $line)
@@ -29,10 +29,10 @@
                     @endforeach
                 </div>
             @else
-                <p class="{{ $compact ? 'mt-0.5 text-lg' : 'mt-1 text-2xl' }} font-bold tabular-nums text-gray-900 dark:text-white">{{ $value }}</p>
+                <p class="{{ $compact ? 'text-base leading-tight' : 'text-xl leading-tight' }} font-bold tabular-nums text-gray-900 dark:text-white">{{ $value }}</p>
             @endif
             @if ($hint)
-                <p class="{{ $compact ? 'mt-0.5' : 'mt-1' }} text-xs text-gray-400 dark:text-gray-500">{{ $hint }}</p>
+                <p class="{{ $compact ? 'mt-0' : 'mt-0.5' }} text-xs text-gray-400 dark:text-gray-500">{{ $hint }}</p>
             @endif
         </div>
     </div>

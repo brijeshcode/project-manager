@@ -1,7 +1,7 @@
 <div x-data="{ del: null }">
     <x-ui.page-header title="Clients" subtitle="Manage your clients and their information">
         <x-slot name="actions">
-            <x-ui.filter-button :active="(int) ($status !== '')" />
+            <x-ui.filter-button :active="(int) ($status !== 'active')" />
             <a href="{{ route('clients.create') }}" wire:navigate class="btn btn-primary">
                 <x-nav.icon name="plus" class="h-5 w-5" /> Add Client
             </a>
@@ -14,13 +14,13 @@
             <input wire:model.live.debounce.300ms="search" id="search" type="search" maxlength="100" placeholder="Search by name, code, contact or email..." class="input" />
         </x-slot:bar>
         <x-slot:chips>
-            @if ($status !== '')<x-ui.filter-chip :label="'Status: '.ucfirst($status)" wire:click="$set('status', '')" />@endif
+            @if ($status !== 'active')<x-ui.filter-chip :label="'Status: '.ucfirst($status)" wire:click="$set('status', 'active')" />@endif
         </x-slot:chips>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
                 <label for="status" class="label">Status</label>
                 <select wire:model="status" id="status" class="select">
-                    <option value="">All statuses</option>
+                    <option value="all">All statuses</option>
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                     <option value="archived">Archived</option>
@@ -37,8 +37,14 @@
         </div>
     </x-ui.filter-panel>
 
+    <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3" data-test="client-stats">
+        <x-ui.stat label="Income (received)" icon="currency" color="green" :value="\App\Support\Money::format($stats['income'], $localCode)" />
+        <x-ui.stat label="Balance" icon="currency" :color="$stats['balance'] < 0 ? 'yellow' : 'blue'" :value="\App\Support\Money::format($stats['balance'], $localCode)" :hint="$stats['missing'] ? 'Excludes rows without a local amount' : null" />
+        <x-ui.stat label="Active subscriptions" icon="calendar" color="purple" :value="\App\Support\Money::format($stats['subs'], $localCode)" />
+    </div>
+
     @if ($clients->isEmpty())
-        @if ($search !== '' || $status !== '')
+        @if ($search !== '' || $status !== 'active')
             <x-ui.empty-state title="No matches" message="Try adjusting your search criteria.">
                 <x-slot name="action"><button type="button" wire:click="clearFilters" class="btn btn-secondary">Clear filters</button></x-slot>
             </x-ui.empty-state>
@@ -54,11 +60,10 @@
             <table class="min-w-full divide-y divide-slate-200 dark:divide-gray-700">
                 <thead>
                     <tr>
-                        <th class="table-th">Client</th>
+                        <th class="table-th">Name</th>
                         <th class="table-th">Contact</th>
-                        <th class="table-th">Financial Summary</th>
-                        <th class="table-th">Status</th>
-                        <th class="table-th">Worked together</th>
+                        <th class="table-th">Subscriptions</th>
+                        <th class="table-th">Balance</th>
                         <th class="table-th text-right">Actions</th>
                     </tr>
                 </thead>
@@ -67,37 +72,38 @@
                         @php
                             $t = $totals[$client->id];
                             $balance = $t['received'] - $t['billed'];
-                            // from: first project start or when the client was added, whichever is earlier
-                            $firstStart = $client->projects_min_start_date ? \Illuminate\Support\Carbon::parse($client->projects_min_start_date) : null;
-                            $from = $firstStart && $firstStart->lt($client->created_at) ? $firstStart : $client->created_at;
-                            $to = $client->status->value === 'active' ? null : $client->inactive_since;
+                            $lt = $localTotals[$client->id];
+                            $localBalance = $lt['missing'] > 0 ? null : $lt['received'] - $lt['billed'];
+                            $sub = $subs[$client->id] ?? null;
+                            $foreign = strtoupper($client->currency) !== $localCode;
+                            $cls = $balance < 0 ? 'text-red-600 dark:text-red-400' : ($balance > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400');
+                            $lbl = $balance < 0 ? 'Client owes' : ($balance > 0 ? 'Advance paid' : 'Settled');
                         @endphp
                         <tr wire:key="client-{{ $client->id }}" class="transition hover:bg-slate-50 dark:hover:bg-gray-700/40">
                             <td class="table-td whitespace-nowrap">
-                                <div class="flex items-center gap-4">
-                                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400">
-                                        <x-nav.icon :name="$client->type->value === 'company' ? 'building' : 'user'" class="h-5 w-5" />
-                                    </span>
-                                    <div>
-                                        <a href="{{ route('clients.show', $client) }}" wire:navigate class="text-sm font-medium text-gray-900 hover:underline dark:text-white">{{ $client->name }}</a>
-                                        @if ($client->portal_blocked_at)<x-ui.badge color="rose" class="ml-1" data-test="portal-blocked">Portal blocked</x-ui.badge>@endif
-                                        @if ($client->company_name)<div class="text-xs text-gray-400 dark:text-gray-500">{{ $client->company_name }}</div>@endif
-                                        <div class="text-sm text-gray-500 dark:text-gray-400">{{ $client->client_code }}@if ($client->contact_name) <span class="ml-2">&bull; {{ $client->contact_name }}</span>@endif</div>
-                                    </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="h-2 w-2 rounded-full {{ $client->status->value === 'active' ? 'bg-green-500' : 'bg-gray-400' }}" title="{{ ucfirst($client->status->value) }}"></span>
+                                    <a href="{{ route('clients.show', $client) }}" wire:navigate class="text-sm font-medium text-gray-900 hover:underline dark:text-white">{{ $client->name }}</a>
+                                    @if ($client->portal_blocked_at)<x-ui.badge color="rose" data-test="portal-blocked">Portal blocked</x-ui.badge>@endif
                                 </div>
+                                <div class="text-xs capitalize text-gray-500 dark:text-gray-400" data-test="client-type">{{ $client->type->value }}</div>
                             </td>
-                            <td class="table-td whitespace-nowrap">
-                                <div class="text-gray-900 dark:text-white">{{ $client->contact_email ?: 'No email' }}</div>
-                                <div class="text-gray-500 dark:text-gray-400">{{ $client->contact_phone ?: 'No phone' }}</div>
+                            <td class="table-td whitespace-nowrap" data-test="client-contact">
+                                @foreach ([$client->contact_name, $client->contact_email, $client->contact_phone] as $c)
+                                    @if ($c)<div class="text-xs text-gray-500 dark:text-gray-400">{{ $c }}</div>@endif
+                                @endforeach
                             </td>
-                            <td class="table-td whitespace-nowrap">
-                                <div class="text-gray-900 dark:text-white">Billed: {{ \App\Support\Money::format($t['billed'], $client->currency) }}</div>
-                                <div class="text-gray-500 dark:text-gray-400">Balance: {{ \App\Support\Money::format($balance, $client->currency) }}</div>
+                            <td class="table-td whitespace-nowrap" data-test="client-subs">
+                                @if ($sub)
+                                    <div class="text-gray-900 dark:text-white">{{ \App\Support\Money::format($sub['amount'], $client->currency) }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ $sub['count'] }} active @if ($foreign) &bull; {{ \App\Support\Money::format($sub['local'], $localCode) }}@endif</div>
+                                @else
+                                    <span class="text-gray-400">&mdash;</span>
+                                @endif
                             </td>
-                            <td class="table-td whitespace-nowrap"><x-ui.badge :color="$client->status->color()" class="capitalize">{{ $client->status->value }}</x-ui.badge></td>
-                            <td class="table-td whitespace-nowrap" data-test="worked-period" title="{{ $from?->format('M j, Y') }} – {{ $to ? $to->format('M j, Y') : 'present' }}">
-                                <div class="text-gray-900 dark:text-white">{{ $from?->format('M Y') }} – {{ $to ? $to->format('M Y') : 'Present' }}</div>
-                                @if ($to)<div class="text-xs text-gray-500 dark:text-gray-400">Inactive since {{ $to->format('M j, Y') }}</div>@endif
+                            <td class="table-td whitespace-nowrap" data-test="client-balance">
+                                <div class="{{ $cls }}">{{ \App\Support\Money::format(abs($balance), $client->currency) }}</div>
+                                <div class="text-xs {{ $cls }}">{{ $lbl }}@if ($foreign && $localBalance !== null) &bull; {{ \App\Support\Money::format(abs($localBalance), $localCode) }}@endif</div>
                             </td>
                             <td class="table-td whitespace-nowrap text-right">
                                 <div class="flex items-center justify-end gap-3">

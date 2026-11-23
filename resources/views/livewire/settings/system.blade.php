@@ -53,6 +53,22 @@
             </div>
         </section>
 
+        <section class="grid gap-4 lg:grid-cols-3" data-test="section-dashboard">
+            <div>
+                <h2 class="text-base font-semibold text-slate-900 dark:text-white">Dashboard</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-gray-400">Which tab the dashboard opens on.</p>
+            </div>
+            <div class="card p-5 lg:col-span-2">
+                <div class="max-w-xs">
+                    <label for="dashboard-tab" class="label">Default dashboard tab</label>
+                    <select id="dashboard-tab" wire:model="dashboardTab" class="select" data-test="dashboard-tab">
+                        @foreach (\App\Support\Settings::DASHBOARD_TABS as $k => $lbl)<option value="{{ $k }}">{{ $lbl }}</option>@endforeach
+                    </select>
+                    @error('dashboardTab') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
+            </div>
+        </section>
+
         <div class="flex justify-end border-t border-slate-200 pt-4 dark:border-gray-700">
             <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save" data-test="save">Save</button>
         </div>

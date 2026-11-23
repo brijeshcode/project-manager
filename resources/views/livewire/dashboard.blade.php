@@ -17,6 +17,13 @@
         </x-slot>
     </x-ui.page-header>
 
+    <div class="{{ $group }}" role="tablist" aria-label="Dashboard view">
+        @foreach (['financial' => 'Financial', 'project' => 'Project'] as $key => $text)
+            <button type="button" wire:click="$set('tab', '{{ $key }}')" role="tab" aria-selected="{{ $tab === $key ? 'true' : 'false' }}" class="{{ $seg($tab === $key) }}" data-test="tab-{{ $key }}">{{ $text }}</button>
+        @endforeach
+    </div>
+
+    @if ($tab === 'financial')
     <div class="card flex flex-wrap items-start gap-3 p-4" data-test="range-filter">
         <div class="{{ $group }} flex-wrap" role="group" aria-label="Date range">
             @foreach (\App\Livewire\Dashboard::RANGES as $key => $text)
@@ -50,13 +57,13 @@
             <p class="mb-4 text-sm text-amber-700 dark:text-amber-400">{{ $money['outstanding_missing_rate'] }} {{ $money['outstanding_missing_rate'] === 1 ? 'client' : 'clients' }} without a rate {{ $money['outstanding_missing_rate'] === 1 ? 'is' : 'are' }} left out of Outstanding.</p>
         @endif
 
-        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <x-ui.stat label="Total Revenue" icon="currency" color="green" :value="$loc($money['received'])" :hint="$rangeLabel.($money['pass_through'] ? ' · excludes '.$loc($money['pass_through']).' pass-through costs' : '')" />
-            <x-ui.stat label="Outstanding Balance" icon="credit-card" color="yellow" :value="$loc($money['outstanding'])" :hint="$overdue.' overdue '.($overdue === 1 ? 'invoice' : 'invoices')" />
-            <x-ui.stat label="Active Clients" icon="users" color="blue" :value="$activeClients" :hint="$clientCount.' total '.($clientCount === 1 ? 'client' : 'clients')" />
-            <x-ui.stat label="This Month" icon="document" color="purple" :value="$loc($money['this_month'])" :hint="$sentThisMonth.' '.($sentThisMonth === 1 ? 'invoice' : 'invoices').' sent'" />
-            <x-ui.stat label="Expenses" icon="credit-card" color="slate" :value="$loc($money['expenses'])" :hint="$rangeLabel" />
-            <x-ui.stat label="Net Income" icon="currency" :color="$money['net'] < 0 ? 'yellow' : 'green'" :value="$loc($money['net'])" hint="Revenue − expenses" />
+        <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <x-ui.stat label="Total Revenue" compact icon="currency" color="green" :value="$loc($money['received'])" :hint="$rangeLabel.($money['pass_through'] ? ' · excludes '.$loc($money['pass_through']).' pass-through costs' : '')" />
+            <x-ui.stat label="Outstanding Balance" compact icon="credit-card" color="yellow" :value="$loc($money['outstanding'])" :hint="$overdue.' overdue '.($overdue === 1 ? 'invoice' : 'invoices')" />
+            <x-ui.stat label="Active Clients" compact icon="users" color="blue" :value="$activeClients" :hint="$clientCount.' total '.($clientCount === 1 ? 'client' : 'clients')" />
+            <x-ui.stat label="This Month" compact icon="document" color="purple" :value="$loc($money['this_month'])" :hint="$sentThisMonth.' '.($sentThisMonth === 1 ? 'invoice' : 'invoices').' sent'" />
+            <x-ui.stat label="Expenses" compact icon="credit-card" color="slate" :value="$loc($money['expenses'])" :hint="$rangeLabel" />
+            <x-ui.stat label="Net Income" compact icon="currency" :color="$money['net'] < 0 ? 'yellow' : 'green'" :value="$loc($money['net'])" hint="Revenue − expenses" />
         </div>
     </div>
 
@@ -102,6 +109,12 @@
                     <button type="button" wire:click="$set('trendCount', {{ $c }})" aria-pressed="{{ $trendCount === $c ? 'true' : 'false' }}" class="{{ $seg(! $trendCustom && $trendCount === $c) }}" data-test="trend-count-{{ $c }}">{{ $c }}</button>
                 @endforeach
             </div>
+            <select wire:model.live="trendFy" class="input w-auto py-1.5" aria-label="Financial year" data-test="trend-fy">
+                <option value="">All financial years</option>
+                @foreach ($fyYears as $y)
+                    <option value="{{ $y }}">FY {{ $y }}–{{ substr($y + 1, 2) }}</option>
+                @endforeach
+            </select>
             <div class="{{ $group }}" role="group" aria-label="Chart type">
                 @foreach (['bar' => 'Bar', 'line' => 'Line'] as $key => $text)
                     <button type="button" wire:click="$set('trendChart', '{{ $key }}')" aria-pressed="{{ $trendChart === $key ? 'true' : 'false' }}" class="{{ $seg($trendChart === $key) }}" data-test="trend-chart-{{ $key }}">{{ $text }}</button>
@@ -129,9 +142,14 @@
         @endif
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-3">
-        <div class="card p-6">
+    <div class="grid gap-6 lg:grid-cols-4">
+        <div class="card p-6" data-test="payment-status">
             <h2 class="{{ $h2 }} mb-4">Payment Status</h2>
+            <x-ui.doughnut :counts="$statusAmounts" :fmt="$loc" empty="No payments or balances" />
+        </div>
+
+        <div class="card p-6">
+            <h2 class="{{ $h2 }} mb-4">Invoices</h2>
             <x-ui.doughnut :counts="$statusCounts" />
         </div>
 
@@ -226,6 +244,38 @@
         @endforelse
     </div>
 
+    <div class="grid gap-6 lg:grid-cols-2">
+        <div class="card p-6" data-test="client-ranking">
+            <h2 class="{{ $h2 }}">Client ranking</h2>
+            <p class="mb-4 text-xs text-gray-500 dark:text-gray-400">Score = projects × 10 + paid share (0–60) + payment behaviour (+20 nothing owed, −20 overdue). All time.</p>
+            @forelse ($ranking as $i => $row)
+                <div class="flex items-center justify-between gap-4 border-b border-gray-100 py-2 last:border-0 dark:border-gray-700" data-test="ranking-row">
+                    <div class="min-w-0">
+                        <a href="{{ route('clients.show', $row['client']) }}" wire:navigate class="block truncate text-sm font-medium text-gray-900 hover:underline dark:text-white">{{ $i + 1 }}. {{ $row['client']->name }}</a>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ $row['projects'] }} {{ Str::plural('project', $row['projects']) }} · paid {{ $loc($row['paid']) }} · <span @class(['text-rose-600 dark:text-rose-400' => $row['state'] === 'overdue'])>{{ ['clear' => 'nothing owed', 'owes' => 'owes', 'overdue' => 'overdue'][$row['state']] }}</span></p>
+                    </div>
+                    <span class="shrink-0 text-sm font-semibold tabular-nums text-gray-900 dark:text-white">{{ $row['score'] }}</span>
+                </div>
+            @empty
+                <p class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">No clients yet</p>
+            @endforelse
+        </div>
+
+        <div class="card p-6" data-test="expense-stats">
+            <h2 class="{{ $h2 }}">Expense breakdown</h2>
+            <p class="mb-4 text-xs text-gray-500 dark:text-gray-400">Paid out {{ $rangeLabel }}: <span class="font-semibold tabular-nums text-gray-900 dark:text-white">{{ $loc($money['expenses']) }}</span> · {{ $money['received'] > 0 ? round($money['expenses'] * 100 / $money['received']).'% of revenue' : 'no revenue' }} · {{ $bills->count() }} {{ Str::plural('bill', $bills->count()) }} due</p>
+            @php $catMax = max(1, collect($expenseCats)->max('cents')); @endphp
+            @forelse ($expenseCats as $c)
+                <div class="py-1.5" data-test="expense-cat">
+                    <div class="flex justify-between text-sm"><span class="text-gray-700 dark:text-gray-300">{{ $c['name'] }}</span><span class="tabular-nums text-gray-900 dark:text-white">{{ $loc($c['cents']) }}</span></div>
+                    <div class="mt-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-700"><div class="h-full rounded-full bg-slate-500" style="width: {{ round($c['cents'] * 100 / $catMax) }}%"></div></div>
+                </div>
+            @empty
+                <p class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">No expenses paid in this period</p>
+            @endforelse
+        </div>
+    </div>
+
     <div>
         <h2 class="{{ $h2 }} mb-3">Work</h2>
         <div class="grid gap-6 sm:grid-cols-3">
@@ -258,4 +308,55 @@
             @endif
         </div>
     </div>
+
+    @else
+    @php $pri = ['Low', 'Medium', 'High']; $dl = fn ($d) => $d ? $d->format('M j, Y') : '—'; @endphp
+    <div class="card p-6" data-test="project-overview">
+        <h2 class="{{ $h2 }} mb-4">Active projects</h2>
+        @forelse ($projectRows as $r)
+            <div class="border-b border-gray-100 py-3 last:border-0 dark:border-gray-700" data-test="project-row">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <a href="{{ route('projects.show', $r['project']) }}" wire:navigate class="link text-sm font-semibold">{{ $r['project']->name }}</a>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ $r['project']->client->name }} · deadline {{ $dl($r['project']->deadline) }}</p>
+                    </div>
+                    @if ($r['status'])<x-ui.badge :color="$r['status'][1]">{{ $r['status'][0] }}</x-ui.badge>@else<x-ui.badge color="slate">No deadline</x-ui.badge>@endif
+                </div>
+                <div class="mt-2 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700"><div class="h-full bg-brand-600" style="width: {{ $r['pct'] }}%"></div></div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ $r['pct'] }}% complete · {{ $r['tasks'] }} {{ Str::plural('task', $r['tasks']) }} · budget {{ $loc($r['budget']) }} · paid {{ $loc($r['paid']) }} · done, not paid <span class="font-medium text-gray-900 dark:text-white">{{ $loc($r['unpaid']) }}</span></p>
+            </div>
+        @empty
+            <p class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">No active projects</p>
+        @endforelse
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-2">
+        @foreach ([['Priority tasks', $priorityTasks, 'No high-priority open tasks', 'priority-tasks'], ['Open tasks', $taskList, 'No open tasks', 'task-list']] as [$title, $list, $none, $dt])
+            <div class="card p-6" data-test="{{ $dt }}">
+                <h2 class="{{ $h2 }} mb-4">{{ $title }}</h2>
+                @forelse ($list as $t)
+                    <div class="border-b border-gray-100 py-3 last:border-0 dark:border-gray-700">
+                        <a href="{{ route('tasks.show', $t) }}" wire:navigate class="link block truncate text-sm font-semibold">{{ $t->title }}</a>
+                        <p class="truncate text-xs text-gray-500 dark:text-gray-400">{{ $t->project?->name }} · {{ $pri[$t->priority] ?? 'Low' }} · due {{ $dl($t->deadline) }}</p>
+                    </div>
+                @empty
+                    <p class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">{{ $none }}</p>
+                @endforelse
+            </div>
+        @endforeach
+    </div>
+
+    <div class="card p-6" data-test="unapproved-tasks">
+        <h2 class="{{ $h2 }} mb-4">Done, waiting for client approval</h2>
+        @forelse ($unapproved as $client => $tasks)
+            <p class="mt-3 text-sm font-semibold text-gray-900 first:mt-0 dark:text-white">{{ $client }} <span class="font-normal text-gray-500">({{ $tasks->count() }})</span></p>
+            @foreach ($tasks as $t)
+                <a href="{{ route('tasks.show', $t) }}" wire:navigate class="link block truncate py-1 text-sm">{{ $t->title }} <span class="text-xs text-gray-500 dark:text-gray-400">· {{ $t->project?->name }}</span></a>
+            @endforeach
+        @empty
+            <p class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">Nothing waiting for approval</p>
+        @endforelse
+    </div>
+
+    @endif
 </div>

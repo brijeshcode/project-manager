@@ -258,4 +258,51 @@ class DashboardMoney
             ];
         })->all();
     }
+
+    /** Rank clients: projects x10 + paid share (0-60, all time) + timeliness (+20 owes nothing, 0 owes, -20 overdue invoice). */
+    public static function clientRanking(int $limit = 10): array
+    {
+        $paid = Payment::where('local_currency', LocalCurrency::code())->groupBy('client_id')->selectRaw('client_id, SUM(local_amount_cents) as s')->pluck('s', 'client_id');
+        $projects = \App\Models\Project::groupBy('client_id')->selectRaw('client_id, COUNT(*) as n')->pluck('n', 'client_id');
+        $owing = self::owingClientIds();
+        $late = Invoice::where('status', 'sent')->whereIn('client_id', $owing)->whereDate('due_on', '<', now()->toDateString())->pluck('client_id')->all();
+        $max = max(1, (int) $paid->max());
+
+        return Client::get()->map(function (Client $c) use ($paid, $projects, $owing, $late, $max) {
+            $state = in_array($c->id, $late, true) ? 'overdue' : (in_array($c->id, $owing, true) ? 'owes' : 'clear');
+            $p = (int) ($paid[$c->id] ?? 0);
+
+            return ['client' => $c, 'projects' => (int) ($projects[$c->id] ?? 0), 'paid' => $p, 'state' => $state,
+                'score' => (int) ($projects[$c->id] ?? 0) * 10 + (int) round($p * 60 / $max) + ['overdue' => -20, 'owes' => 0, 'clear' => 20][$state]];
+        })->sortByDesc('score')->take($limit)->values()->all();
+    }
+
+    /** Local cents in [from, to]: paid = income received; pending / overdue = what clients still owe (overdue = a past-due sent invoice). */
+    public static function paymentStatusAmounts(CarbonInterface $from, CarbonInterface $to): array
+    {
+        $out = ['paid' => max(0, self::forPeriodLocal($from, $to)['received']), 'pending' => 0, 'overdue' => 0];
+        $clients = Client::get()->keyBy('id');
+        $late = Invoice::where('status', 'sent')->whereDate('due_on', '<', now()->toDateString())->pluck('client_id')->all();
+        foreach (app(ClientAccount::class)->totals($clients->keys()->all()) as $id => $t) {
+            $balance = $t['billed'] - $t['received'];
+            $rate = $balance > 0 ? LocalCurrency::rateFor($clients[$id]->currency) : null;
+            if ($rate !== null) {
+                $out[in_array($id, $late, true) ? 'overdue' : 'pending'] += Money::convert($balance, $rate);
+            }
+        }
+
+        return $out;
+    }
+
+    /** Expense payments in [from, to] by category, local cents, biggest first. */
+    public static function expensesByCategory(CarbonInterface $from, CarbonInterface $to): array
+    {
+        return ExpensePayment::query()->join('expenses', 'expenses.id', '=', 'expense_payments.expense_id')
+            ->leftJoin('expense_categories', 'expense_categories.id', '=', 'expenses.expense_category_id')
+            ->whereDate('expense_payments.paid_on', '>=', $from->toDateString())->whereDate('expense_payments.paid_on', '<=', $to->toDateString())
+            ->where('expense_payments.local_currency', LocalCurrency::code())
+            ->groupBy('expense_categories.name')->orderByDesc('s')
+            ->selectRaw('expense_categories.name as n, SUM(expense_payments.local_amount_cents) as s')->get()
+            ->map(fn ($r) => ['name' => $r->n ?? 'Uncategorised', 'cents' => (int) $r->s])->all();
+    }
 }

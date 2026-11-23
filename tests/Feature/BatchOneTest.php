@@ -129,7 +129,7 @@ it('defaults to page size 15 and full sidebar, and ignores invalid stored values
 
 it('Settings group lists items in order, gated by permission', function (string $role, array $items) {
     $r = $this->actingAs(b1User($role, $role === 'client' ? ['client_id' => Client::create(['name' => 'C', 'currency' => 'USD'])->id] : []))->get($role === 'client' ? '/portal' : '/dashboard')->assertOk();
-    preg_match('/data-test="settings-nav">(.*?)<\/nav>/s', $r->getContent(), $m);
+    preg_match('/data-test="settings-nav"[^>]*>(.*?)<\/nav>/s', $r->getContent(), $m);
     preg_match_all('/<span class="sb-label">(.*?)<\/span>/s', $m[1], $labels);
     expect($labels[1])->toBe($items);
     $workspace = substr($r->getContent(), 0, strpos($r->getContent(), 'data-test="settings-nav"'));
@@ -137,7 +137,7 @@ it('Settings group lists items in order, gated by permission', function (string 
         expect($workspace)->not->toContain('<span class="sb-label">'.$moved.'</span>');
     }
 })->with([
-    'admin' => ['super_admin', ['Currencies', 'Bank accounts', 'Task types', 'Labels', 'System', 'Profile']],
+    'admin' => ['super_admin', ['Currencies', 'Bank accounts', 'Expense categories', 'Task types', 'Labels', 'System', 'Profile']],
     'project manager' => ['project_manager', ['Profile']],
     'developer' => ['developer', ['Profile']],
     'client' => ['client', ['Profile']],
@@ -223,4 +223,14 @@ it('page size setting applies to the portal invoices and payments lists', functi
     Settings::set('page_size', '100');
     expect(Livewire::actingAs($u)->test(PortalPayments::class)->viewData('payments')->perPage())->toBe(100);
     expect(Livewire::actingAs($u)->test(PortalInvoices::class)->viewData('invoices')->perPage())->toBe(100);
+});
+
+it('saves the default dashboard tab and groups the settings sidebar', function () {
+    $admin = b1User('super_admin');
+    expect(Settings::dashboardDefaultTab())->toBe('financial');
+    Livewire::actingAs($admin)->test(System::class)->set('dashboardTab', 'project')->call('save')->assertHasNoErrors();
+    expect(Settings::dashboardDefaultTab())->toBe('project');
+    Livewire::actingAs($admin)->test(System::class)->set('dashboardTab', 'x')->call('save')->assertHasErrors(['dashboardTab']);
+    $this->actingAs($admin)->get(route('settings.index'))->assertOk()
+        ->assertSee('data-test="settings-group-financial"', false)->assertSee('data-test="settings-group-project"', false);
 });

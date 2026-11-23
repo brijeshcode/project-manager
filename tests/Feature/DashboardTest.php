@@ -227,3 +227,22 @@ it('income trend from/to dates chart a given year by month, and a count goes bac
         ->assertDontSee('Jan 2025:', false)
         ->set('trendCount', 5)->assertSet('trendCustom', false)->assertSee('last 5 months');
 });
+
+it('dashboard has tabs, FY filter, ranking, expense stats and project tab', function () {
+    $c = Client::create(['name' => 'Acme', 'currency' => 'INR', 'billing_mode' => 'fixed']);
+    dbPay($c, 100000, now()->toDateString(), 100000);
+    $u = dbUser('super_admin');
+
+    $r = actingAs($u)->get('/dashboard')->assertOk();
+    $r->assertSee('data-test="client-ranking"', false)->assertSee('data-test="expense-stats"', false)->assertSee('data-test="trend-fy"', false)->assertSee('data-test="payment-status"', false);
+    $r->assertDontSee('data-test="project-overview"', false);
+
+    $fy = now()->month >= 4 ? now()->year : now()->year - 1;
+    Livewire::actingAs($u)->test(\App\Livewire\Dashboard::class)
+        ->assertSet('tab', 'financial')->set('trendFy', (string) $fy)->assertSet('trendFy', (string) $fy)
+        ->set('trendFy', '1999')->assertSet('trendFy', '')
+        ->set('tab', 'project')->assertSee('data-test="project-overview"', false)->assertSee('Done, waiting for client approval')->assertDontSee('data-test="client-ranking"', false);
+
+    \App\Support\Settings::set('dashboard_default_tab', 'project');
+    Livewire::actingAs($u)->test(\App\Livewire\Dashboard::class)->assertSet('tab', 'project');
+});

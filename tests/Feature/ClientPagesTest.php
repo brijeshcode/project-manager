@@ -64,10 +64,10 @@ it('index lists columns, billed and balance with exact amounts', function () {
     cpPayment($c, 40000);
 
     Livewire::actingAs(cpAdmin())->test(Index::class)->assertOk()
-        ->assertSee(['Client', 'Contact', 'Financial Summary', 'Status', 'Actions'])
-        ->assertSee('Globex')->assertSee('CLI-0001')->assertSee('hank@globex.test')
-        ->assertSee('Billed: $1,500.00')->assertSee('Balance: -$1,100.00')
-        ->assertDontSee('999.00')->assertSee('active');
+        ->assertSee(['Name', 'Contact', 'Subscriptions', 'Balance', 'Actions'])
+        ->assertSee('Globex')->assertSee('hank@globex.test')
+        ->assertSee('$1,100.00')->assertSee('Client owes')
+        ->assertDontSee('999.00');
     expect(app(\App\Services\ClientAccount::class)->balanceCents($c))->toBe(-110000);
 });
 
@@ -93,7 +93,7 @@ it('index computes totals with grouped queries, not per row', function () {
     DB::enableQueryLog();
     Livewire::actingAs(cpAdmin())->test(Index::class)->assertOk();
     $n = collect(DB::getQueryLog())->filter(fn ($q) => str_contains($q['query'], 'from "invoices"') || str_contains($q['query'], 'from `invoices`'))->count();
-    expect($n)->toBe(1);
+    expect($n)->toBeLessThanOrEqual(3); // constant: client totals, local totals, subscription usage
 });
 
 it('index links to view, edit and add project', function () {
@@ -209,7 +209,7 @@ it('rejects bad type and status', function () {
 
 it('edit saves, keeps the code, and redirects to show with a toast', function () {
     $c = cpClient();
-    Livewire::actingAs(cpAdmin())->test(Form::class, ['client' => $c->fresh()])->assertOk()->assertSee('CLI-0001')
+    Livewire::actingAs(cpAdmin())->test(Form::class, ['client' => $c->fresh()])->assertOk()
         ->set('name', 'Renamed')->set('status', 'archived')->call('save')
         ->assertRedirect(route('clients.show', $c));
     expect($c->fresh()->name)->toBe('Renamed')->and($c->fresh()->status->value)->toBe('archived')->and($c->fresh()->client_code)->toBe('CLI-0001');

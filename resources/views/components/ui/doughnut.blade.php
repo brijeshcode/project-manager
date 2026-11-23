@@ -1,5 +1,5 @@
 {{-- Server-rendered SVG doughnut. counts: ['paid' => n, 'pending' => n, 'overdue' => n, 'void' => n] --}}
-@props(['counts'])
+@props(['counts', 'fmt' => null, 'empty' => 'No invoices in this period'])
 
 @php
     // literal class names so Tailwind keeps them
@@ -23,7 +23,7 @@
                     @php $len = $n * 100 / $total; @endphp
                     <circle cx="60" cy="60" r="42" fill="none" stroke-width="22" pathLength="100" class="{{ $stroke }}"
                         stroke-dasharray="{{ round($len, 3) }} {{ round(100 - $len, 3) }}" stroke-dashoffset="{{ $acc > 0 ? round(-$acc, 3) : 0 }}" transform="rotate(-90 60 60)">
-                        <title>{{ $label }}: {{ $n }} ({{ round($n * 100 / $total) }}%)</title>
+                        <title>{{ $label }}: {{ $fmt ? $fmt($n) : $n }} ({{ round($n * 100 / $total) }}%)</title>
                     </circle>
                     @php $acc += $len; @endphp
                 @endif
@@ -31,11 +31,11 @@
         @endif
     </svg>
     @if ($total === 0)
-        <p class="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">No invoices in this period</p>
+        <p class="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">{{ $empty }}</p>
     @endif
     <ul class="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm text-gray-600 dark:text-gray-300">
         @foreach ($segs as [$label, $stroke, $bg])
-            <li class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm {{ $bg }}"></span>{{ $label }}</li>
+            <li class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm {{ $bg }}"></span>{{ $label }}@if ($fmt) <span class="tabular-nums text-gray-500 dark:text-gray-400">{{ $fmt((int) ($counts[strtolower($label)] ?? 0)) }}</span>@endif</li>
         @endforeach
     </ul>
 </div>

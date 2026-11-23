@@ -8,6 +8,8 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Support\DashboardMoney;
+use App\Support\DashboardProjects;
+use App\Support\Settings;
 use Illuminate\Support\Carbon;
 use Livewire\Component;
 
@@ -18,6 +20,11 @@ class Dashboard extends Component
     public const TREND_BY = ['week' => 'Weekly', 'month' => 'Monthly', 'quarter' => 'Quarterly', 'year' => 'Yearly'];
 
     public const TREND_COUNTS = [5, 10, 20, 50];
+
+    public string $tab = 'financial';
+
+    /** Financial year for the trend (start year, '' = none); FYs run April to March. */
+    public string $trendFy = '';
 
     public string $range = 'this_month';
 
@@ -41,6 +48,26 @@ class Dashboard extends Component
     public function mount(): void
     {
         abort_unless(auth()->user()->can('manage-money'), 403);
+        $this->tab = Settings::get('dashboard_default_tab', 'financial') === 'project' ? 'project' : 'financial';
+    }
+
+    public function updatedTab(): void
+    {
+        $this->tab = $this->tab === 'project' ? 'project' : 'financial';
+    }
+
+    public function updatedTrendFy(): void
+    {
+        $this->trendFy = in_array($this->trendFy, $this->fyYears(), true) ? $this->trendFy : '';
+        $this->trendCustom = false;
+    }
+
+    /** Start years of the last 6 financial years, newest first. */
+    public function fyYears(): array
+    {
+        $y = now()->month >= 4 ? now()->year : now()->year - 1;
+
+        return array_map('strval', range($y, $y - 5));
     }
 
     public function updatedRange(): void
@@ -70,12 +97,14 @@ class Dashboard extends Component
     {
         $this->trendCount = in_array($this->trendCount, self::TREND_COUNTS, true) ? $this->trendCount : 10;
         $this->trendCustom = false;
+        $this->trendFy = '';
     }
 
     public function applyTrendRange(): void
     {
         $this->validate(['trendFrom' => 'required|date', 'trendTo' => 'required|date|after_or_equal:trendFrom'], [], ['trendFrom' => 'from', 'trendTo' => 'to']);
         $this->trendCustom = true;
+        $this->trendFy = '';
     }
 
     public function updatedTrendChart(): void
@@ -107,6 +136,11 @@ class Dashboard extends Component
     /** Applied trend dates, else the last $trendCount buckets up to now; independent of the range filter. */
     private function trendSeries(): array
     {
+        if ($this->trendFy !== '') {
+            $start = Carbon::create((int) $this->trendFy, 4, 1);
+
+            return DashboardMoney::revenueSeriesLocal($start, $start->copy()->addYear()->subDay()->endOfDay(), $this->trendBy);
+        }
         if ($this->trendCustom) {
             return DashboardMoney::revenueSeriesLocal(Carbon::parse($this->trendFrom)->startOfDay(), Carbon::parse($this->trendTo)->endOfDay(), $this->trendBy);
         }
@@ -128,7 +162,17 @@ class Dashboard extends Component
 
         [$from, $to, $rangeLabel] = $this->bounds();
 
+        $project = $this->tab === 'project';
+
         return view('livewire.dashboard', [
+            'fyYears' => $this->fyYears(),
+            'ranking' => DashboardMoney::clientRanking(),
+            'statusAmounts' => DashboardMoney::paymentStatusAmounts($from, $to),
+            'expenseCats' => DashboardMoney::expensesByCategory($from, $to),
+            'projectRows' => $project ? DashboardProjects::rows() : [],
+            'priorityTasks' => $project ? DashboardProjects::priorityTasks() : collect(),
+            'taskList' => $project ? DashboardProjects::taskList() : collect(),
+            'unapproved' => $project ? DashboardProjects::unapprovedByClient() : collect(),
             'rangeLabel' => $rangeLabel,
             'owing' => DashboardMoney::owingClientIds(),
             'statusCounts' => DashboardMoney::invoiceStatusCounts($from, $to),
