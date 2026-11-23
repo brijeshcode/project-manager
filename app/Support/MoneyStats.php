@@ -42,7 +42,8 @@ class MoneyStats
         $q = fn () => (clone $filtered)->reorder();
         $count = $q()->count();
         $missing = $q()->whereNull('local_amount_cents')->count();
-        $total = $missing ? null : (int) $q()->where('local_currency', $local)->sum('local_amount_cents');
+        // cash received: the payments' local amounts less the TDS and deductions the clients kept
+        $total = $missing ? null : (int) $q()->where('local_currency', $local)->sum('local_amount_cents') - (int) $q()->where('local_currency', $local)->sum('local_deductions_cents');
         $byType = $q()->where('local_currency', $local)->groupBy('type')->selectRaw('type, SUM(local_amount_cents) as cents')->pluck('cents', 'type');
 
         return [

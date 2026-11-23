@@ -20,6 +20,7 @@ trait PaymentFields
     public ?int $client_id = null;
     public ?int $project_id = null;
     public string $amount = '';
+    public string $deductions = '';
     public string $currency = '';
     public string $paid_on = '';
     public string $for_month = '';
@@ -78,6 +79,7 @@ trait PaymentFields
             'exchange_rate' => $client && $cur !== $local ? $this->rateRules() : 'nullable',
             'project_id' => ['nullable', Rule::exists('projects', 'id')->where('client_id', $this->client_id)],
             'amount' => ['bail', 'required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents($v) > 0 || $fail('The amount must be greater than zero.')],
+            'deductions' => ['nullable', 'regex:/^\d{1,7}(\.\d{1,2})?$/', fn ($a, $v, $fail) => Money::toCents((string) $v) <= Money::toCents((string) $this->amount) || $fail('TDS and deductions cannot be more than the amount.')],
             'paid_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'for_month' => ['nullable', 'date_format:Y-m'],
             'type' => ['required', new Enum(PaymentType::class)],
@@ -91,7 +93,7 @@ trait PaymentFields
 
         return [
             'client_id' => $data['client_id'], 'project_id' => $data['project_id'] ?: null,
-            'amount_cents' => $cents, 'currency' => $cur,
+            'amount_cents' => $cents, 'deductions_cents' => Money::toCents((string) ($data['deductions'] ?: 0)), 'currency' => $cur,
             'exchange_rate' => $rate, 'local_amount_cents' => Money::convert($cents, $rate), 'local_currency' => $local,
             'paid_on' => $data['paid_on'], 'for_month' => $data['for_month'] ?: null, 'type' => $data['type'],
             'method' => $data['method'] ?: null, 'notes' => $data['notes'] ?: null,

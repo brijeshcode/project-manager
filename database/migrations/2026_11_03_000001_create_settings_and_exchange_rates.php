@@ -30,6 +30,8 @@ return new class extends Migration
             $t->decimal('exchange_rate', 18, 6)->nullable();
             $t->bigInteger('local_amount_cents')->nullable();
             $t->string('local_currency', 3)->nullable();
+            $t->unsignedBigInteger('deductions_cents')->default(0); // TDS and other amounts the client kept: billed, not received
+            $t->bigInteger('local_deductions_cents')->nullable(); // deductions in the local currency at the payment's rate
         });
 
         // Default local currency is INR: existing INR-client payments convert at 1.
@@ -38,7 +40,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('payments', fn (Blueprint $t) => $t->dropColumn(['exchange_rate', 'local_amount_cents', 'local_currency']));
+        Schema::table('payments', fn (Blueprint $t) => $t->dropColumn(['exchange_rate', 'local_amount_cents', 'local_currency', 'deductions_cents', 'local_deductions_cents']));
         Schema::dropIfExists('exchange_rates');
         Schema::dropIfExists('settings');
     }

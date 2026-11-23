@@ -14,7 +14,7 @@ class Invoice extends Model
 
     protected $fillable = [
         'number', 'client_id', 'status', 'issued_on', 'due_on', 'currency', 'subtotal_cents', 'tax_percent',
-        'tax_cents', 'total_cents', 'bank_account_id', 'bank_snapshot', 'exchange_rate', 'local_total_cents', 'terms', 'emailed_at', 'lines_snapshot', 'show_quantity', 'for_month',
+        'tax_cents', 'total_cents', 'bank_account_id', 'bank_snapshot', 'exchange_rate', 'local_total_cents', 'terms', 'emailed_at', 'lines_snapshot', 'show_quantity', 'for_month', 'deductions_cents',
     ];
 
     protected $hidden = ['bank_snapshot'];

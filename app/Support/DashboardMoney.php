@@ -24,10 +24,12 @@ class DashboardMoney
     {
         $local = LocalCurrency::code();
         // income: payments minus pass-through costs invoiced in the same window
+        // cash: the TDS and deductions the clients kept are billed but never received
         $received = fn (CarbonInterface $a, CarbonInterface $b) => (int) Payment::query()
             ->whereDate('paid_on', '>=', $a->toDateString())->whereDate('paid_on', '<=', $b->toDateString())
             ->where('local_currency', $local)
-            ->sum('local_amount_cents') - self::passThroughLocal($a, $b)->sum('cents');
+            ->selectRaw('COALESCE(SUM(local_amount_cents), 0) - COALESCE(SUM(local_deductions_cents), 0) as net')
+            ->value('net') - self::passThroughLocal($a, $b)->sum('cents');
 
         $outstanding = 0;
         $missing = 0;

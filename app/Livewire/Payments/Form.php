@@ -46,6 +46,7 @@ class Form extends Component
         $this->project_id = $payment->project_id;
         $this->currency = $payment->currency;
         $this->amount = Money::toInput($payment->amount_cents);
+        $this->deductions = $payment->deductions_cents ? Money::toInput($payment->deductions_cents) : '';
         $this->paid_on = $payment->paid_on->toDateString();
         $this->for_month = (string) $payment->for_month;
         $this->type = $payment->type->value;

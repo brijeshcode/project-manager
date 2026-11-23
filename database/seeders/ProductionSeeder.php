@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\PaymentType;
 use App\Enums\RecurringFrequency;
+use App\Models\BankAccount;
 use App\Models\BillableLine;
 use App\Models\Client;
 use App\Models\Expense;
@@ -15,16 +16,18 @@ use App\Models\Project;
 use App\Models\RecurringCharge;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\ExchangeRates;
 use App\Services\LocalCurrency;
 use App\Support\Money;
+use App\Support\Settings;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * Real clients, projects, subscriptions and billing history for production. Safe to run more than once: nothing
- * already there is duplicated or changed, and no past subscription periods are billed by the scheduler.
+ * Real clients and projects for production, plus a bank account. Safe to run more than once: nothing already there
+ * is duplicated or changed, and no past subscription periods are billed by the scheduler.
  * History (subscriptions, sent invoices, payments, expenses) comes from data/production-history.json when present.
  * Run: php artisan db:seed --class=ProductionSeeder
  */
@@ -43,16 +46,11 @@ class ProductionSeeder extends Seeder
                 // David paid for the development; the idea is Nick's
                 ['name' => 'Wholesale Trading System', 'budget' => 2000, 'completed' => '2025-08-31', 'modules' => self::WHOLESALE_MODULES],
             ],
-            // [description, monthly amount, project name or null, started (Y-m), ended (Y-m) or null]
-            'subscriptions' => [], // from production-history.json
         ],
         [
             'name' => 'Mark Zouein', 'login' => 'mark@example.com', 'country' => 'Lebanon', 'phone' => '+961 3 737 655',
             'projects' => [
                 ['name' => 'Currency Trading System', 'budget' => 1500, 'completed' => '2023-12-31', 'modules' => self::CURRENCY_MODULES, 'pending' => self::CURRENCY_PENDING],
-            ],
-            'subscriptions' => [
-                ['Maintaining currency trading system', 80, 'Currency Trading System', '2024-01', null],
             ],
         ],
         [
@@ -63,8 +61,28 @@ class ProductionSeeder extends Seeder
             'projects' => [ 
                 ['name' => 'Global Z update and issues: updates', 'budget' => 0, 'completed' => '2026-11-20', 'modules' => self::WHOLESALE_MODULES], // this has zero budget because it was created by david as wholesale trading system, and nick is upgrading and changing it by his own needs. so we add task and set price on it.
             ],
-            'subscriptions' => [
-                ['Wholesale trading system maintenance', 120, 'Wholesale Trading System', '2025-09', '2026-09'],
+        ],
+        [
+            'name' => 'Smart Working', 'currency' => 'INR', 'country' => 'India', 'phone' => null,
+            // contract developer, Nov 2022 to Jan 2025, fixed income with TDS; both projects built in a team
+            'projects' => [
+                ['name' => 'Keyloop', 'completed' => '2025-01-31'],
+                ['name' => 'Stickee', 'completed' => '2025-01-31'],
+            ],
+        ],
+        [
+            // freelancer, hourly, 2020 to March 2023; projects not recorded
+            'name' => 'Phonixx', 'currency' => 'INR', 'country' => null, 'phone' => null,
+            'projects' => [],
+        ],
+        [
+            'name' => 'Lokesh', 'currency' => 'INR', 'country' => 'India', 'phone' => '+91 9079072651',
+            'projects' => [
+                ['name' => 'Milk delivery and billing system', 'budget' => 25000, 'completed' => '2026-11-20', 'modules' => [
+                    'Login' => ['Login', 'Customer login', 'Driver login'],
+                    'Dashboard' => ['Dashboard', 'Delivery dashboard'],
+                    'Payments' => ['Payments', 'Customer cash payment'],
+                ]],
             ],
         ],
     ];
@@ -166,7 +184,7 @@ class ProductionSeeder extends Seeder
     {
         foreach (self::CLIENTS as $c) {
             $client = Client::firstOrCreate(['name' => $c['name']], [
-                'currency' => 'USD',
+                'currency' => $c['currency'] ?? 'USD',
                 'contact_name' => $c['name'],
                 'contact_phone' => $c['phone'],
                 'country' => $c['country'],
@@ -174,10 +192,12 @@ class ProductionSeeder extends Seeder
             ] + ($c['company'] ?? []));
 
             // portal login, as Clients\Show::addLogin makes it; an existing user (and its password) is left alone
-            $login = User::firstOrCreate(['email' => $c['login']], ['name' => $c['name'], 'password' => Hash::make('password'), 'client_id' => $client->id]);
-            if ($login->wasRecentlyCreated) {
-                $login->forceFill(['email_verified_at' => now()])->save();
-                $login->assignRole('client');
+            if (isset($c['login'])) {
+                $login = User::firstOrCreate(['email' => $c['login']], ['name' => $c['name'], 'password' => Hash::make('password'), 'client_id' => $client->id]);
+                if ($login->wasRecentlyCreated) {
+                    $login->forceFill(['email_verified_at' => now()])->save();
+                    $login->assignRole('client');
+                }
             }
 
             $projects = [];
@@ -189,31 +209,19 @@ class ProductionSeeder extends Seeder
                 $this->seedModules($projects[$p['name']], $p['modules'] ?? []);
                 isset($p['pending']) && $this->seedModules($projects[$p['name']], ['Pending tasks' => $p['pending']], pending: true);
             }
+        }
 
-            foreach ($c['subscriptions'] as [$desc, $amount, $projectName, $from, $to]) {
-                if (RecurringCharge::where('client_id', $client->id)->where('description', $desc)->exists()) {
-                    continue;
-                }
-                $start = $from ? Carbon::createFromFormat('!Y-m', $from) : today()->addMonthNoOverflow()->startOfMonth();
-                $charge = RecurringCharge::create([
-                    'client_id' => $client->id,
-                    // own project, else another client's (Nick maintains the system David paid for)
-                    'project_id' => $projectName ? ($projects[$projectName] ?? Project::where('name', $projectName)->first())?->id : null,
-                    'description' => $desc,
-                    'amount_cents' => $amount * 100,
-                    'frequency' => RecurringFrequency::Monthly,
-                    'next_due_on' => $start,
-                    'active' => false,
-                ]);
+        BankAccount::firstOrCreate(['label' => 'PNB Nehru Palace Jaipur'], [
+            'account_name' => 'Brijesh', 'bank_name' => 'Punjab National Bank', 'account_number' => '4064001500081447', 'ifsc_swift' => '',
+        ]);
 
-                if ($to && Carbon::createFromFormat('!Y-m', $to)->endOfMonth()->isPast()) {
-                    // already finished: kept for the record, never billed
-                    $charge->forceFill(['client_state' => RecurringCharge::ENDED, 'client_approved_at' => $start, 'ended_at' => Carbon::createFromFormat('!Y-m', $to)->endOfMonth()])->save();
-                } else {
-                    // running and already agreed: billing starts from the next due date, past months are not billed
-                    $charge->startApproved(false, today());
-                }
-            }
+        if (Settings::get('number_format') === null) {
+            Settings::set('number_format', 'indian', 'system');
+        }
+
+        $staff = User::whereNull('client_id')->orderBy('id')->first();
+        if ($staff && ! app(ExchangeRates::class)->active('USD')) {
+            app(ExchangeRates::class)->setRate('USD', '92', $staff);
         }
 
         $path = $this->historyPath ?? database_path('seeders/data/production-history.json');
@@ -249,6 +257,7 @@ class ProductionSeeder extends Seeder
     {
         $n = ['subscriptions' => 0, 'invoices' => 0, 'payments' => 0, 'skipped' => 0];
         $clients = Client::pluck('id', 'name');
+        $currencies = Client::get()->pluck('currency', 'name');
         // the client's own project first; else one of another client's (e.g. Nick's project paid by David)
         $project = fn (int $clientId, ?string $name) => $name ? Project::where('name', $name)->orderByRaw('client_id = ? desc', [$clientId])->value('id') : null;
         $month = fn (string $ym) => Carbon::createFromFormat('!Y-m', $ym);
@@ -257,7 +266,7 @@ class ProductionSeeder extends Seeder
         $rateFor = fn (string $client, string $date) => $paidRates
             ->filter(fn ($p) => $p['client'] === $client)
             ->sortBy(fn ($p) => abs(strtotime($p['paid_on']) - strtotime($date)))
-            ->first()['exchange_rate'] ?? LocalCurrency::rateFor('USD');
+            ->first()['exchange_rate'] ?? LocalCurrency::rateFor($currencies[$client] ?? 'USD');
 
         foreach ($data['subscriptions'] ?? [] as $s) {
             $cid = $clients[$s['client']] ?? null;
@@ -289,7 +298,7 @@ class ProductionSeeder extends Seeder
 
                 continue;
             }
-            DB::transaction(function () use ($inv, $cid, $project, $rateFor) {
+            DB::transaction(function () use ($inv, $cid, $project, $rateFor, $currencies) {
                 $rate = $inv['exchange_rate'] ?? $rateFor($inv['client'], $inv['issued_on']);
                 $rate = $rate === null ? null : number_format((float) $rate, 6, '.', '');
                 $lines = array_map(fn ($l) => $l + [
@@ -301,7 +310,7 @@ class ProductionSeeder extends Seeder
                 $subtotal = array_sum(array_column($lines, 'cents'));
                 $invoice = Invoice::create([
                     'number' => $inv['number'], 'client_id' => $cid, 'status' => 'sent', 'issued_on' => $inv['issued_on'], 'due_on' => null,
-                    'currency' => 'USD', 'subtotal_cents' => $subtotal, 'tax_percent' => '0.00', 'tax_cents' => 0, 'total_cents' => $subtotal,
+                    'currency' => $currencies[$inv['client']] ?? 'USD', 'deductions_cents' => Money::toCents((string) ($inv['deductions'] ?? 0)), 'subtotal_cents' => $subtotal, 'tax_percent' => '0.00', 'tax_cents' => 0, 'total_cents' => $subtotal,
                     'terms' => $inv['terms'] ?? null, 'emailed_at' => $inv['issued_on'], 'exchange_rate' => $rate, 'for_month' => $inv['period'] ?? null,
                     'show_quantity' => collect($lines)->contains(fn ($l) => (float) $l['qty'] != 1.0),
                     'lines_snapshot' => array_map(fn ($l) => ['description' => $l['description'], 'quantity' => number_format((float) $l['qty'], 2, '.', ''), 'unit_price_cents' => $l['unit_cents'], 'amount_cents' => $l['cents'], 'project_id' => $l['project_id']], $lines),
@@ -334,7 +343,7 @@ class ProductionSeeder extends Seeder
             }
             Payment::create([
                 'client_id' => $cid, 'amount_cents' => $cents, 'paid_on' => $p['paid_on'], 'type' => PaymentType::Maintenance,
-                'method' => $p['method'] ?? null, 'notes' => $p['notes'] ?? null, 'currency' => 'USD', 'documents_visible_to_client' => false,
+                'method' => $p['method'] ?? null, 'notes' => $p['notes'] ?? null, 'currency' => $currencies[$p['client']] ?? 'USD', 'deductions_cents' => Money::toCents((string) ($p['deductions'] ?? 0)), 'documents_visible_to_client' => false,
                 // the notes say which month it paid for: "...; for Jan 2024" ("for Mar or Apr 2025" takes the first)
                 'for_month' => preg_match('/for (\w{3})(?: or \w{3})? (\d{4})/', $p['notes'] ?? '', $m) ? Carbon::parse("1 $m[1] $m[2]")->format('Y-m') : null,
                 // the rate and INR actually received, as printed on the transfer receipt

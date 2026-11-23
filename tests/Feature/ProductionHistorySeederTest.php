@@ -107,3 +107,47 @@ it('seeds paid expenses from the history file, once', function () {
         ->and($e->category->name)->toBe('Developer fee')->and($e->status())->toBe('paid')->and($e->payments->sole()->local_amount_cents)->toBe(3450427);
     unlink($path);
 });
+
+it('seeds the maintenance subscriptions and the Smart Working salary payments with the client currency', function () {
+    $path = tempnam(sys_get_temp_dir(), 'hist');
+    file_put_contents($path, json_encode([
+        'subscriptions' => [
+            ['client' => 'Mark Zouein', 'description' => 'Maintaining currency trading system', 'amount' => 80, 'first_period' => '2024-01', 'last_period' => null, 'active' => true, 'pass_through' => false, 'project' => 'Currency Trading System'],
+            ['client' => 'Nick Zouein', 'description' => 'Wholesale trading system maintenance', 'amount' => 120, 'first_period' => '2025-09', 'last_period' => '2026-09', 'active' => false, 'pass_through' => false, 'project' => 'Wholesale Trading System'],
+        ],
+        'payments' => [
+            ['client' => 'Smart Working', 'paid_on' => '2023-01-31', 'amount' => 155582, 'method' => 'Bank transfer', 'notes' => 'Salary for Jan 2023: gross 166667, deductions 11085'],
+        ],
+    ]));
+    $s = app(ProductionSeeder::class);
+    $s->historyPath = $path;
+    $s->run();
+    unlink($path);
+
+    $mark = RecurringCharge::where('description', 'Maintaining currency trading system')->first();
+    expect($mark->active)->toBeTrue()->and($mark->amount_cents)->toBe(8000)
+        ->and($mark->next_due_on->gte(today()))->toBeTrue()->and($mark->project->name)->toBe('Currency Trading System');
+    expect(RecurringCharge::where('description', 'Wholesale trading system maintenance')->first()->statusBadge()[0])->toBe('Ended');
+
+    $pay = Payment::whereHas('client', fn ($q) => $q->where('name', 'Smart Working'))->first();
+    expect($pay->amount_cents)->toBe(15558200)->and($pay->currency)->toBe('INR')->and($pay->for_month)->toBe('2023-01');
+});
+
+it('bills a INR client with an invoice and a payment of the same amount', function () {
+    $path = tempnam(sys_get_temp_dir(), 'hist');
+    file_put_contents($path, json_encode([
+        'invoices' => [['number' => 'INV-PHX-2022-03-001', 'client' => 'Phonixx', 'issued_on' => '2022-03-31', 'period' => '2022-03', 'terms' => null, 'deductions' => 4176, 'lines' => [
+            ['description' => 'Freelance development, Mar 2022', 'qty' => 1, 'unit_price' => 83512, 'amount' => 83512, 'subscription' => null, 'period' => null, 'project' => null],
+        ]]],
+        'payments' => [['client' => 'Phonixx', 'paid_on' => '2022-03-31', 'amount' => 83512, 'method' => 'Bank transfer', 'notes' => 'TDS 194H: 4176', 'deductions' => 4176]],
+    ]));
+    $s = app(ProductionSeeder::class);
+    $s->historyPath = $path;
+    $s->run();
+    unlink($path);
+
+    $inv = Invoice::where('number', 'INV-PHX-2022-03-001')->first();
+    $pay = Payment::whereHas('client', fn ($q) => $q->where('name', 'Phonixx'))->first();
+    expect($inv->currency)->toBe('INR')->and($inv->exchange_rate)->toEqual(1.0)->and($inv->total_cents)->toBe(8351200)
+        ->and($pay->amount_cents)->toBe($inv->total_cents)->and($pay->local_amount_cents)->toBe($pay->amount_cents)->and($pay->exchange_rate)->toEqual(1.0)->and($pay->deductions_cents)->toBe(417600)->and($pay->local_deductions_cents)->toBe(417600)->and($inv->deductions_cents)->toBe(417600);
+});

@@ -64,6 +64,12 @@
                         <input wire:model.live.debounce.300ms="amount" id="amount" type="text" inputmode="decimal" placeholder="0.00" class="input tabular-nums" />
                         @error('amount') <p class="mt-1 field-error">{{ $message }}</p> @enderror
                     </div>
+                    <div>
+                        <label for="deductions" class="label">TDS &amp; deductions{{ $formCurrency ? ' ('.$formCurrency.')' : '' }}</label>
+                        <input wire:model.live.debounce.300ms="deductions" id="deductions" type="text" inputmode="decimal" placeholder="0.00" class="input tabular-nums" />
+                        <p class="mt-1 text-xs text-slate-500 dark:text-gray-400">Kept by the client, so billed but not received in cash.</p>
+                        @error('deductions') <p class="mt-1 field-error">{{ $message }}</p> @enderror
+                    </div>
                     @if ($needsRate)
                         <div>
                             <label for="exchange_rate" class="label">Rate to {{ $local }}</label>

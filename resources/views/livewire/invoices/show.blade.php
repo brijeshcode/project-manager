@@ -59,6 +59,7 @@
                 <p class="mt-2 text-sm text-slate-600 dark:text-gray-300">{{ $explain }}</p>
                 <dl class="mt-4 space-y-2 border-t border-slate-100 pt-4 text-sm dark:border-gray-700">
                     <div class="flex justify-between"><dt class="text-slate-500 dark:text-gray-400">Total</dt><dd class="font-medium tabular-nums text-gray-900 dark:text-white">{{ \App\Support\Money::format($invoice->total_cents, $invoice->currency) }}</dd></div>
+                    @if ($invoice->deductions_cents)<div class="flex justify-between"><dt class="text-slate-500 dark:text-gray-400">TDS deducted by client</dt><dd class="font-medium tabular-nums text-gray-900 dark:text-white">{{ AppSupportMoney::format($invoice->deductions_cents, $invoice->currency) }}</dd></div><div class="flex justify-between"><dt class="text-slate-500 dark:text-gray-400">Net received</dt><dd class="font-medium tabular-nums text-gray-900 dark:text-white">{{ AppSupportMoney::format($invoice->total_cents - $invoice->deductions_cents, $invoice->currency) }}</dd></div>@endif
                     @if ($invoice->due_on)
                         <div class="flex justify-between"><dt class="text-slate-500 dark:text-gray-400">Due</dt><dd class="text-gray-900 dark:text-white">{{ $invoice->due_on->toFormattedDateString() }}</dd></div>
                     @endif

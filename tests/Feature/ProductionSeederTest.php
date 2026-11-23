@@ -20,7 +20,8 @@ it('seeds the production clients once, with no billed lines', function () {
     $seed();
     $seed(); // idempotent
 
-    expect(Client::count())->toBe(3)->and(Project::count())->toBe(5)->and(RecurringCharge::count())->toBe(2)
+    expect(Client::count())->toBe(6)->and(Project::count())->toBe(8)->and(RecurringCharge::count())->toBe(0)
+        ->and(\App\Models\Payment::count())->toBe(0)->and(\App\Models\BankAccount::count())->toBe(1)
         ->and(BillableLine::count())->toBe(0);
 
     $david = Client::where('name', 'David Zouein')->first();
@@ -32,11 +33,6 @@ it('seeds the production clients once, with no billed lines', function () {
     $app = Project::where('name', 'Luigi Darbur App')->first();
     expect((float) $app->final_budget)->toBe(2300.0)->and($app->status)->toBe('completed')->and($app->completed_at->toDateString())->toBe('2025-11-30');
 
-    $mark = RecurringCharge::where('description', 'Maintaining currency trading system')->first();
-    expect($mark->active)->toBeTrue()->and($mark->amount_cents)->toBe(8000)
-        ->and($mark->next_due_on->gte(today()))->toBeTrue()->and($mark->project->name)->toBe('Currency Trading System');
-
-    expect(RecurringCharge::where('description', 'Wholesale trading system maintenance')->first()->statusBadge()[0])->toBe('Ended');
 });
 
 it('seeds each project\'s modules with done tasks, and the old currency todos as drafts', function () {

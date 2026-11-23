@@ -17,8 +17,11 @@
     <div class="grid gap-6 lg:grid-cols-3">
         <div class="space-y-6 lg:col-span-2">
             <div class="card p-6">
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">Amount received</p>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-gray-400">Amount billed and settled</p>
                 <p class="mt-1 text-3xl font-semibold tabular-nums text-gray-900 dark:text-white" data-test="amount">{{ $money($payment->amount_cents, $payment->currency) }}</p>
+                @if ($payment->deductions_cents)
+                    <p class="mt-2 text-sm tabular-nums text-slate-600 dark:text-gray-300">TDS &amp; deductions {{ $money($payment->deductions_cents, $payment->currency) }} · cash received {{ $money($payment->amount_cents - $payment->deductions_cents, $payment->currency) }}</p>
+                @endif
                 @if ($foreign)
                     <p class="mt-1 text-sm tabular-nums text-slate-500 dark:text-gray-400">
                         @if ($payment->hasLocal())

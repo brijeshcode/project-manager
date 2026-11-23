@@ -24,6 +24,7 @@ return new class extends Migration {
             $t->decimal('inr_rate', 10, 4)->nullable();
             $t->bigInteger('local_total_cents')->nullable(); // total x rate, in the local currency
             $t->text('terms')->nullable();
+            $t->unsignedBigInteger('deductions_cents')->default(0); // TDS the client deducted on this invoice; the total stays gross
             $t->timestamp('emailed_at')->nullable();
             $t->timestamps();
             $t->index(['client_id', 'status']);
