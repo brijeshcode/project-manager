@@ -97,7 +97,9 @@ Route::middleware(['auth', 'can:manage-money'])->prefix('expenses')->name('expen
     Route::get('{expense}/edit', \App\Livewire\Expenses\Form::class)->name('edit');
 });
 
-Route::get('payment-documents/{document}/download', \App\Http\Controllers\PaymentDocumentDownloadController::class)
+Route::get('tax', \App\Livewire\Tax\Index::class)->middleware(['auth', 'can:manage-money'])->name('tax.index');
+
+route::get('payment-documents/{document}/download', \App\Http\Controllers\PaymentDocumentDownloadController::class)
     ->whereNumber('document')->middleware(['auth', 'can:manage-money'])->name('payment-documents.download');
 
 Route::middleware(['auth', 'can:manage-money'])->prefix('invoices')->name('invoices.')->group(function () {

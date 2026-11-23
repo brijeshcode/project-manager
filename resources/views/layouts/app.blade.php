@@ -29,18 +29,19 @@
                 ['Invoices',      'portal.invoices',       ['portal.invoices', 'portal.invoice'],  'document',    $client],
                 ['Payments',      'payments.index',        'payments.*',                           'credit-card', $money],
                 ['Expenses',      'expenses.index',        'expenses.*',                           'tag',         $money],
+                ['Tax',           'tax.index',             'tax.*',                                'document',    $money],
                 ['Payments',      'portal.payments',       ['portal.payments', 'portal.payment'],  'credit-card', $client && $u->client?->portalShows('payments')],
                 ['Statement',     'portal.statement',      'portal.statement',                     'document',    $client && $u->client?->portalShows('statement')],
                 ['Subscriptions', 'portal.subscriptions',  ['portal.subscriptions', 'portal.subscription'], 'refresh', $client],
             ])->filter(fn ($i) => $i[4]);
             $settingsNav = collect([
-                ['Currencies',    'currencies.index',      'currencies.*',                         'coins',              $money],
-                ['Bank accounts', 'billing.bank-accounts', 'billing.bank-accounts',                'landmark',           $money],
-                ['Expense categories', 'settings.expense-categories', 'settings.expense-categories', 'tags',          $money],
-                ['Task types',    'settings.task-types',   'settings.task-types',                  'sliders-horizontal', $u && $u->can('manage-taxonomy')],
-                ['Labels',        'settings.labels',       'settings.labels',                      'tags',               $u && $u->can('manage-taxonomy')],
-                ['System',        'settings.system',       'settings.system',                      'settings',           $u && $u->can('manage-system')],
-                ['Profile',       'profile',               'profile',                              'user',               (bool) $u],
+                ['Currencies',    'currencies.index',      'currencies.*',                         'coins',              $money, 'Financial'],
+                ['Bank accounts', 'billing.bank-accounts', 'billing.bank-accounts',                'landmark',           $money, 'Financial'],
+                ['Expense categories', 'settings.expense-categories', 'settings.expense-categories', 'tags',          $money, 'Financial'],
+                ['Task types',    'settings.task-types',   'settings.task-types',                  'sliders-horizontal', $u && $u->can('manage-taxonomy'), 'Project'],
+                ['Labels',        'settings.labels',       'settings.labels',                      'tags',               $u && $u->can('manage-taxonomy'), 'Project'],
+                ['System',        'settings.system',       'settings.system',                      'settings',           $u && $u->can('manage-system'), 'General'],
+                ['Profile',       'profile',               'profile',                              'user',               (bool) $u, 'General'],
             ])->filter(fn ($i) => $i[4]);
 
             $initials = $u ? collect(explode(' ', trim($u->name)))->map(fn ($p) => mb_substr($p, 0, 1))->take(2)->implode('') : '?';
@@ -88,11 +89,25 @@
                             <x-nav.item :route="$route" :pattern="$pattern" :icon="$icon">{{ $label }}</x-nav.item>
                         @endforeach
                     </div>
-                    <div class="space-y-1" data-test="settings-nav">
-                        <p class="sb-heading px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Settings</p>
-                        @foreach ($settingsNav as [$label, $route, $pattern, $icon])
-                            <x-nav.item :route="$route" :pattern="$pattern" :icon="$icon">{{ $label }}</x-nav.item>
-                        @endforeach
+                    @php $sOpen = $settingsNav->contains(fn ($i) => request()->routeIs($i[2])); @endphp
+                    <div class="space-y-1" data-test="settings-nav" x-data="{ s: @js($sOpen) }">
+                        <button type="button" @click="s = !s" :aria-expanded="s" class="sb-heading flex w-full items-center justify-between px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-600">
+                            Settings <span class="text-[10px] transition" :class="s && 'rotate-90'">&#9656;</span>
+                        </button>
+                        <div x-show="s" x-cloak class="space-y-1">
+                            @foreach ($settingsNav->values()->groupBy(5) as $grp => $items)
+                                <div x-data="{ g: @js($items->contains(fn ($i) => request()->routeIs($i[2]))) }" class="space-y-1">
+                                    <button type="button" @click="g = !g" :aria-expanded="g" class="sb-heading flex w-full items-center justify-between px-3 pt-2 text-[11px] font-medium text-slate-400 hover:text-slate-600" data-test="settings-group-{{ Str::slug($grp) }}">
+                                        {{ $grp }} <span class="text-[10px] transition" :class="g && 'rotate-90'">&#9656;</span>
+                                    </button>
+                                    <div x-show="g" x-cloak class="space-y-1">
+                                        @foreach ($items as [$label, $route, $pattern, $icon])
+                                            <x-nav.item :route="$route" :pattern="$pattern" :icon="$icon">{{ $label }}</x-nav.item>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
                     </div>
                 </nav>
 
