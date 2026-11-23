@@ -118,7 +118,7 @@ class RecurringForm extends Component
 
         return view('livewire.billing.recurring-form', [
             'pastCount' => $past,
-            'clients'  => Client::orderBy('name')->get(['id', 'name']),
+            'clients'  => Client::billable()->orderBy('name')->get(['id', 'name']),
             'projects' => $this->client_id ? Client::find($this->client_id)?->projects()->orderBy('name')->get(['id', 'name']) ?? collect() : collect(),
         ]);
     }

@@ -8,8 +8,11 @@
         } catch (e) {}
         try {
             // per-user sidebar layout overrides the system default already rendered in data-sidebar
-            var s = localStorage.getItem('sidebar');
+            // a choice made under an older system default is dropped once the admin changes the default
+            var d = document.documentElement.dataset.sidebar, s = localStorage.getItem('sidebar');
+            if (s && localStorage.getItem('sidebarBase') !== d) { localStorage.removeItem('sidebar'); s = null; }
             if (s === 'full' || s === 'half' || s === 'mini') document.documentElement.dataset.sidebar = s;
+            document.documentElement.dataset.sidebarDefault = d;
         } catch (e) {}
         try {
             // board "Card options": fields to hide on cards (see board-options.js)

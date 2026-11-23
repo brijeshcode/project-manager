@@ -97,7 +97,7 @@ class Form extends Component
         return view('livewire.payments.form', [
             'local' => LocalCurrency::code(), 'preview' => $this->paymentPreview($client), 'formCurrency' => $cur,
             'needsRate' => $client && $cur !== LocalCurrency::code(), 'currencies' => $this->currencyOptions($client),
-            'clients' => Client::orderBy('name')->get(['id', 'name']),
+            'clients' => Client::billable()->orderBy('name')->get(['id', 'name']),
             'projects' => $client ? $client->projects()->orderBy('name')->get(['id', 'name']) : collect(),
             'types' => PaymentType::cases(),
             'documents' => $this->paymentId ? PaymentDocument::where('payment_id', $this->paymentId)->orderBy('id')->get() : collect(),

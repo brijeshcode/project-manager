@@ -39,6 +39,7 @@ class System extends Component
         Settings::set('sidebar_layout', $data['sidebarLayout'], 'system');
         Settings::set('number_format', $data['numberFormat'], 'system');
         Settings::set('dashboard_default_tab', $data['dashboardTab'], 'system');
+        $this->dispatch('sidebar-default', layout: $data['sidebarLayout']);
         $this->dispatch('toast', type: 'success', message: 'System settings saved.');
     }
 

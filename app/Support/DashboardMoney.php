@@ -33,7 +33,7 @@ class DashboardMoney
 
         $outstanding = 0;
         $missing = 0;
-        $clients = Client::query()->get()->pluck('currency', 'id');
+        $clients = Client::billable()->get()->pluck('currency', 'id');
         $rates = [];
         foreach (app(ClientAccount::class)->totals($clients->keys()->all()) as $id => $t) {
             $balance = $t['received'] - $t['billed'];
@@ -163,7 +163,7 @@ class DashboardMoney
     /** Clients whose balance is negative (they owe money). Payments are not linked to invoices, so this decides "paid". */
     public static function owingClientIds(): array
     {
-        $ids = Client::pluck('id')->all();
+        $ids = Client::billable()->pluck('id')->all();
 
         return collect(app(ClientAccount::class)->totals($ids))->filter(fn ($t) => $t['received'] < $t['billed'])->keys()->all();
     }
@@ -240,7 +240,7 @@ class DashboardMoney
             ->whereDate('issued_on', '>=', $from->toDateString())->whereDate('issued_on', '<=', $to->toDateString())
             ->groupBy('client_id')->selectRaw('client_id, COUNT(*) as n')->pluck('n', 'client_id');
 
-        $top = Client::query()->get()
+        $top = Client::billable()->get()
             ->sort(fn ($a, $b) => [(int) ($revenue[$b->id] ?? 0), strtolower($a->name)] <=> [(int) ($revenue[$a->id] ?? 0), strtolower($b->name)])
             ->take($limit)->values();
 
@@ -268,7 +268,7 @@ class DashboardMoney
         $late = Invoice::where('status', 'sent')->whereIn('client_id', $owing)->whereDate('due_on', '<', now()->toDateString())->pluck('client_id')->all();
         $max = max(1, (int) $paid->max());
 
-        return Client::get()->map(function (Client $c) use ($paid, $projects, $owing, $late, $max) {
+        return Client::billable()->get()->map(function (Client $c) use ($paid, $projects, $owing, $late, $max) {
             $state = in_array($c->id, $late, true) ? 'overdue' : (in_array($c->id, $owing, true) ? 'owes' : 'clear');
             $p = (int) ($paid[$c->id] ?? 0);
 
@@ -281,7 +281,7 @@ class DashboardMoney
     public static function paymentStatusAmounts(CarbonInterface $from, CarbonInterface $to): array
     {
         $out = ['paid' => max(0, self::forPeriodLocal($from, $to)['received']), 'pending' => 0, 'overdue' => 0];
-        $clients = Client::get()->keyBy('id');
+        $clients = Client::billable()->get()->keyBy('id');
         $late = Invoice::where('status', 'sent')->whereDate('due_on', '<', now()->toDateString())->pluck('client_id')->all();
         foreach (app(ClientAccount::class)->totals($clients->keys()->all()) as $id => $t) {
             $balance = $t['billed'] - $t['received'];

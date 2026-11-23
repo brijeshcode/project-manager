@@ -46,7 +46,7 @@ class Index extends Component
 
     private function payments()
     {
-        return Payment::query()->whereBetween('paid_on', $this->range())->where('local_currency', LocalCurrency::code());
+        return Payment::query()->whereHas('client', fn ($q) => $q->billable())->whereBetween('paid_on', $this->range())->where('local_currency', LocalCurrency::code());
     }
 
     /** Fill receipts and expenses from the books; the user can overwrite them. */

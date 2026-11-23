@@ -84,6 +84,7 @@
                                 <div class="flex items-center gap-2">
                                     <span class="h-2 w-2 rounded-full {{ $client->status->value === 'active' ? 'bg-green-500' : 'bg-gray-400' }}" title="{{ ucfirst($client->status->value) }}"></span>
                                     <a href="{{ route('clients.show', $client) }}" wire:navigate class="text-sm font-medium text-gray-900 hover:underline dark:text-white">{{ $client->name }}</a>
+                                    @if ($client->is_internal)<x-ui.badge color="slate" data-test="internal-badge">Internal</x-ui.badge>@endif
                                     @if ($client->portal_blocked_at)<x-ui.badge color="rose" data-test="portal-blocked">Portal blocked</x-ui.badge>@endif
                                 </div>
                                 <div class="text-xs capitalize text-gray-500 dark:text-gray-400" data-test="client-type">{{ $client->type->value }}</div>

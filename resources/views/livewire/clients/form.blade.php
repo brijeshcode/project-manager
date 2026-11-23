@@ -71,6 +71,10 @@
                         </select>
                         @error('billing_mode') <p class="field-error">{{ $message }}</p> @enderror
                     </div>
+                    <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 sm:col-span-2">
+                        <input type="checkbox" wire:model="is_internal" id="is_internal" class="h-4 w-4 rounded text-brand-600 focus:ring-brand-500 dark:border-gray-600 dark:bg-gray-700" />
+                        Internal (personal, not billed)
+                    </label>
                 </div>
             </section>
         @endif

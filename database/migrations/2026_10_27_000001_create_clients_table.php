@@ -21,6 +21,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->foreignId('currency_id')->constrained('currencies');
+            $table->boolean('is_internal')->default(false); // owner's own work: never billed or reported
             // Contact details (nullable)
             $table->string('contact_name')->nullable();
             $table->string('contact_email')->nullable();

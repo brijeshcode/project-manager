@@ -21,9 +21,22 @@ document.addEventListener('alpine:init', () => {
             this.mode = this.next();
             this.chosen = true;
             root.dataset.sidebar = this.mode;
-            try { localStorage.setItem('sidebar', this.mode); } catch (e) {}
+            try {
+                localStorage.setItem('sidebar', this.mode);
+                localStorage.setItem('sidebarBase', root.dataset.sidebarDefault || '');
+            } catch (e) {}
         },
     });
+});
+
+// System settings saved a new default: apply it now and drop this browser's older personal choice.
+window.addEventListener('sidebar-default', (e) => {
+    const layout = e.detail.layout;
+    if (!LAYOUTS.includes(layout)) return;
+    try { localStorage.removeItem('sidebar'); } catch (err) {}
+    root.dataset.sidebar = root.dataset.sidebarDefault = layout;
+    const sidebar = window.Alpine && window.Alpine.store('sidebar');
+    if (sidebar) { sidebar.mode = layout; sidebar.chosen = false; }
 });
 
 // Livewire navigate swaps <html> attributes (dropping `dark` and data-sidebar); reapply right after the swap, before paint.
@@ -34,6 +47,7 @@ document.addEventListener('livewire:navigating', (e) => {
         const sidebar = window.Alpine && window.Alpine.store('sidebar');
         if (sidebar) {
             // the swapped-in page carries the system default; a stored or just-made choice wins over it
+            root.dataset.sidebarDefault = root.dataset.sidebar;
             let m = null;
             try { m = localStorage.getItem('sidebar'); } catch (err) {}
             if (sidebar.chosen || LAYOUTS.includes(m)) root.dataset.sidebar = sidebar.chosen ? sidebar.mode : m;

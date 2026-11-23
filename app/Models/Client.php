@@ -30,6 +30,7 @@ class Client extends Model
         'type',
         'client_code',
         'status',
+        'is_internal',
         'inactive_since',
         'portal_blocked_at',
         'portal_features',
@@ -60,6 +61,7 @@ class Client extends Model
             'billing_mode'        => \App\Enums\BillingMode::class,
             'type'                => ClientType::class,
             'status'              => ClientStatus::class,
+            'is_internal'         => 'boolean',
             'inactive_since'      => 'date',
             'portal_blocked_at'   => 'datetime',
             'portal_features'     => 'array',
@@ -77,6 +79,11 @@ class Client extends Model
                 $c->inactive_since = $c->status === ClientStatus::Active ? null : ($c->inactive_since ?? today());
             }
         });
+    }
+
+    public function scopeBillable($q)
+    {
+        return $q->where('is_internal', false);
     }
 
     public function portalBlocked(): bool

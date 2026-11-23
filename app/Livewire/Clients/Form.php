@@ -31,6 +31,7 @@ class Form extends Component
     public string $billing_mode = 'fixed';
     public string $type   = 'company';
     public string $status = 'active';
+    public bool $is_internal = false;
 
     // Contact
     public ?string $contact_name  = null;
@@ -75,6 +76,7 @@ class Form extends Component
             $this->billing_mode = $client->billing_mode->value;
             $this->type         = $client->type->value;
             $this->status       = $client->status->value;
+            $this->is_internal  = $client->is_internal;
             foreach (self::FIELDS as $f) {
                 $this->$f = $client->$f;
             }
@@ -96,6 +98,7 @@ class Form extends Component
             'billing_mode'        => ['required', Rule::enum(BillingMode::class)],
             'type'                => ['required', Rule::enum(ClientType::class)],
             'status'              => ['required', Rule::enum(ClientStatus::class)],
+            'is_internal'         => 'boolean',
             'contact_name'        => 'nullable|string|max:255',
             'contact_email'       => 'nullable|email|max:255',
             'contact_phone'       => 'nullable|string|max:50',

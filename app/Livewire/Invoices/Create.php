@@ -175,7 +175,7 @@ class Create extends Component
             'local' => LocalCurrency::code(),
             'sameCurrency' => $cur === LocalCurrency::code(),
             'currencies' => $client ? $this->currencyOptions($client) : [],
-            'clients' => Client::orderBy('name')->get(['id', 'name']),
+            'clients' => Client::billable()->orderBy('name')->get(['id', 'name']),
             'banks' => BankAccount::orderBy('label')->get(['id', 'label', 'bank_name']),
         ]);
     }
